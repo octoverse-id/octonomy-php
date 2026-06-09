@@ -1,0 +1,49 @@
+{
+    "name": "octoverse-id/octonomy-php",
+    "description": "Official PHP SDK for Octonomy — multi-tenant tag management and taxonomy service.",
+    "type": "library",
+    "keywords": ["octonomy", "tags", "taxonomy", "sdk", "api-client"],
+    "license": "Apache-2.0",
+    "homepage": "https://github.com/octoverse-id/octonomy-php",
+    "support": {
+        "issues": "https://github.com/octoverse-id/octonomy-php/issues",
+        "source": "https://github.com/octoverse-id/octonomy-php"
+    },
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "phpstan/phpstan": "^2.0",
+        "friendsofphp/php-cs-fixer": "^3.64"
+    },
+    "autoload": {
+        "psr-4": {
+            "Octoverse\\Octonomy\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Octoverse\\Octonomy\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "stan": "phpstan analyse",
+        "check": [
+            "@cs",
+            "@stan",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

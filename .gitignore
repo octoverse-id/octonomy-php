@@ -1,0 +1,26 @@
+# Composer
+/vendor/
+composer.lock
+
+# Tool caches
+.phpunit.cache/
+.phpunit.result.cache
+.php-cs-fixer.cache
+.phpstan.cache/
+
+# Coverage artifacts
+/coverage/
+coverage.xml
+clover.xml
+
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Local environment
+.env
+
+# Local code review pipeline artifacts (keep the tracked placeholder)
+code-review/*
+!code-review/.gitkeep

@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a problem with the Octonomy PHP SDK.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal PHP snippet, the SDK call(s) made, and the observed result.
+      render: php
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Exception details
+      description: The exception class and, for an ApiException, its statusCode / errorCode / requestId.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: sdk-version
+    attributes:
+      label: SDK version
+      description: e.g. 0.1.0 or a commit SHA.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: PHP version (`php -v`), Guzzle version, and the Octonomy server version you target.
+    validations:
+      required: false
