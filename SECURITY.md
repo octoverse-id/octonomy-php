@@ -2,12 +2,8 @@
 
 ## Supported versions
 
-This SDK is pre-1.0. Security fixes are applied to the latest `0.x` release.
-
-| Version | Supported |
-| ------- | --------- |
-| 0.1.x   | ✅        |
-| < 0.1   | ❌        |
+No version of this SDK has been released yet, so there is no supported release. Security fixes land on
+`main`. The support policy for the first release lines is published here before they ship.
 
 ## Reporting a vulnerability
 

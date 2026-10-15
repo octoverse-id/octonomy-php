@@ -7,9 +7,10 @@ The official PHP client for [Octonomy](https://github.com/octoverse-id/octonomy)
 multi-application tag management and taxonomy service. A hand-written, Guzzle-based client for the
 stable REST **v1** API.
 
-> **Status:** `0.1.0` — early. The transport, auth, error, and pagination foundation plus the
-> **Vocabularies** and **Tags** resources are implemented. The remaining resources are tracked in
-> [`docs/roadmap.md`](docs/roadmap.md).
+> **Status:** unreleased and early. No version has been tagged or published to Packagist yet, so the
+> install command below works once the first release ships. The transport, auth, error, and pagination
+> foundation plus the **Vocabularies** and **Tags** resources are implemented. The remaining resources
+> are tracked in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Install
 

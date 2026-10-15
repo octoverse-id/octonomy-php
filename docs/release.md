@@ -6,7 +6,8 @@ nothing to upload — tagging the repository (and the Packagist webhook) publish
 ## Versioning
 
 See [versioning.md](versioning.md). `Client::VERSION` is canonical and must match the latest
-`CHANGELOG.md` release heading (`make version-check`).
+`CHANGELOG.md` release heading (`make version-check`). Nothing has been released yet; until the first
+release, `Client::VERSION` is a placeholder and `make version-check` passes without a heading.
 
 ## Pre-release gate
 
@@ -14,14 +15,17 @@ See [versioning.md](versioning.md). `Client::VERSION` is canonical and must matc
 make release-check
 ```
 
-This runs `cs` (php-cs-fixer), `stan` (phpstan), `test` (phpunit), and `version-check`. All must pass.
+This runs `cs` (php-cs-fixer), `stan` (phpstan), `test` (phpunit), and `version-check` in strict mode,
+which fails if `CHANGELOG.md` has no release heading. All must pass.
 
 ## Cutting a release
 
-1. **Branch:** `git switch -c release/<version>` (e.g. `release/0.2.0`).
+1. **Branch:** `git switch -c release/<version>` (e.g. `release/2.0.0`).
 2. **Bump the version:** set `Client::VERSION` in `src/Client.php` to the new `X.Y.Z`.
 3. **Update the CHANGELOG:** move `[Unreleased]` items under a new `## [X.Y.Z] - <date>` heading and
-   refresh the compare links at the bottom.
+   refresh the links at the bottom. On the first release, `[Unreleased]` still points at
+   `commits/main`: repoint it to `compare/vX.Y.Z...HEAD` and add `[X.Y.Z]` pointing at
+   `releases/tag/vX.Y.Z`. Both resolve once step 6 completes (tag pushed and GitHub release created).
 4. **Run the gate:** `make release-check`.
 5. **Open the release PR**, get it reviewed, and merge to `main`.
 6. **Tag the merge commit and publish:**

@@ -29,7 +29,7 @@ body:
     id: sdk-version
     attributes:
       label: SDK version
-      description: e.g. 0.1.0 or a commit SHA.
+      description: The version `composer show octoverse-id/octonomy-php` reports, or a commit SHA.
     validations:
       required: false
   - type: textarea

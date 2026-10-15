@@ -25,13 +25,22 @@ stan: ## Run static analysis
 
 check: cs stan test ## Fast pre-push gate (style, static analysis, tests)
 
-version-check: ## Verify Client::VERSION matches the latest CHANGELOG.md heading
+# Before the first release CHANGELOG.md has only [Unreleased] and Client::VERSION is a placeholder,
+# so there is nothing to match. release-check sets REQUIRE_RELEASE so a release cannot skip the check.
+version-check: ## Verify Client::VERSION matches the latest released CHANGELOG.md heading
 	@code_ver=$$(grep -E "const VERSION" src/Client.php | sed -E "s/.*'([^']+)'.*/\1/"); \
 	log_ver=$$(grep -m1 -E '^## \[[0-9]' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/'); \
+	if [ -z "$$log_ver" ]; then \
+		if [ -n "$(REQUIRE_RELEASE)" ]; then \
+			echo "no release heading in CHANGELOG.md: set Client::VERSION to the release version, then add a matching '## [X.Y.Z] - <date>' heading (docs/release.md)"; exit 1; \
+		fi; \
+		echo "version OK: nothing released yet (Client::VERSION=$$code_ver is a placeholder)"; exit 0; \
+	fi; \
 	if [ "$$code_ver" != "$$log_ver" ]; then \
 		echo "version mismatch: Client::VERSION=$$code_ver CHANGELOG.md=$$log_ver"; exit 1; \
 	fi; \
 	echo "version OK: $$code_ver"
 
-release-check: cs stan test version-check ## Full pre-release gate
+release-check: cs stan test ## Full pre-release gate (requires a release heading in CHANGELOG.md)
+	@$(MAKE) --no-print-directory version-check REQUIRE_RELEASE=1
 	@echo "release-check passed"

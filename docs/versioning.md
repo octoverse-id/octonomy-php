@@ -11,30 +11,35 @@ source of truth for how a change maps to a version bump.
 | **Targeted server contract** | this document + the vendored `docs/openapi.yaml` | Which Octonomy REST contract the SDK is written against (currently **v1**, server `1.0.0`). |
 
 The SDK versions **independently** of the Octonomy server. `make version-check` asserts `Client::VERSION`
-matches the latest `CHANGELOG.md` release heading.
+matches the latest `CHANGELOG.md` release heading. Before the first release there is no such heading, so
+it passes; `make release-check` runs it in a strict mode that fails without one.
 
-## Pre-1.0 (current: 0.x)
+## Before the first release
 
-While the SDK is `0.x`, the public API may still change between minor versions as resource coverage is
-filled in. We still record every user-facing change in the CHANGELOG and avoid gratuitous breakage.
+Nothing has been released yet: there is no git tag, GitHub release, or Packagist version, and
+`CHANGELOG.md` has only an `[Unreleased]` section. `Client::VERSION` (`0.1.0`) is a placeholder that the
+first release PR replaces; it does not name a release.
+
+The first releases are planned as two lines ([epic #4](https://github.com/octoverse-id/octonomy-php/issues/4)): `2.0.0` from `main` for PHP 8.2+, and `1.0.0`
+from `support/php7.4` for PHP 7.4+. No `0.x` version will be released. Until then the public API may
+change without a deprecation path, and every user-facing change is still recorded under `[Unreleased]`.
 
 ## Bump rules
 
 Decide the bump from the **most significant** change in the release.
 
-### PATCH — `0.1.x` / `1.0.x`
+### PATCH — `x.y.Z`
 Backward-compatible **bug fixes**. No change to the public API.
 - Examples: fix a header, correct envelope decoding, fix a query param name.
 
-### MINOR — `0.x.0` / `1.x.0`
+### MINOR — `x.Y.0`
 Backward-compatible **additions** to the public API.
 - Examples: a new resource service, a new method, a new optional property on a `*Params`/`*Create` DTO,
   a new exception subclass.
-- In `1.x`, existing callers keep working unchanged. In `0.x`, additive is preferred but a necessary
-  breaking change may ride a minor bump (documented in the CHANGELOG).
+- Existing callers keep working unchanged.
 
-### MAJOR — `x.0.0`
-Backward-**incompatible** changes to the public API once the SDK is `1.0.0`.
+### MAJOR — `X.0.0`
+Backward-**incompatible** changes to the public API.
 - Examples: removing/renaming a public class or method, changing a method signature or a model's
   property types.
 
