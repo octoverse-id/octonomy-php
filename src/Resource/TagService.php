@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Resource;
 
 use Octoverse\Octonomy\Http\Transport;
-use Octoverse\Octonomy\Internal\Json;
 use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Model\TagCreate;
 use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\TagUpdate;
-use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
 
@@ -28,7 +26,7 @@ final class TagService
     public function create(TagCreate $input, ?RequestOptions $options = null): Tag
     {
         return Tag::fromArray(
-            $this->transport->request('POST', 'tags', [], $input->toArray(), $options),
+            $this->transport->one('POST', 'tags', [], $input->toArray(), $options),
         );
     }
 
@@ -38,7 +36,7 @@ final class TagService
     public function get(string $id, ?RequestOptions $options = null): Tag
     {
         return Tag::fromArray(
-            $this->transport->request('GET', 'tags/' . rawurlencode($id), [], null, $options),
+            $this->transport->one('GET', 'tags/' . rawurlencode($id), [], null, $options),
         );
     }
 
@@ -49,14 +47,9 @@ final class TagService
      */
     public function list(?TagListParams $params = null, ?RequestOptions $options = null): ResultList
     {
-        $body = $this->transport->request('GET', 'tags', $params?->toQuery() ?? [], null, $options);
+        $page = $this->transport->many('GET', 'tags', $params?->toQuery() ?? [], null, $options);
 
-        $data = [];
-        foreach (Json::objectList($body, 'data') as $row) {
-            $data[] = Tag::fromArray($row);
-        }
-
-        return new ResultList($data, Pagination::fromArray(Json::object($body, 'pagination')));
+        return new ResultList(array_map(Tag::fromArray(...), $page->rows), $page->pagination);
     }
 
     /**
@@ -65,7 +58,7 @@ final class TagService
     public function update(string $id, TagUpdate $input, ?RequestOptions $options = null): Tag
     {
         return Tag::fromArray(
-            $this->transport->request('PATCH', 'tags/' . rawurlencode($id), [], $input->toArray(), $options),
+            $this->transport->one('PATCH', 'tags/' . rawurlencode($id), [], $input->toArray(), $options),
         );
     }
 
@@ -75,6 +68,6 @@ final class TagService
      */
     public function delete(string $id, ?RequestOptions $options = null): void
     {
-        $this->transport->request('DELETE', 'tags/' . rawurlencode($id), [], null, $options);
+        $this->transport->none('DELETE', 'tags/' . rawurlencode($id), [], null, $options);
     }
 }

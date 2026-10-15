@@ -53,7 +53,7 @@ final class ClientTest extends SdkTestCase
 
     public function testSendsAuthAndTenantHeaders(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'tag_1'])]);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])]);
 
         $client->tags()->get('tag_1');
 
@@ -69,7 +69,7 @@ final class ClientTest extends SdkTestCase
 
     public function testActorHeaderFromConfig(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'tag_1'])], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])], ['actor_id' => 'svc-config']);
 
         $client->tags()->get('tag_1');
 
@@ -78,7 +78,7 @@ final class ClientTest extends SdkTestCase
 
     public function testActorHeaderPerCallOverride(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'tag_1'])], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])], ['actor_id' => 'svc-config']);
 
         $client->tags()->get('tag_1', RequestOptions::withActor('svc-call'));
 

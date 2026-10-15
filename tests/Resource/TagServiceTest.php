@@ -17,7 +17,7 @@ final class TagServiceTest extends SdkTestCase
     public function testCreate(): void
     {
         $client = $this->clientWith([
-            self::jsonResponse(201, [
+            self::jsonResponse(201, ['data' => [
                 'id' => 'tag_1',
                 'name' => 'Featured',
                 'slug' => 'featured',
@@ -26,7 +26,7 @@ final class TagServiceTest extends SdkTestCase
                 'usage_count' => 0,
                 'created_at' => '2026-06-08T12:00:00Z',
                 'updated_at' => '2026-06-08T12:00:00Z',
-            ]),
+            ]]),
         ]);
 
         $tag = $client->tags()->create(new TagCreate(name: 'Featured', slug: 'featured', type: 'label'));
@@ -112,7 +112,7 @@ final class TagServiceTest extends SdkTestCase
 
     public function testUpdate(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'tag_1', 'is_active' => false])]);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1', 'is_active' => false]])]);
 
         $tag = $client->tags()->update('tag_1', new TagUpdate(isActive: false));
 

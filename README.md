@@ -82,6 +82,11 @@ try {
 }
 ```
 
+A 2xx whose body is missing the envelope the endpoint guarantees throws
+`MalformedResponseException`. A network failure, or a 2xx body that is not JSON from a method that
+returns data, throws `TransportException` (`delete()` ignores any body). Every SDK exception extends
+`Octoverse\Octonomy\Exception\OctonomyException`.
+
 ## Pagination
 
 List methods return a `ResultList<T>` with `->data` (a list of models) and `->pagination`

@@ -15,7 +15,7 @@ final class VocabularyServiceTest extends SdkTestCase
     public function testCreate(): void
     {
         $client = $this->clientWith([
-            self::jsonResponse(201, ['id' => 'voc_1', 'name' => 'Labels', 'slug' => 'labels', 'is_active' => true]),
+            self::jsonResponse(201, ['data' => ['id' => 'voc_1', 'name' => 'Labels', 'slug' => 'labels', 'is_active' => true]]),
         ]);
 
         $vocab = $client->vocabularies()->create(new VocabularyCreate(name: 'Labels', slug: 'labels'));
@@ -33,7 +33,7 @@ final class VocabularyServiceTest extends SdkTestCase
 
     public function testGet(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'voc_1', 'name' => 'Labels'])]);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'voc_1', 'name' => 'Labels']])]);
 
         $vocab = $client->vocabularies()->get('voc_1');
 
@@ -69,7 +69,7 @@ final class VocabularyServiceTest extends SdkTestCase
 
     public function testUpdateOmitsNullFields(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['id' => 'voc_1', 'name' => 'Renamed'])]);
+        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'voc_1', 'name' => 'Renamed']])]);
 
         $vocab = $client->vocabularies()->update('voc_1', new VocabularyUpdate(name: 'Renamed'));
 

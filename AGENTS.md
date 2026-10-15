@@ -18,14 +18,18 @@ stays a faithful, ergonomic client.
 - Tag aliases are alternate identifiers that resolve to canonical tags and follow tenant/application
   compatibility rules.
 - Keep the SDK faithful to `docs/openapi.yaml`, the bundled contract reference. Where the live server
-  diverges from the generated spec — notably the `{data, pagination}` list envelope the spec omits —
-  trust the server's real behavior and document the divergence in a comment.
+  diverges from the generated spec — notably the `{data: {...}}` single-resource wrapper and the
+  `{data, pagination}` list envelope, both of which the spec omits — trust the server's real behavior
+  and document the divergence in a comment.
 
 ## API Client Rules
 
 - One file per resource service (`Resource/TagService.php`, …), reached from an accessor on `Client`.
 - Methods take required inputs first and an optional `?RequestOptions $options = null` last.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
+- Services read responses only through `Transport::one()` (single resource), `many()` (list), or
+  `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
+  `MalformedResponseException` rather than hydrating an empty model.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.

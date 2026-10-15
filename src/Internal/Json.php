@@ -9,32 +9,48 @@ use Octoverse\Octonomy\Exception\TransportException;
 /**
  * Json holds small, defensive helpers for reading values out of a decoded JSON
  * response body. They never throw on a missing/mismatched field — they return a
- * safe zero value — so model hydration stays total.
+ * safe zero value — so model hydration stays total. The response envelope itself
+ * is not lenient: Transport rejects a 2xx without it before any model sees it.
  *
  * @internal
  */
 final class Json
 {
     /**
-     * Decode a JSON object body into a string-keyed array.
-     *
-     * @return array<string, mixed>
+     * Decode a response body, keeping JSON objects as \stdClass. Decoding to
+     * arrays would make {} and [] identical, and would turn {"0": ...} into what
+     * looks like a list, so envelope checks must run on this form. Returns null
+     * for an empty body.
      *
      * @throws TransportException when the payload is not valid JSON
      */
-    public static function decode(string $raw): array
+    public static function decode(string $raw): mixed
     {
         if ($raw === '') {
-            return [];
+            return null;
         }
         try {
-            /** @var mixed $data */
-            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            return json_decode($raw, false, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new TransportException('Failed to decode Octonomy response: ' . $e->getMessage(), 0, $e);
         }
+    }
 
-        return is_array($data) ? self::stringKeyed($data) : [];
+    /**
+     * Convert a JSON object from decode() into the string-keyed array form the
+     * models read. Nested objects become arrays too, matching what array-mode
+     * decoding produces.
+     *
+     * @return array<string, mixed>
+     */
+    public static function objectToArray(\stdClass $object): array
+    {
+        $out = [];
+        foreach (get_object_vars($object) as $key => $value) {
+            $out[(string) $key] = self::toArrays($value);
+        }
+
+        return $out;
     }
 
     /**
@@ -125,30 +141,6 @@ final class Json
     }
 
     /**
-     * Read a JSON array-of-objects field as a list of string-keyed arrays.
-     *
-     * @param array<string, mixed> $d
-     *
-     * @return list<array<string, mixed>>
-     */
-    public static function objectList(array $d, string $key): array
-    {
-        $v = $d[$key] ?? null;
-        if (!is_array($v)) {
-            return [];
-        }
-
-        $out = [];
-        foreach ($v as $row) {
-            if (is_array($row)) {
-                $out[] = self::stringKeyed($row);
-            }
-        }
-
-        return $out;
-    }
-
-    /**
      * @param array<string, mixed> $d
      */
     public static function dateTime(array $d, string $key): \DateTimeImmutable
@@ -163,6 +155,18 @@ final class Json
         }
 
         return new \DateTimeImmutable('@0');
+    }
+
+    private static function toArrays(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            return self::objectToArray($value);
+        }
+        if (is_array($value)) {
+            return array_map(self::toArrays(...), $value);
+        }
+
+        return $value;
     }
 
     /**

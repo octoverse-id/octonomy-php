@@ -13,7 +13,8 @@ template, then:
 2. Add `Model/<Resource>.php` (readonly, `::fromArray()`), the `*Create`/`*Update` input DTOs
    (`toArray()` omitting nulls), and any `*ListParams` (`toQuery()`).
 3. Add `Resource/<Resource>Service.php` with methods that take inputs first and
-   `?RequestOptions $options = null` last, delegating to `Transport::request`.
+   `?RequestOptions $options = null` last, delegating to `Transport::one()` (single resource),
+   `many()` (list) or `none()` (204). There is no raw-body method, by design.
 4. Wire an accessor onto `Client`.
 5. Add `MockHandler`-based tests (assert method/path/headers/query/body; cover the error envelope),
    a `## [Unreleased]` CHANGELOG entry, and update [`api.md`](api.md).
@@ -52,6 +53,8 @@ Link tags to external resources; idempotent writes (re-assigning returns 200, no
 
 Note: assignment writes accept `tag_id`, `alias_id`, or `alias_slug`. Watch for the
 `application_mismatch` and `inactive_tag` error codes (already defined on `ErrorCode`).
+`remove()` answers 204 (`none()`), and `bulk-remove` answers `{"data": {"removed": N}}`, so
+`bulkRemove()` reads it with `one()` into a small readonly result model.
 
 ## Resource tags
 
