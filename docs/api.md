@@ -45,7 +45,7 @@ params are serialized as `"true"`/`"false"`.
 
 ## Responses
 
-- **Single resource:** the model object (e.g. `Tag`).
+- **Single resource:** the model object (e.g. `Tag`), unwrapped from the server's `{ data: {...} }`.
 - **List:** `ResultList<T>` = `{ data: T[], pagination: {limit, offset, count, next, previous} }`.
 - **Delete:** no body (deactivation on the server).
 - **Errors:** `{ error: {code, message, details, request_id} }` → a typed `ApiException` subclass.
@@ -63,6 +63,13 @@ params are serialized as `"true"`/`"false"`.
 
 Every exception exposes `$statusCode`, `$errorCode`, `$details`, and `$requestId`. The string codes are
 available as constants on `Octoverse\Octonomy\ErrorCode`.
+
+Two failures are not HTTP errors and do not extend `ApiException`:
+
+| Condition | Exception |
+| --------- | --------- |
+| 2xx whose body lacks its envelope: a non-empty `data` object, or a `data` array of non-empty objects + a `pagination` object | `MalformedResponseException` |
+| Network failure, timeout, or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException` |
 
 ## Not yet implemented
 

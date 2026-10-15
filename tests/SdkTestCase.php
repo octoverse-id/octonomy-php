@@ -9,6 +9,8 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use Octoverse\Octonomy\Client;
+use Octoverse\Octonomy\Config;
+use Octoverse\Octonomy\Http\Transport;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 
@@ -35,6 +37,24 @@ abstract class SdkTestCase extends TestCase
             'tenant_id' => 'tenant-1',
             'http_client' => $guzzle,
         ], $config));
+    }
+
+    /**
+     * Build a bare Transport over a MockHandler, for tests of the transport
+     * contract itself rather than of a resource service.
+     *
+     * @param list<Response> $responses
+     */
+    protected function transportWith(array $responses): Transport
+    {
+        $this->mock = new MockHandler($responses);
+
+        return new Transport(new Config(
+            baseUrl: 'https://octonomy.test',
+            token: 'test-token',
+            tenantId: 'tenant-1',
+            httpClient: new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
+        ), Client::VERSION);
     }
 
     protected function lastRequest(): RequestInterface

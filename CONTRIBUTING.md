@@ -36,6 +36,8 @@ These mirror [AGENTS.md](AGENTS.md):
 - One file per resource service (`src/Resource/*Service.php`), reached from an accessor on `Client`.
 - Methods take required inputs first, `?RequestOptions $options = null` last.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
+- Services read responses only through `Transport::one()` / `many()` / `none()`; never hydrate a
+  raw body.
 - Non-2xx responses throw typed exceptions extending `ApiException`; never return error codes.
 - Response models are `readonly` DTOs with `::fromArray()`; input DTOs use nullable promoted
   properties + `toArray()` that omits nulls.

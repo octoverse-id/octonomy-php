@@ -10,9 +10,10 @@ changing the types and paths.
 | ---------------- | -------------- |
 | `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()`. |
 | `Config` | Validated configuration (base URL, token, tenant, actor, http client, timeout, user agent). |
-| `Http\Transport` | The single `request()` method: URL building under `/api/v1`, auth/tenant headers, JSON, status → exception. |
+| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/v1`, auth/tenant headers, JSON, status → exception, and the response-envelope check. No method returns a raw body. |
+| `Http\Envelope` | A validated list response (`rows` + `Pagination`) returned by `Transport::many()`; `@internal`. |
 | `RequestOptions` | Per-call options (`withActor`). |
-| `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`. |
+| `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
 | `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
@@ -20,26 +21,38 @@ changing the types and paths.
 
 ## Request lifecycle
 
-1. A service method (e.g. `TagService::create`) calls `Transport::request($method, $path, $query, $body, $options)`.
+1. A service method calls the `Transport` method that matches the endpoint's response shape, each
+   taking `($method, $path, $query, $body, $options)`:
+   - `one()` for a single resource (create/get/update) → the object unwrapped from `{"data": {...}}`;
+   - `many()` for a list → an `Envelope` of rows + `Pagination` from `{"data": [...], "pagination": {...}}`;
+   - `none()` for a 204 (delete/deactivate) → nothing; any body is ignored.
 2. `Transport` builds `base_url + /api/v1/ + path`, attaches headers, and JSON-encodes the body
    (`http_errors` is off so the SDK owns status handling).
-3. On a 2xx it decodes the body to an array, which the service hydrates into a model / `ResultList`.
-   On a non-2xx it calls `ApiException::fromResponse()`, which decodes the `{error:{...}}` envelope and
-   returns the most specific subclass. Guzzle network failures are wrapped in `TransportException`.
+3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
+   `MalformedResponseException` instead of hydrating an empty model. A non-JSON 2xx throws
+   `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the `{error:{...}}`
+   envelope and returns the most specific subclass. Guzzle network failures are wrapped in
+   `TransportException`.
 
 ```
-Caller ─▶ Service::method ─▶ Transport::request ─▶ Guzzle ─▶ Octonomy /api/v1
+Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/v1
                                    │
-                                   ├─ 2xx → array → Model::fromArray / ResultList
-                                   └─ !2xx → throw ApiException subclass (statusCode, errorCode, details, requestId)
+                                   ├─ 2xx, envelope ok      → data object → Model::fromArray
+                                   │                         → Envelope    → ResultList<Model>
+                                   ├─ 2xx, envelope missing → throw MalformedResponseException
+                                   └─ !2xx                  → throw ApiException subclass (statusCode, errorCode, details, requestId)
 ```
+
+Services never see a raw body. That is deliberate: the server wraps every single-resource response,
+and a service that hydrated the body directly would get a zero-valued model with no error (issue #6).
 
 ## Conventions that keep it faithful
 
 - **Contract reference:** `docs/openapi.yaml` is vendored from the server. Models mirror it
-  field-for-field. The one deliberate divergence is the list envelope: the generated spec shows a bare
-  array, but the server wraps lists in `{data, pagination}` (see `octonomy/core/pagination.py`
-  upstream). The SDK follows the server; the divergence is noted in code.
+  field-for-field. The deliberate divergences are the two response envelopes the generated spec omits:
+  the server wraps every single resource in `{data: {...}}` (`octonomy/core/responses.py` upstream)
+  and every list in `{data, pagination}` (`octonomy/core/pagination.py`). The SDK follows the server,
+  enforces both envelopes in `Transport`, and notes the divergence in code.
 - **Immutability:** response models and input DTOs are `readonly`. Input DTOs send only the fields the
   caller set (PATCH-friendly) via `toArray()`.
 - **No hidden behavior:** the client never retries, logs, or mutates global state. Retries, timeouts,

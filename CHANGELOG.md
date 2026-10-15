@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `create()`, `get()` and `update()` on `tags()` and `vocabularies()` now unwrap the `{"data": {...}}`
+  envelope the server sends for single resources. Previously they hydrated the envelope itself and
+  returned zero-valued models (`id` `''`, `createdAt` 1970-01-01) without raising (#6).
+
+### Added
+- `MalformedResponseException`, thrown when a 2xx body is missing its `data` object, or a list
+  response its `data` array or `pagination` object, instead of hydrating an empty model (#6).
+
+### Changed
+- List methods now throw `MalformedResponseException` for a response without the
+  `{data, pagination}` envelope, where they previously returned an empty `ResultList` (#6).
+
 ## [0.1.0] - 2026-06-09
 
 Initial release of the Octonomy PHP SDK. Targets the stable Octonomy REST **v1** API
