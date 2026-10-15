@@ -7,38 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- `create()`, `get()` and `update()` on `tags()` and `vocabularies()` now unwrap the `{"data": {...}}`
-  envelope the server sends for single resources. Previously they hydrated the envelope itself and
-  returned zero-valued models (`id` `''`, `createdAt` 1970-01-01) without raising (#6).
-
 ### Added
-- `MalformedResponseException`, thrown when a 2xx body is missing its `data` object, or a list
-  response its `data` array or `pagination` object, instead of hydrating an empty model (#6).
-
-### Changed
-- List methods now throw `MalformedResponseException` for a response without the
-  `{data, pagination}` envelope, where they previously returned an empty `ResultList` (#6).
-
-## [0.1.0] - 2026-06-09
-
-Initial release of the Octonomy PHP SDK. Targets the stable Octonomy REST **v1** API
-(server release `1.0.0`, served under `/api/v1`). Guzzle is the only runtime dependency.
-
-### Added
-- Client foundation: `Client` with options-array/`Config` construction and validation, a
-  Guzzle-backed `Transport` that sets `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`,
-  `Accept`, and `User-Agent`, and an injectable `http_client`.
+- Client foundation targeting the Octonomy REST **v1** API (`/api/v1`): `Client` with
+  options-array/`Config` construction and validation, a Guzzle-backed `Transport` that sets
+  `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`, `Accept`, and `User-Agent`, and an
+  injectable `http_client`. Guzzle is the only runtime dependency.
+- Response envelopes: single-resource methods unwrap the server's `{"data": {...}}`, and list methods
+  decode `{data, pagination}` into a generic `ResultList<T>` and `Pagination` (#6).
 - Typed exception hierarchy: `ApiException` (with `statusCode`, `errorCode`, `details`, `requestId`)
   and `NotFoundException`, `ConflictException`, `ValidationException`, `AuthenticationException`,
-  `ForbiddenException`, plus `ConfigurationException` and `TransportException`, decoded from the
-  `{error:{code,message,details,request_id}}` envelope.
-- Pagination: generic `ResultList<T>` and `Pagination` decoding the `{data, pagination}` envelope.
+  `ForbiddenException`, decoded from the `{error:{code,message,details,request_id}}` envelope; plus
+  `ConfigurationException`, `TransportException`, and `MalformedResponseException`, which is thrown
+  when a 2xx body lacks its envelope instead of hydrating an empty model (#6).
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`
   input DTOs.
-- Runnable `examples/quickstart.php` and a vendored `docs/openapi.yaml` contract reference.
+- Runnable `examples/quickstart.php` and a vendored `docs/openapi.yaml` contract reference (server
+  `1.0.0`).
 
-[Unreleased]: https://github.com/octoverse-id/octonomy-php/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/octoverse-id/octonomy-php/releases/tag/v0.1.0
+[Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/main
