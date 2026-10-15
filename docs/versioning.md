@@ -12,7 +12,8 @@ source of truth for how a change maps to a version bump.
 
 The SDK versions **independently** of the Octonomy server. `make version-check` asserts `Client::VERSION`
 matches the latest `CHANGELOG.md` release heading. Before the first release there is no such heading, so
-it passes; `make release-check` runs it in a strict mode that fails without one.
+it checks instead that `Client::VERSION` is still the placeholder; `make release-check` runs it in a
+strict mode that fails without a heading.
 
 ## Before the first release
 

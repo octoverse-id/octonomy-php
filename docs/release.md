@@ -7,7 +7,8 @@ nothing to upload — tagging the repository (and the Packagist webhook) publish
 
 See [versioning.md](versioning.md). `Client::VERSION` is canonical and must match the latest
 `CHANGELOG.md` release heading (`make version-check`). Nothing has been released yet; until the first
-release, `Client::VERSION` is a placeholder and `make version-check` passes without a heading.
+release, `Client::VERSION` is the `0.1.0` placeholder, and `make version-check` passes without a heading
+only while it keeps that value.
 
 ## Pre-release gate
 
