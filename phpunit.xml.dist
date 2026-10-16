@@ -8,8 +8,14 @@
          failOnRisky="true"
          beStrictAboutOutputDuringTests="true">
     <testsuites>
-        <testsuite name="octonomy-php">
+        <testsuite name="unit">
             <directory>tests</directory>
+            <exclude>tests/Integration</exclude>
+        </testsuite>
+        <!-- Runs against the container harness (scripts/octonomy-harness.sh) and skips when
+             OCTONOMY_TEST_BASE_URL is empty, so a plain `vendor/bin/phpunit` stays hermetic. -->
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
         </testsuite>
     </testsuites>
     <source>
