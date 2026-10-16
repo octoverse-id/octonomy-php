@@ -199,8 +199,11 @@ require_safe_config() {
         "OCTONOMY_HARNESS_READY_INTERVAL=${READY_INTERVAL}" \
         "OCTONOMY_HARNESS_PROBE_TIMEOUT=${PROBE_TIMEOUT}" \
         "OCTONOMY_HARNESS_REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"; do
+        # A leading zero is refused outright, not just a zero: `00` is zero to
+        # curl --max-time and pg_isready -t, both of which then mean "no limit",
+        # and dash arithmetic reads `08` as malformed octal.
         case "${_pair#*=}" in
-            '' | *[!0-9]* | 0) fail "${_pair%%=*} must be a positive integer (got '${_pair#*=}')" ;;
+            '' | *[!0-9]* | 0*) fail "${_pair%%=*} must be a positive integer without leading zeros (got '${_pair#*=}')" ;;
         esac
     done
     [ "$PORT" -le 65535 ] || fail "OCTONOMY_HARNESS_PORT must be at most 65535 (got ${PORT})"
@@ -394,7 +397,7 @@ assert_namespaced_write() {
             -H "X-Namespace-ID: ${NAMESPACE_ID}" \
             -H "Content-Type: application/json" \
             -d "{\"application_id\":\"${APPLICATION_ID}\",\"name\":\"Harness Probe\",\"slug\":\"harness-probe\"}"
-    )"
+    )" || code=000
     payload="$(cat "$body_file")"
     rm -f "$body_file"
 
