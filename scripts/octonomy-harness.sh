@@ -170,6 +170,49 @@ require_docker() {
     docker info >/dev/null 2>&1 || fail "the docker daemon is not reachable"
 }
 
+# Hold every overridable value to a charset that is safe in all the places it
+# lands unescaped: docker -e flags (word-split by $(octonomy_env_args)), JSON
+# bodies, URLs, request headers, and assignments in the env file, which is
+# sourced as shell. Encoding each value once per context is more machinery than
+# POSIX sh makes reliable, so a value that would need encoding is refused before
+# anything runs instead. Upstream does not check; every default here passes.
+require_safe_config() {
+    for _pair in \
+        "OCTONOMY_HARNESS_PREFIX=${PREFIX}" \
+        "OCTONOMY_HARNESS_SECRET_KEY=${SECRET_KEY}" \
+        "OCTONOMY_HARNESS_TOKEN_PEPPER=${TOKEN_PEPPER}" \
+        "OCTONOMY_HARNESS_TENANT_ID=${TENANT_ID}" \
+        "OCTONOMY_HARNESS_APPLICATION_ID=${APPLICATION_ID}" \
+        "OCTONOMY_HARNESS_NAMESPACE_TYPE=${NAMESPACE_TYPE}" \
+        "OCTONOMY_HARNESS_NAMESPACE_ID=${NAMESPACE_ID}" \
+        "OCTONOMY_HARNESS_NAMESPACE_A_ID=${NAMESPACE_A_ID}" \
+        "OCTONOMY_HARNESS_NAMESPACE_B_ID=${NAMESPACE_B_ID}"; do
+        case "${_pair#*=}" in
+            '' | *[!A-Za-z0-9._-]*)
+                fail "${_pair%%=*} must be non-empty and use only A-Z a-z 0-9 . _ - (got '${_pair#*=}'): it is written unescaped into docker flags, JSON, URLs and the sourced env file"
+                ;;
+        esac
+    done
+    for _pair in \
+        "OCTONOMY_HARNESS_PORT=${PORT}" \
+        "OCTONOMY_HARNESS_READY_TIMEOUT=${READY_TIMEOUT}" \
+        "OCTONOMY_HARNESS_READY_INTERVAL=${READY_INTERVAL}" \
+        "OCTONOMY_HARNESS_PROBE_TIMEOUT=${PROBE_TIMEOUT}" \
+        "OCTONOMY_HARNESS_REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"; do
+        case "${_pair#*=}" in
+            '' | *[!0-9]* | 0) fail "${_pair%%=*} must be a positive integer (got '${_pair#*=}')" ;;
+        esac
+    done
+    [ "$PORT" -le 65535 ] || fail "OCTONOMY_HARNESS_PORT must be at most 65535 (got ${PORT})"
+    # The probes and the corpus give each namespace its own rows. Two names for
+    # one namespace would merge those rows, and the isolation probe would then
+    # fail as "not refused", which reads as a server defect rather than a typo.
+    if [ "$NAMESPACE_A_ID" = "$NAMESPACE_B_ID" ] || [ "$NAMESPACE_ID" = "$NAMESPACE_A_ID" ] ||
+        [ "$NAMESPACE_ID" = "$NAMESPACE_B_ID" ]; then
+        fail "OCTONOMY_HARNESS_NAMESPACE_ID, _NAMESPACE_A_ID and _NAMESPACE_B_ID must be three different namespaces"
+    fi
+}
+
 # Refuse an image reference that is not pinned by digest. The defaults are; an
 # override is where a moving tag creeps back in, because
 # OCTONOMY_HARNESS_IMAGE=...:latest boots, goes green today, and means something
@@ -239,6 +282,11 @@ mint_token() {
     _mint_token="$(printf '%s\n' "$_mint_output" | sed -n 's/^Token: //p')"
     [ -n "$_mint_token" ] ||
         fail "could not parse a token out of create_service_token output for ${_mint_name}: ${_mint_output}"
+    # The token is written unquoted into the sourced env file, like every other
+    # value, so it gets the same check: octo_<hex>_<token_urlsafe> today.
+    case "$_mint_token" in
+        *[!A-Za-z0-9_-]*) fail "the token minted for ${_mint_name} has characters outside A-Z a-z 0-9 _ -, so it cannot be written safely to the env file" ;;
+    esac
     printf '%s\n' "$_mint_token"
 }
 
@@ -400,46 +448,57 @@ probe_status() {
         "$@"
 }
 
-# The exact merchant grants, proved in both directions.
+# The exact merchant grants, proved in both directions, for BOTH grants.
 #
 # Unlike assert_namespaced_write above, the failure this guards against is not a
 # vacuous pass in the isolation suite -- a token that reached nothing would make
 # every assertion there fail loudly. It is a MISDIAGNOSIS: thirty 403s inside
 # test assertions read as an SDK defect, and the actual fault is a token minted
-# with the wrong grant shape. Two requests here say so in one line instead.
+# with the wrong grant shape. Four requests here say so in one line instead.
 #
 # The negative direction is the one worth the round trip. A grant that reached
 # every namespace would still satisfy the positive probe, and the whole suite
-# rests on it not doing that.
+# rests on it not doing that. Upstream probes only grant A; a B minted with the
+# wrong shape would be exported unchecked, so here each grant is probed alike.
+#
+# Each positive probe is a write and leaves a vocabulary behind (harness-probe-a,
+# harness-probe-b). They are part of the corpus, counted by assert_corpus: the
+# only vocabularies the merchant partitions hold.
 assert_exact_grants() {
     log "asserting each exact merchant grant reaches its own namespace and no other"
+    assert_exact_grant "$NAMESPACE_A_TOKEN" "$NAMESPACE_A_ID" "$NAMESPACE_B_ID" a
+    assert_exact_grant "$NAMESPACE_B_TOKEN" "$NAMESPACE_B_ID" "$NAMESPACE_A_ID" b
+    log "exact merchant grants confirmed (201 inside, 403 across, both grants)"
+}
 
-    code="$(
-        probe_status POST "${BASE_URL}/api/v2/vocabularies" \
-            "$NAMESPACE_A_TOKEN" "$NAMESPACE_A_ID" \
+# Prove the exact grant in $1 writes in namespace $2 and is refused in $3. $4
+# names its probe vocabulary.
+#
+# The `|| _eg_code=000` keeps a timed-out curl from ending the script under
+# `set -e` before the failure can say which probe hung.
+assert_exact_grant() {
+    _eg_code="$(
+        probe_status POST "${BASE_URL}/api/v2/vocabularies" "$1" "$2" \
             -H "Content-Type: application/json" \
-            -d "{\"application_id\":\"${APPLICATION_ID}\",\"name\":\"Harness Probe A\",\"slug\":\"harness-probe-a\"}"
-    )"
-    [ "$code" = "201" ] || fail "the ${NAMESPACE_A_ID} grant could not write in its own namespace (HTTP ${code}, want 201)"
+            -d "{\"application_id\":\"${APPLICATION_ID}\",\"name\":\"Harness Probe ${4}\",\"slug\":\"harness-probe-${4}\"}"
+    )" || _eg_code=000
+    [ "$_eg_code" = "201" ] || fail "the ${2} grant could not write in its own namespace (HTTP ${_eg_code}, want 201)"
 
     # Refused, not merely filtered: an exact grant that does not match the
     # request's partition never reaches a queryset (BearerTokenPermission,
     # octonomy/core/auth.py:402-408).
-    code="$(
-        probe_status GET "${BASE_URL}/api/v2/tags?application_id=${APPLICATION_ID}" \
-            "$NAMESPACE_A_TOKEN" "$NAMESPACE_B_ID"
-    )"
-    [ "$code" = "403" ] || fail "the ${NAMESPACE_A_ID} grant was not refused in ${NAMESPACE_B_ID} (HTTP ${code}, want 403): these tokens are not namespace-isolated, so the isolation suite would be asserting nothing"
-
-    log "exact merchant grants confirmed (201 inside, 403 across)"
+    _eg_code="$(
+        probe_status GET "${BASE_URL}/api/v2/tags?application_id=${APPLICATION_ID}" "$1" "$3"
+    )" || _eg_code=000
+    [ "$_eg_code" = "403" ] || fail "the ${2} grant was not refused in ${3} (HTTP ${_eg_code}, want 403): these tokens are not namespace-isolated, so an isolation suite would be asserting nothing"
 }
 
 # --- The seeded corpus ---------------------------------------------------------
 
 # Everything above proves the environment WORKS. Nothing above puts a taxonomy
-# in it: the probes leave three namespaced vocabularies and not one tag, so a
-# fixture captured here would be a fixture of empty lists, and a list assertion
-# would pass by finding nothing to check.
+# in it: the probes leave one vocabulary in each of the three merchant
+# namespaces and not one tag, so a fixture captured here would be a fixture of
+# empty lists, and a list assertion would pass by finding nothing to check.
 #
 # `manage.py seed_demo` cannot stand in. It writes tenant_demo (seed_demo.py:14)
 # with a token scoped to that tenant, while every credential here is
@@ -460,10 +519,14 @@ assert_exact_grants() {
 #     assignments product/sku-001: red, large
 #                 product/sku-002: green, and red again via alias_slug scarlet
 #   merchant:harness-merchant-a        tags red (in global colors), sale
+#     vocabulary  harness-probe-a (left by assert_exact_grants)
 #     alias       promo -> sale
 #     assignments product/sku-001: red, sale
 #   merchant:harness-merchant-b        tags red, clearance
+#     vocabulary  harness-probe-b (left by assert_exact_grants)
 #     assignments product/sku-001: red
+#   merchant:harness-merchant          vocabulary harness-probe only (left by
+#                                      assert_namespaced_write; not read back)
 #
 # `red` exists in all three partitions under the same (type, slug) on purpose.
 # Slug uniqueness is per partition (octonomy/tags/models.py), so nothing but the
@@ -474,11 +537,8 @@ assert_exact_grants() {
 # fixture holds both shapes of each.
 #
 # The database is new on every `up`, so these writes never meet a previous run's
-# rows, and assert_corpus can require exact counts rather than minimums. Keep
-# the counts below in step with the table above.
-SEED_GLOBAL_TAGS=4
-SEED_NAMESPACE_A_TAGS=2
-SEED_NAMESPACE_B_TAGS=2
+# rows, and assert_corpus can require exact counts rather than minimums. Its
+# table of counts must move with this one.
 
 # Send one bounded request as the wildcard token and print "<status> <body>".
 # $1 method, $2 path under BASE_URL, $3 namespace id or "" for global, and $4
@@ -599,59 +659,116 @@ seed_assignment() {
             "$APPLICATION_ID" "$2" "$3" "$4")" >/dev/null
 }
 
-# Count the occurrences of the literal string $2 in $1.
-count_of() {
-    printf '%s\n' "$1" | grep -o -F -- "$2" | wc -l | tr -d ' '
+# One UUID, as an extended regular expression.
+UUID_ERE='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+# Count the matches of the extended regular expression $2 in $1.
+count_matches() {
+    printf '%s\n' "$1" | grep -o -E -- "$2" | wc -l | tr -d ' '
 }
 
-# Read one partition's tags back and require exactly $3 rows, each carrying the
-# literal $4 -- or, when $4 is empty, no namespace field at all. $1 is the API
-# version and $2 the namespace id ("" for global).
+# $1 with its dots escaped for an ERE. require_safe_config limits every value
+# that reaches here to A-Z a-z 0-9 . _ -, so the dot is the only metacharacter.
+ere_quote() {
+    printf '%s\n' "$1" | sed 's/\./\\./g'
+}
+
+# Read one list back from partition $2 and require exactly $4 rows in it, each
+# in that partition. $1 is the API version and $3 the path under /api/$1.
 #
 # Three numbers must agree, because each can be right while the corpus is
 # wrong: the pagination count (the server's total), the rows actually on the
-# page, and the rows carrying the partition's own namespace marker. A namespaced
+# page, and the rows whose OWN namespace fields name the partition. A namespaced
 # list that leaked global rows would pass the first two and fail the third.
-assert_tag_partition() {
-    _at_where="/api/${1}/tags (${2:-global})"
-    # application_id is required on a namespaced read (auth.py:195-198) and
-    # harmless on a global one, where include_shared keeps the shared rows.
-    _at_response="$(api_request GET "/api/${1}/tags?application_id=${APPLICATION_ID}&limit=200" "$2" "")"
-    _at_code="${_at_response%% *}"
-    _at_payload="${_at_response#* }"
-    [ "$_at_code" = "200" ] || fail "reading back ${_at_where} returned HTTP ${_at_code}: ${_at_payload}"
-
-    _at_total="$(printf '%s\n' "$_at_payload" | sed -n 's/.*"pagination":{[^}]*"count":\([0-9][0-9]*\).*/\1/p')"
-    [ "$_at_total" = "$3" ] ||
-        fail "${_at_where} reports ${_at_total:-no} total rows, want ${3}: ${_at_payload}"
-    _at_rows="$(count_of "$_at_payload" "\"tenant_id\":\"${TENANT_ID}\"")"
-    [ "$_at_rows" = "$3" ] ||
-        fail "${_at_where} returned ${_at_rows} rows on the page, want ${3}: ${_at_payload}"
-    if [ -n "$4" ]; then
-        _at_marked="$(count_of "$_at_payload" "$4")"
-        [ "$_at_marked" = "$3" ] ||
-            fail "${_at_where}: ${_at_marked} of ${3} rows carry ${4}, so the partition is not what was seeded: ${_at_payload}"
+#
+# "Own" fields, because a row can nest another resource: a /resources/.../tags
+# row is an assignment wrapping a full tag, and both carry namespace fields. So
+# the namespace is matched only where it directly follows the start of a row,
+# and the start of a row is anchored on that resource's leading keys -- the
+# serializer field order, as in seed_write.
+#
+# On /api/v1 there are no namespace fields at all (octonomy/core/serializers.py),
+# and their absence is the assertion: v1 cannot address a namespace, so it must
+# show global rows and nothing that says otherwise.
+assert_partition() {
+    _ap_where="/api/${1}/${3} (${2:-global})"
+    case "$3" in
+        resources/*) _ap_row="\"assignment_id\":\"${UUID_ERE}\"" ;;
+        *) _ap_row="\"id\":\"${UUID_ERE}\",\"tenant_id\":\"$(ere_quote "$TENANT_ID")\",\"application_id\":(null|\"[^\"]*\")" ;;
+    esac
+    if [ -n "$2" ]; then
+        _ap_marker="${_ap_row},\"namespace_type\":\"$(ere_quote "$NAMESPACE_TYPE")\",\"namespace_id\":\"$(ere_quote "$2")\""
     else
-        _at_marked="$(count_of "$_at_payload" '"namespace_')"
-        [ "$_at_marked" = "0" ] ||
-            fail "${_at_where} emitted namespace fields, which /api/v1 must never do: ${_at_payload}"
+        _ap_marker="${_ap_row},\"namespace_type\":null,\"namespace_id\":null"
+    fi
+
+    _ap_response="$(api_request GET "/api/${1}/${3}" "$2" "")"
+    _ap_code="${_ap_response%% *}"
+    _ap_payload="${_ap_response#* }"
+    [ "$_ap_code" = "200" ] || fail "reading back ${_ap_where} returned HTTP ${_ap_code}: ${_ap_payload}"
+
+    _ap_total="$(printf '%s\n' "$_ap_payload" | sed -n 's/.*"pagination":{[^}]*"count":\([0-9][0-9]*\).*/\1/p')"
+    [ "$_ap_total" = "$4" ] ||
+        fail "${_ap_where} reports ${_ap_total:-no} total rows, want ${4}: ${_ap_payload}"
+    _ap_rows="$(count_matches "$_ap_payload" "$_ap_row")"
+    [ "$_ap_rows" = "$4" ] ||
+        fail "${_ap_where} returned ${_ap_rows} rows on the page, want ${4}: ${_ap_payload}"
+    if [ "$1" = "v1" ]; then
+        _ap_marked="$(count_matches "$_ap_payload" '"namespace_(type|id)"')"
+        [ "$_ap_marked" = "0" ] ||
+            fail "${_ap_where} emitted namespace fields, which /api/v1 must never do: ${_ap_payload}"
+    else
+        _ap_marked="$(count_matches "$_ap_payload" "$_ap_marker")"
+        [ "$_ap_marked" = "$4" ] ||
+            fail "${_ap_where}: ${_ap_marked} of ${4} rows are in the ${2:-global} partition, so it is not what was seeded: ${_ap_payload}"
     fi
 }
 
-# The seed writes all returned 201, which proves each row exists. It does not
-# prove the rows landed in the partitions the corpus table claims, and that
-# placement is the whole value of the corpus. So read every partition back.
+# Every seed write returned 201, which proves each row exists. It does not prove
+# the rows landed in the partitions the corpus table claims, and that placement
+# is the whole value of the corpus. So read every resource back from every
+# partition, including the empty ones: a partition that should hold nothing is
+# exactly where a scope leak would show.
+#
+# application_id is required on a namespaced read (auth.py:195-198) and on any
+# resource-tags read; on a global list it is harmless, and include_shared (on by
+# default) keeps the shared rows in view.
 assert_corpus() {
     log "asserting each partition reads back exactly as seeded"
-    assert_tag_partition v2 "" "$SEED_GLOBAL_TAGS" '"namespace_type":null,"namespace_id":null'
-    assert_tag_partition v2 "$NAMESPACE_A_ID" "$SEED_NAMESPACE_A_TAGS" \
-        "\"namespace_type\":\"${NAMESPACE_TYPE}\",\"namespace_id\":\"${NAMESPACE_A_ID}\""
-    assert_tag_partition v2 "$NAMESPACE_B_ID" "$SEED_NAMESPACE_B_TAGS" \
-        "\"namespace_type\":\"${NAMESPACE_TYPE}\",\"namespace_id\":\"${NAMESPACE_B_ID}\""
-    # v1 cannot address a namespace at all (namespace headers are a 400 there),
-    # so it must see the global rows and nothing else.
-    assert_tag_partition v1 "" "$SEED_GLOBAL_TAGS" ""
-    log "corpus confirmed: ${SEED_GLOBAL_TAGS} global tags, ${SEED_NAMESPACE_A_TAGS} in ${NAMESPACE_A_ID}, ${SEED_NAMESPACE_B_TAGS} in ${NAMESPACE_B_ID}; /api/v1 sees only the global ones"
+    _q="application_id=${APPLICATION_ID}&limit=200"
+    _a="$NAMESPACE_A_ID"
+    _b="$NAMESPACE_B_ID"
+    _sku1="resources/product/sku-001/tags?${_q}"
+    _sku2="resources/product/sku-002/tags?${_q}"
+
+    # version  partition  path                    rows
+    assert_partition v2 "" "vocabularies?${_q}" 2
+    assert_partition v2 "" "tags?${_q}" 4
+    assert_partition v2 "" "tag-aliases?${_q}" 2
+    assert_partition v2 "" "$_sku1" 2
+    assert_partition v2 "" "$_sku2" 2
+
+    assert_partition v2 "$_a" "vocabularies?${_q}" 1
+    assert_partition v2 "$_a" "tags?${_q}" 2
+    assert_partition v2 "$_a" "tag-aliases?${_q}" 1
+    assert_partition v2 "$_a" "$_sku1" 2
+    assert_partition v2 "$_a" "$_sku2" 0
+
+    assert_partition v2 "$_b" "vocabularies?${_q}" 1
+    assert_partition v2 "$_b" "tags?${_q}" 2
+    assert_partition v2 "$_b" "tag-aliases?${_q}" 0
+    assert_partition v2 "$_b" "$_sku1" 1
+    assert_partition v2 "$_b" "$_sku2" 0
+
+    # v1 cannot address a namespace (namespace headers are a 400 there), so it
+    # sees exactly the global partition.
+    assert_partition v1 "" "vocabularies?${_q}" 2
+    assert_partition v1 "" "tags?${_q}" 4
+    assert_partition v1 "" "tag-aliases?${_q}" 2
+    assert_partition v1 "" "$_sku1" 2
+    assert_partition v1 "" "$_sku2" 2
+
+    log "corpus confirmed: every resource in global, ${_a} and ${_b} reads back as seeded, and /api/v1 sees only global"
 }
 
 # --- Commands ------------------------------------------------------------------
@@ -665,6 +782,7 @@ cmd_down() {
 }
 
 cmd_up() {
+    require_safe_config
     require_docker
     require_pinned_images
     command -v curl >/dev/null 2>&1 || fail "curl is not installed or not on PATH"

@@ -59,8 +59,8 @@ stays a faithful, ergonomic client.
   `scripts/octonomy-harness.sh` (`make harness-up`, then `make test-integration`). They must skip when
   `OCTONOMY_TEST_BASE_URL` is empty and must only read, so the suite reruns against one harness.
 - The harness seeds its corpus with curl, never through the SDK, so SDK defects cannot shape the data
-  the SDK is tested against. When changing the corpus, update `SEED_*` counts and the table in
-  `docs/development.md`, and keep the image pinned by digest.
+  the SDK is tested against. When changing the corpus, update the counts in `assert_corpus` and the
+  table in `docs/development.md`, and keep both images pinned by digest.
 
 ## Local Development
 
