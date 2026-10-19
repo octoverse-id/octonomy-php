@@ -1,0 +1,48 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {
+            "limit": "1",
+            "offset": "1"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000009"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000005",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "name": "Green",
+                    "slug": "green",
+                    "type": "color",
+                    "description": null,
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 1,
+                    "created_at": "2026-01-01T00:00:08.000000Z",
+                    "updated_at": "2026-01-01T00:00:09.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 1,
+                "offset": 1,
+                "count": 6,
+                "next": "http://127.0.0.1:8000/api/v1/tags?limit=1&offset=2",
+                "previous": "http://127.0.0.1:8000/api/v1/tags?limit=1"
+            }
+        }
+    }
+}

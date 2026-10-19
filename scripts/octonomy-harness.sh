@@ -214,6 +214,18 @@ require_safe_config() {
         esac
     done
     [ "$PORT" -le 65535 ] || fail "OCTONOMY_HARNESS_PORT must be at most 65535 (got ${PORT})"
+    # The image references reach the env file too (fixture capture records which
+    # server it captured), so they get the same treatment, widened by the three
+    # characters a reference needs: / : @.
+    for _pair in \
+        "OCTONOMY_HARNESS_IMAGE=${HARNESS_IMAGE}" \
+        "OCTONOMY_HARNESS_POSTGRES_IMAGE=${POSTGRES_IMAGE}"; do
+        case "${_pair#*=}" in
+            '' | *[!A-Za-z0-9._/:@-]*)
+                fail "${_pair%%=*} must be non-empty and use only A-Z a-z 0-9 . _ - / : @ (got '${_pair#*=}'): it is written unescaped into the sourced env file"
+                ;;
+        esac
+    done
     # The probes and the corpus give each namespace its own rows. Two names for
     # one namespace would merge those rows, and the isolation probe would then
     # fail as "not refused", which reads as a server defect rather than a typo.
@@ -887,6 +899,9 @@ OCTONOMY_TEST_NAMESPACE_A_ID=${NAMESPACE_A_ID}
 OCTONOMY_TEST_NAMESPACE_A_TOKEN=${NAMESPACE_A_TOKEN}
 OCTONOMY_TEST_NAMESPACE_B_ID=${NAMESPACE_B_ID}
 OCTONOMY_TEST_NAMESPACE_B_TOKEN=${NAMESPACE_B_TOKEN}
+# The server image this harness runs. Fixture capture records it in the
+# manifest, so a fixture set always names the build it came from.
+OCTONOMY_TEST_SERVER_IMAGE=${HARNESS_IMAGE}
 ENV_EOF
 
     trap - EXIT

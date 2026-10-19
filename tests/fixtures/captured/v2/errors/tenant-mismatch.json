@@ -1,0 +1,35 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-other-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 400,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000053"
+        },
+        "body": {
+            "error": {
+                "code": "tenant_mismatch",
+                "message": "Service client is not granted access to this tenant.",
+                "details": {
+                    "X-Tenant-ID": [
+                        "Tenant is not granted for this service client."
+                    ]
+                },
+                "request_id": "req_00000000000000000000000000000053"
+            }
+        }
+    }
+}

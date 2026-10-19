@@ -1,0 +1,53 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app",
+            "limit": "1",
+            "offset": "1"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000035"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-00000000002c",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "name": "Promotions",
+                    "slug": "promotions",
+                    "type": "label",
+                    "description": null,
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000028",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 0,
+                    "created_at": "2026-01-01T00:00:57.000000Z",
+                    "updated_at": "2026-01-01T00:00:58.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 1,
+                "offset": 1,
+                "count": 4,
+                "next": "http://127.0.0.1:8000/api/v2/tags?application_id=harness-app&limit=1&offset=2",
+                "previous": "http://127.0.0.1:8000/api/v2/tags?application_id=harness-app&limit=1"
+            }
+        }
+    }
+}

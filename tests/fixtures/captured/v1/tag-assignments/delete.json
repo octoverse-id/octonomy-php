@@ -1,0 +1,24 @@
+{
+    "request": {
+        "method": "DELETE",
+        "path": "/api/v1/tag-assignments",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "tag_id": "00000000-0000-4000-8000-00000000000a",
+            "resource_type": "product",
+            "resource_id": "sku-003"
+        }
+    },
+    "response": {
+        "status": 204,
+        "headers": {
+            "X-Request-ID": "req_00000000000000000000000000000013"
+        },
+        "body": null
+    }
+}

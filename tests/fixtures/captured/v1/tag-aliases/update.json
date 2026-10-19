@@ -1,0 +1,37 @@
+{
+    "request": {
+        "method": "PATCH",
+        "path": "/api/v1/tag-aliases/00000000-0000-4000-8000-00000000001f",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": {
+            "name": "Staff Picks"
+        }
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000001b"
+        },
+        "body": {
+            "data": {
+                "id": "00000000-0000-4000-8000-00000000001f",
+                "tenant_id": "harness-tenant",
+                "application_id": "harness-app",
+                "tag_id": "00000000-0000-4000-8000-00000000000a",
+                "name": "Staff Picks",
+                "slug": "staff-pick",
+                "metadata": {
+                    "source": "editorial"
+                },
+                "is_active": true,
+                "created_at": "2026-01-01T00:00:46.000000Z",
+                "updated_at": "2026-01-01T00:00:48.000000Z"
+            }
+        }
+    }
+}

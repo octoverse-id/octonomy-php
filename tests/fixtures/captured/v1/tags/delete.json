@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "DELETE",
+        "path": "/api/v1/tags/00000000-0000-4000-8000-000000000020",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 204,
+        "headers": {
+            "X-Request-ID": "req_0000000000000000000000000000001f"
+        },
+        "body": null
+    }
+}

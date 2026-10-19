@@ -1,0 +1,74 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/resources/product/sku-001/tags",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000014"
+        },
+        "body": {
+            "data": [
+                {
+                    "assignment_id": "00000000-0000-4000-8000-000000000015",
+                    "assigned_by": "octonomy-php-harness",
+                    "assigned_at": "2026-01-01T00:00:19.000000Z",
+                    "tag": {
+                        "id": "00000000-0000-4000-8000-000000000006",
+                        "tenant_id": "harness-tenant",
+                        "application_id": "harness-app",
+                        "name": "Large",
+                        "slug": "large",
+                        "type": "size",
+                        "description": null,
+                        "vocabulary_id": "00000000-0000-4000-8000-000000000002",
+                        "metadata": {},
+                        "is_active": true,
+                        "usage_count": 1,
+                        "created_at": "2026-01-01T00:00:12.000000Z",
+                        "updated_at": "2026-01-01T00:00:13.000000Z"
+                    }
+                },
+                {
+                    "assignment_id": "00000000-0000-4000-8000-000000000016",
+                    "assigned_by": "octonomy-php-harness",
+                    "assigned_at": "2026-01-01T00:00:18.000000Z",
+                    "tag": {
+                        "id": "00000000-0000-4000-8000-000000000008",
+                        "tenant_id": "harness-tenant",
+                        "application_id": null,
+                        "name": "Red",
+                        "slug": "red",
+                        "type": "color",
+                        "description": "Primary red",
+                        "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                        "metadata": {
+                            "hex": "#cc0000"
+                        },
+                        "is_active": true,
+                        "usage_count": 3,
+                        "created_at": "2026-01-01T00:00:06.000000Z",
+                        "updated_at": "2026-01-01T00:00:07.000000Z"
+                    }
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 2,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

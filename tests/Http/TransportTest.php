@@ -4,39 +4,36 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests\Http;
 
-use GuzzleHttp\Psr7\Response;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\SdkTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Covers the three ways Transport reads a 2xx — one(), many(), none() — and the
- * envelope each one enforces. The malformed bodies here are deliberately
- * synthetic: a conforming server cannot produce them.
+ * envelope each one enforces. Well-formed responses are captured from a real
+ * server; the malformed ones are synthetic negatives, because a conforming
+ * server cannot produce them.
  */
 final class TransportTest extends SdkTestCase
 {
     public function testOneUnwrapsTheDataObject(): void
     {
-        $transport = $this->transportWith([new Response(
-            200,
-            ['Content-Type' => 'application/json'],
-            '{"data":{"id":"tag_1","metadata":{"color":"red","sizes":[{"eu":42}]},"parent_id":null}}',
-        )]);
+        $transport = $this->transportWith([self::captured('v1/tags/get')]);
 
+        $data = $transport->one('GET', 'tags/tag_1');
+
+        self::assertSame(self::capturedData('v1/tags/get'), $data);
         // Nested objects come back as arrays, as models expect.
-        self::assertSame(
-            ['id' => 'tag_1', 'metadata' => ['color' => 'red', 'sizes' => [['eu' => 42]]], 'parent_id' => null],
-            $transport->one('GET', 'tags/tag_1'),
-        );
+        self::assertSame(['color' => 'red'], $data['metadata']);
     }
 
     #[DataProvider('bodiesWithoutDataObject')]
     public function testOneRejectsABodyWithoutADataObject(string $raw): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative(200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -63,7 +60,7 @@ final class TransportTest extends SdkTestCase
 
     public function testOneRaisesTransportExceptionForANonJson2xx(): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'text/html'], '<html>proxy</html>')]);
+        $transport = $this->transportWith([self::syntheticNegative(200, '<html>proxy</html>', ['Content-Type' => 'text/html'])]);
 
         $this->expectException(TransportException::class);
 
@@ -72,9 +69,7 @@ final class TransportTest extends SdkTestCase
 
     public function testOneRaisesTheTypedApiExceptionForANon2xx(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(404, ['error' => ['code' => 'not_found', 'message' => 'Resource not found.']]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
 
@@ -83,29 +78,29 @@ final class TransportTest extends SdkTestCase
 
     public function testManyReturnsRowsAndPagination(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(200, [
-                'data' => [['id' => 'tag_1'], ['id' => 'tag_2']],
-                'pagination' => ['limit' => 2, 'offset' => 4, 'count' => 9, 'next' => 'https://n', 'previous' => null],
-            ]),
-        ]);
+        // A middle page, so both links are set.
+        $captured = CapturedFixture::load('v1/tags/list-page');
+        $pagination = $captured->json()['pagination'];
+        $transport = $this->transportWith([$captured->response()]);
 
-        $page = $transport->many('GET', 'tags', ['limit' => '2', 'offset' => '4']);
+        $page = $transport->many('GET', 'tags', ['limit' => '1', 'offset' => '1']);
 
-        self::assertSame([['id' => 'tag_1'], ['id' => 'tag_2']], $page->rows);
-        self::assertSame(2, $page->pagination->limit);
-        self::assertSame(4, $page->pagination->offset);
-        self::assertSame(9, $page->pagination->count);
-        self::assertSame('https://n', $page->pagination->next);
-        self::assertNull($page->pagination->previous);
-        self::assertSame(['limit' => '2', 'offset' => '4'], $this->lastQuery());
+        self::assertSame($captured->data(), $page->rows);
+        self::assertCount(1, $page->rows);
+        self::assertSame(1, $page->pagination->limit);
+        self::assertSame(1, $page->pagination->offset);
+        self::assertSame($pagination['count'], $page->pagination->count);
+        self::assertGreaterThan(2, $page->pagination->count);
+        self::assertSame($pagination['next'], $page->pagination->next);
+        self::assertSame($pagination['previous'], $page->pagination->previous);
+        self::assertNotNull($page->pagination->next);
+        self::assertNotNull($page->pagination->previous);
+        self::assertSame(['limit' => '1', 'offset' => '1'], $this->lastQuery());
     }
 
     public function testManyAcceptsAnEmptyPage(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(200, ['data' => [], 'pagination' => ['limit' => 50, 'offset' => 0, 'count' => 0]]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/tags/list-empty')]);
 
         $page = $transport->many('GET', 'tags');
 
@@ -116,7 +111,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('bodiesWithBadData')]
     public function testManyRejectsDataThatIsNotAListOfObjects(string $raw, string $expected): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative(200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags: ' . $expected);
@@ -145,7 +140,7 @@ final class TransportTest extends SdkTestCase
 
     public function testManyRaisesTransportExceptionForANonJson2xx(): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'text/html'], '<html>proxy</html>')]);
+        $transport = $this->transportWith([self::syntheticNegative(200, '<html>proxy</html>', ['Content-Type' => 'text/html'])]);
 
         $this->expectException(TransportException::class);
 
@@ -155,7 +150,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('bodiesWithBadPagination')]
     public function testManyRejectsMissingOrInvalidPagination(string $raw): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative(200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -178,7 +173,7 @@ final class TransportTest extends SdkTestCase
 
     public function testNoneSendsTheRequestAndReturnsNothing(): void
     {
-        $transport = $this->transportWith([new Response(204)]);
+        $transport = $this->transportWith([self::captured('v1/tag-assignments/delete')]);
 
         $transport->none('DELETE', 'tag-assignments', [], ['tag_id' => 'tag_1', 'resource_id' => 'r1']);
 
@@ -191,7 +186,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('unexpectedSuccessBodies')]
     public function testNoneIgnoresAnUnexpectedSuccessBody(int $status, string $raw): void
     {
-        $transport = $this->transportWith([new Response($status, [], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($status, $raw, [])]);
 
         $transport->none('DELETE', 'tags/tag_1');
 
@@ -210,9 +205,7 @@ final class TransportTest extends SdkTestCase
 
     public function testNoneStillRaisesForANon2xx(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(404, ['error' => ['code' => 'not_found', 'message' => 'Resource not found.']]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
 

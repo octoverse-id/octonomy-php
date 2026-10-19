@@ -1,0 +1,134 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags/00000000-0000-4000-8000-00000000002d/audit-logs",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000003c"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000030",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "action": "tag.updated",
+                    "entity_type": "tag",
+                    "entity_id": "00000000-0000-4000-8000-00000000002d",
+                    "tag_id": "00000000-0000-4000-8000-00000000002d",
+                    "resource_type": null,
+                    "resource_id": null,
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000039",
+                    "operation_id": "00000000-0000-4000-8000-000000000031",
+                    "changes": {
+                        "after": {
+                            "metadata": {
+                                "rank": 1,
+                                "color": "red"
+                            },
+                            "description": "Hand-picked by the merchandising team"
+                        },
+                        "before": {
+                            "metadata": {
+                                "color": "red"
+                            },
+                            "description": "Hand-picked items"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:01:05.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000032",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "action": "assignment.created",
+                    "entity_type": "tag_assignment",
+                    "entity_id": "00000000-0000-4000-8000-00000000002e",
+                    "tag_id": "00000000-0000-4000-8000-00000000002d",
+                    "resource_type": "product",
+                    "resource_id": "sku-003",
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000036",
+                    "operation_id": "00000000-0000-4000-8000-000000000033",
+                    "changes": {
+                        "after": {
+                            "id": "00000000-0000-4000-8000-00000000002e",
+                            "tag_id": "00000000-0000-4000-8000-00000000002d",
+                            "tenant_id": "harness-tenant",
+                            "assigned_at": "2026-01-01T00:01:02.000000+00:00",
+                            "assigned_by": "octonomy-php-capture",
+                            "resource_id": "sku-003",
+                            "resource_type": "product",
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:01:03.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000034",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "action": "tag.created",
+                    "entity_type": "tag",
+                    "entity_id": "00000000-0000-4000-8000-00000000002d",
+                    "tag_id": "00000000-0000-4000-8000-00000000002d",
+                    "resource_type": null,
+                    "resource_id": null,
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000034",
+                    "operation_id": "00000000-0000-4000-8000-000000000035",
+                    "changes": {
+                        "after": {
+                            "id": "00000000-0000-4000-8000-00000000002d",
+                            "name": "Featured",
+                            "slug": "featured",
+                            "type": "label",
+                            "metadata": {
+                                "color": "red"
+                            },
+                            "is_active": true,
+                            "parent_id": "00000000-0000-4000-8000-00000000002c",
+                            "tenant_id": "harness-tenant",
+                            "created_at": "2026-01-01T00:00:59.000000+00:00",
+                            "updated_at": "2026-01-01T00:01:00.000000+00:00",
+                            "description": "Hand-picked items",
+                            "vocabulary_id": "00000000-0000-4000-8000-000000000028",
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:01:01.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 3,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

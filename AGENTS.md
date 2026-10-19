@@ -52,6 +52,17 @@ stays a faithful, ergonomic client.
 - PHPUnit tests using Guzzle's `MockHandler` (see `tests/SdkTestCase.php`). Assert the request
   method, path, auth headers (`Authorization`, `X-Tenant-ID`), query params, and JSON body; assert the
   decoded model/`ResultList` on the response side.
+- Response bodies in tests come from captured fixtures (`tests/fixtures/captured/<api_version>/`,
+  replayed with `SdkTestCase::captured()`); hand-written response bodies are banned, because a body
+  written from the spec agrees with its author rather than the server (#6 shipped green that way).
+  **Carve-out:** negative fixtures (missing envelope, missing field, wrong type, invalid JSON, gateway
+  HTML, mutually exclusive flag states) are synthetic, since a conforming server cannot produce them;
+  build them only with `SdkTestCase::syntheticNegative()`, which marks them as such. Request-side
+  assertions stay hand-written: they test SDK behavior, not server shape.
+- Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
+  pinned server) and never edited by hand; the manifest records each file's hash and the unit suite
+  fails on any difference. A refresh is its own reviewed PR, never automatic. Moving the harness
+  image pin requires re-capturing in the same PR.
 - Cover success paths, the `{data, pagination}` list envelope, and error→exception mapping
   (404 → `NotFoundException`, 409 → `ConflictException`, 400 → `ValidationException`).
 - Use PHPUnit attributes (`#[DataProvider]`, …), not doc-comment annotations.
@@ -60,7 +71,7 @@ stays a faithful, ergonomic client.
   `OCTONOMY_TEST_BASE_URL` is empty and must only read, so the suite reruns against one harness.
 - The harness seeds its corpus with curl, never through the SDK, so SDK defects cannot shape the data
   the SDK is tested against. When changing the corpus, update the counts in `assert_corpus` and the
-  table in `docs/development.md`, and keep both images pinned by digest.
+  table in `docs/development.md`, re-run `make fixtures`, and keep both images pinned by digest.
 
 ## Local Development
 

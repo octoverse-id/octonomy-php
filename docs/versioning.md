@@ -9,6 +9,7 @@ source of truth for how a change maps to a version bump.
 | ------- | ----- | ------- |
 | **SDK version** | `Client::VERSION` + git tag `vX.Y.Z` | Canonical SemVer for the SDK and CHANGELOG. Composer/Packagist resolve versions from git tags. |
 | **Targeted server contract** | this document + the vendored `docs/openapi.yaml` | Which Octonomy REST contract the SDK is written against (currently **v1**, server `1.0.0`). |
+| **Captured server release** | `tests/fixtures/captured/manifest.json` | The server build the unit suite's response bodies were captured from (currently `3.2.1`, the harness pin). It moves only in a reviewed fixture-refresh PR. |
 
 The SDK versions **independently** of the Octonomy server. `make version-check` asserts `Client::VERSION`
 matches the latest `CHANGELOG.md` release heading. Before the first release there is no such heading, so

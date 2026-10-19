@@ -1,0 +1,23 @@
+{
+    "request": {
+        "method": "DELETE",
+        "path": "/api/v2/tag-aliases/00000000-0000-4000-8000-000000000041",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 204,
+        "headers": {
+            "X-Request-ID": "req_00000000000000000000000000000048"
+        },
+        "body": null
+    }
+}

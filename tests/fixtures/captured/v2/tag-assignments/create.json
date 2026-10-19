@@ -1,0 +1,41 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/v2/tag-assignments",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "tag_id": "00000000-0000-4000-8000-00000000002d",
+            "resource_type": "product",
+            "resource_id": "sku-003",
+            "assigned_by": "octonomy-php-capture"
+        }
+    },
+    "response": {
+        "status": 201,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000036"
+        },
+        "body": {
+            "data": {
+                "id": "00000000-0000-4000-8000-00000000002e",
+                "tenant_id": "harness-tenant",
+                "application_id": "harness-app",
+                "namespace_type": "merchant",
+                "namespace_id": "harness-merchant-a",
+                "tag_id": "00000000-0000-4000-8000-00000000002d",
+                "resource_type": "product",
+                "resource_id": "sku-003",
+                "assigned_by": "octonomy-php-capture",
+                "assigned_at": "2026-01-01T00:01:02.000000Z"
+            }
+        }
+    }
+}

@@ -27,3 +27,6 @@ clover.xml
 # Local code review pipeline artifacts (keep the tracked placeholder)
 code-review/*
 !code-review/.gitkeep
+
+# Left behind only if scripts/capture-fixtures.php dies mid-write
+/tests/fixtures/captured/.staging/

@@ -11,12 +11,13 @@ use GuzzleHttp\Psr7\Response;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 
 /**
- * SdkTestCase wires a Client to a Guzzle MockHandler so tests can queue canned
- * responses and inspect the request the SDK actually sent.
+ * SdkTestCase wires a Client to a Guzzle MockHandler so tests can queue responses
+ * captured from a real server and inspect the request the SDK actually sent.
  */
 abstract class SdkTestCase extends TestCase
 {
@@ -100,10 +101,39 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $data
+     * A response a real Octonomy sent, replayed from tests/fixtures/captured, such
+     * as captured('v1/tags/get'). Every response body a test needs comes from
+     * here unless a conforming server could not produce it (syntheticNegative()).
      */
-    protected static function jsonResponse(int $status, array $data): Response
+    protected static function captured(string $name): Response
     {
-        return new Response($status, ['Content-Type' => 'application/json'], (string) json_encode($data));
+        return CapturedFixture::load($name)->response();
+    }
+
+    /**
+     * The "data" member of a captured response, to assert what a model hydrated
+     * against what the server actually sent.
+     *
+     * @return array<array-key, mixed>
+     */
+    protected static function capturedData(string $name): array
+    {
+        return CapturedFixture::load($name)->data();
+    }
+
+    /**
+     * A response no conforming Octonomy sends: a missing envelope or field, a
+     * wrong type, invalid JSON, a gateway's HTML. These are the one carve-out
+     * from captured fixtures (AGENTS.md), since a real server cannot be made to
+     * produce them; the name marks each one at its call site.
+     *
+     * @param array<string, string> $headers
+     */
+    protected static function syntheticNegative(
+        int $status,
+        string $body = '',
+        array $headers = ['Content-Type' => 'application/json'],
+    ): Response {
+        return new Response($status, $headers, $body);
     }
 }

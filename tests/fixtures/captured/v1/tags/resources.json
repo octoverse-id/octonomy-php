@@ -1,0 +1,44 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags/00000000-0000-4000-8000-000000000008/resources",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000000f"
+        },
+        "body": {
+            "data": [
+                {
+                    "application_id": "harness-app",
+                    "resource_type": "product",
+                    "resource_id": "sku-002",
+                    "assigned_by": "octonomy-php-harness",
+                    "assigned_at": "2026-01-01T00:00:20.000000Z"
+                },
+                {
+                    "application_id": "harness-app",
+                    "resource_type": "product",
+                    "resource_id": "sku-001",
+                    "assigned_by": "octonomy-php-harness",
+                    "assigned_at": "2026-01-01T00:00:18.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 2,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

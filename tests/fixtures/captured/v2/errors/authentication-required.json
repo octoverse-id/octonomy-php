@@ -1,0 +1,33 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "unknown",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 403,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000052"
+        },
+        "body": {
+            "error": {
+                "code": "authentication_required",
+                "message": "Authentication credentials were not provided.",
+                "details": {
+                    "detail": "Invalid bearer token."
+                },
+                "request_id": "req_00000000000000000000000000000052"
+            }
+        }
+    }
+}

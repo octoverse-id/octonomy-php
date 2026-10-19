@@ -1,0 +1,114 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/resources/product/sku-004/audit-logs",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000016"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000017",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "assignment.created",
+                    "entity_type": "tag_assignment",
+                    "entity_id": "00000000-0000-4000-8000-000000000018",
+                    "tag_id": "00000000-0000-4000-8000-00000000000a",
+                    "resource_type": "product",
+                    "resource_id": "sku-004",
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000015",
+                    "operation_id": "00000000-0000-4000-8000-000000000019",
+                    "changes": {
+                        "after": {
+                            "id": "00000000-0000-4000-8000-000000000018",
+                            "tag_id": "00000000-0000-4000-8000-00000000000a",
+                            "tenant_id": "harness-tenant",
+                            "assigned_at": "2026-01-01T00:00:44.000000+00:00",
+                            "assigned_by": "octonomy-php-capture",
+                            "resource_id": "sku-004",
+                            "resource_type": "product",
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:45.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-00000000001a",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "assignment.removed",
+                    "entity_type": "tag_assignment",
+                    "entity_id": "00000000-0000-4000-8000-00000000001b",
+                    "tag_id": "00000000-0000-4000-8000-000000000005",
+                    "resource_type": "product",
+                    "resource_id": "sku-004",
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000015",
+                    "operation_id": "00000000-0000-4000-8000-000000000019",
+                    "changes": {
+                        "before": {
+                            "id": "00000000-0000-4000-8000-00000000001b",
+                            "tag_id": "00000000-0000-4000-8000-000000000005",
+                            "tenant_id": "harness-tenant",
+                            "assigned_at": "2026-01-01T00:00:41.000000+00:00",
+                            "assigned_by": "octonomy-php-capture",
+                            "resource_id": "sku-004",
+                            "resource_type": "product",
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:43.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-00000000001c",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "assignment.created",
+                    "entity_type": "tag_assignment",
+                    "entity_id": "00000000-0000-4000-8000-00000000001b",
+                    "tag_id": "00000000-0000-4000-8000-000000000005",
+                    "resource_type": "product",
+                    "resource_id": "sku-004",
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000017",
+                    "operation_id": "00000000-0000-4000-8000-00000000001d",
+                    "changes": {
+                        "after": {
+                            "id": "00000000-0000-4000-8000-00000000001b",
+                            "tag_id": "00000000-0000-4000-8000-000000000005",
+                            "tenant_id": "harness-tenant",
+                            "assigned_at": "2026-01-01T00:00:41.000000+00:00",
+                            "assigned_by": "octonomy-php-capture",
+                            "resource_id": "sku-004",
+                            "resource_type": "product",
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:42.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 3,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

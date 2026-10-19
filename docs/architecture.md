@@ -71,6 +71,6 @@ To add a resource, follow `Resource/TagService.php`:
 1. Read the matching schema(s) in `docs/openapi.yaml`.
 2. Add `Model/<Resource>.php` (+ `*Create`/`*Update`/`*ListParams`) and `Resource/<Resource>Service.php`.
 3. Wire the accessor onto `Client`.
-4. Add `MockHandler`-based tests and a CHANGELOG entry.
+4. Add `MockHandler`-based tests that replay captured fixtures, and a CHANGELOG entry.
 
 See [roadmap.md](roadmap.md) for the queued resources.

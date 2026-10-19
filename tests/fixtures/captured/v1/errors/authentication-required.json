@@ -1,0 +1,29 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "unknown",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 403,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000026"
+        },
+        "body": {
+            "error": {
+                "code": "authentication_required",
+                "message": "Authentication credentials were not provided.",
+                "details": {
+                    "detail": "Invalid bearer token."
+                },
+                "request_id": "req_00000000000000000000000000000026"
+            }
+        }
+    }
+}

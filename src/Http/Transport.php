@@ -63,6 +63,8 @@ final class Transport
      * @return array<string, mixed>
      *
      * @throws MalformedResponseException when the 2xx body has no "data" object
+     * @throws ApiException                when the server answers with a non-2xx status
+     * @throws TransportException          when no response arrives or a 2xx body is not JSON
      */
     public function one(
         string $method,
@@ -91,6 +93,8 @@ final class Transport
      *
      * @throws MalformedResponseException when "data" is not a list of non-empty objects or
      *                                    "pagination" is not an object
+     * @throws ApiException                when the server answers with a non-2xx status
+     * @throws TransportException          when no response arrives or a 2xx body is not JSON
      */
     public function many(
         string $method,
@@ -127,6 +131,9 @@ final class Transport
      *
      * @param array<string, string> $query
      * @param array<string, mixed>|null $body
+     *
+     * @throws ApiException       when the server answers with a non-2xx status
+     * @throws TransportException when no response arrives
      */
     public function none(
         string $method,

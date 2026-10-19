@@ -16,8 +16,10 @@ template, then:
    `?RequestOptions $options = null` last, delegating to `Transport::one()` (single resource),
    `many()` (list) or `none()` (204). There is no raw-body method, by design.
 4. Wire an accessor onto `Client`.
-5. Add `MockHandler`-based tests (assert method/path/headers/query/body; cover the error envelope),
-   a `## [Unreleased]` CHANGELOG entry, and update [`api.md`](api.md).
+5. Add `MockHandler`-based tests (assert method/path/headers/query/body; cover the error envelope)
+   that replay captured fixtures, adding the resource's calls to `scripts/capture-fixtures.php` and
+   re-running `make fixtures` if they are not captured yet, plus a `## [Unreleased]` CHANGELOG entry,
+   and update [`api.md`](api.md).
 
 Each item below is a good single GitHub issue (`feature/<n>-<slug>`).
 

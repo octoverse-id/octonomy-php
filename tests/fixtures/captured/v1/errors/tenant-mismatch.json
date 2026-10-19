@@ -1,0 +1,31 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-other-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 400,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000027"
+        },
+        "body": {
+            "error": {
+                "code": "tenant_mismatch",
+                "message": "Service client is not granted access to this tenant.",
+                "details": {
+                    "X-Tenant-ID": [
+                        "Tenant is not granted for this service client."
+                    ]
+                },
+                "request_id": "req_00000000000000000000000000000027"
+            }
+        }
+    }
+}
