@@ -557,14 +557,23 @@ final class FixtureCapture
             'fixtures' => array_map(static fn(string $contents): string => 'sha256:' . hash('sha256', $contents), $encoded),
         ];
 
-        // Write everything beside the corpus first, then swap it in, so a failure
-        // part-way never leaves a corpus that is half one capture and half another.
-        if (!is_dir($output) && !mkdir($output, 0o777, true)) {
-            throw new CaptureFailed("could not create {$output}");
+        // Build the new corpus as a sibling directory, then swap whole
+        // directories, so the corpus is never part one capture and part another.
+        // The swap is two renames, not one atomic step (PHP has no renameat2
+        // exchange): an interrupt between them leaves the old corpus intact at
+        // .previous, and the next run puts it back before doing anything else.
+        $output = rtrim($output, '/');
+        $staging = "{$output}.staging";
+        $previous = "{$output}.previous";
+        if (is_dir($previous)) {
+            if (is_dir($output)) {
+                self::remove($previous);
+            } elseif (!rename($previous, $output)) {
+                throw new CaptureFailed("an earlier capture was interrupted mid-swap and {$previous} could not be moved back to {$output}");
+            }
         }
-        $staging = rtrim($output, '/') . '/.staging';
         self::remove($staging);
-        foreach ($encoded as $file => $contents) {
+        foreach ($encoded + ['manifest.json' => self::encode($manifest, true) . "\n"] as $file => $contents) {
             $path = "{$staging}/{$file}";
             if (!is_dir(dirname($path)) && !mkdir(dirname($path), 0o777, true)) {
                 throw new CaptureFailed('could not create ' . dirname($path));
@@ -573,16 +582,17 @@ final class FixtureCapture
                 throw new CaptureFailed("could not write {$path}");
             }
         }
-        if (file_put_contents("{$staging}/manifest.json", self::encode($manifest, true) . "\n") === false) {
-            throw new CaptureFailed("could not write {$staging}/manifest.json");
+        if (is_dir($output) && !rename($output, $previous)) {
+            self::remove($staging);
+            throw new CaptureFailed("could not move the current corpus aside to {$previous}; it is unchanged");
         }
-        foreach (['v1', 'v2', 'manifest.json'] as $entry) {
-            self::remove("{$output}/{$entry}");
-            if (!rename("{$staging}/{$entry}", "{$output}/{$entry}")) {
-                throw new CaptureFailed("could not move {$entry} into {$output}");
+        if (!rename($staging, $output)) {
+            if (is_dir($previous)) {
+                rename($previous, $output);
             }
+            throw new CaptureFailed("could not move the new corpus into {$output}; the previous one was put back");
         }
-        self::remove($staging);
+        self::remove($previous);
 
         fwrite(STDERR, sprintf("capture-fixtures: wrote %d fixtures from %s to %s\n", count($encoded), $image, $output));
     }
