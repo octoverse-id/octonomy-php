@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests\Fixture;
 
 use Octoverse\Octonomy\Tests\SdkTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Holds the AGENTS.md rule that response bodies in tests come from captured
@@ -68,6 +69,25 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
 
         /** @phpstan-ignore argument.type (passing the wrong type is the point) */
         $this->clientWith([new \stdClass()]);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function namesOutsideTheManifest(): iterable
+    {
+        yield 'a path out of the corpus' => ['../../handwritten'];
+        yield 'an uncaptured operation' => ['v1/tags/no-such-operation'];
+        yield 'the manifest itself' => ['manifest'];
+    }
+
+    #[DataProvider('namesOutsideTheManifest')]
+    public function testOnlyAManifestListedFixtureLoads(string $name): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("'{$name}' is not a captured fixture");
+
+        self::captured($name);
     }
 
     public function testASyntheticNegativeMustNameACarveOut(): void

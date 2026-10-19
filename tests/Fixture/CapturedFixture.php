@@ -39,11 +39,20 @@ final class CapturedFixture
 
     /**
      * Load a fixture by name, such as 'v1/tags/get'.
+     *
+     * Only a name the manifest lists loads. Anything else, a relative path out
+     * of the corpus included, would be a hand-written body that neither the hash
+     * check nor the inventory check ever sees.
      */
     public static function load(string $name): self
     {
         if (isset(self::$loaded[$name])) {
             return self::$loaded[$name];
+        }
+        if (!in_array($name, self::names(), true)) {
+            throw new \InvalidArgumentException(
+                "'{$name}' is not a captured fixture: tests/fixtures/captured/manifest.json does not list it (make fixtures)",
+            );
         }
 
         $path = self::ROOT . "/{$name}.json";
