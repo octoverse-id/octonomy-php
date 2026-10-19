@@ -53,3 +53,44 @@ jobs:
         run: composer install --no-interaction --no-progress
       - name: Run tests
         run: vendor/bin/phpunit
+
+  # The integration suite against a real server: scripts/octonomy-harness.sh boots Postgres plus the
+  # digest-pinned Octonomy image, seeds the corpus, and asserts each partition reads back as seeded.
+  # OCTONOMY_INTEGRATION_REQUIRED=1 turns the suite's no-harness skip into a failure, because here a
+  # skip would mean the boot silently did not happen.
+  integration:
+    name: integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Boot and seed the Octonomy harness
+        run: scripts/octonomy-harness.sh up
+      # The harness mints real bearer tokens. Mask every *_TOKEN value before any later step can
+      # print one; the server is ephemeral, but a token in a job log is still a leak.
+      - name: Mask harness credentials
+        run: |
+          env_file=$(scripts/octonomy-harness.sh env)
+          while IFS= read -r line; do
+            case "${line%%=*}" in
+              *_TOKEN) echo "::add-mask::${line#*=}" ;;
+            esac
+          done < "$env_file"
+      - name: Integration suite against the real server
+        env:
+          OCTONOMY_INTEGRATION_REQUIRED: "1"
+        run: make test-integration
+      - name: Dump harness logs
+        if: failure()
+        run: scripts/octonomy-harness.sh logs
+      - name: Tear down the harness
+        if: always()
+        run: scripts/octonomy-harness.sh down
