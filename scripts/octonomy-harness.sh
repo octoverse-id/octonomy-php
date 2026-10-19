@@ -189,7 +189,14 @@ require_safe_config() {
         "OCTONOMY_HARNESS_NAMESPACE_B_ID=${NAMESPACE_B_ID}"; do
         case "${_pair#*=}" in
             '' | *[!A-Za-z0-9._-]*)
-                fail "${_pair%%=*} must be non-empty and use only A-Z a-z 0-9 . _ - (got '${_pair#*=}'): it is written unescaped into docker flags, JSON, URLs and the sourced env file"
+                # The secret key and pepper are named but never echoed: a refused
+                # value is often a real generated secret, and fail() writes it to
+                # stderr and, under CI, to an ::error:: annotation in the job log.
+                case "${_pair%%=*}" in
+                    *_SECRET_KEY | *_TOKEN_PEPPER) _got='a value that is not shown' ;;
+                    *) _got="'${_pair#*=}'" ;;
+                esac
+                fail "${_pair%%=*} must be non-empty and use only A-Z a-z 0-9 . _ - (got ${_got}): it is written unescaped into docker flags, JSON, URLs and the sourced env file"
                 ;;
         esac
     done
