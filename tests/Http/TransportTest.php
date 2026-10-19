@@ -4,39 +4,37 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests\Http;
 
-use GuzzleHttp\Psr7\Response;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use Octoverse\Octonomy\Tests\SdkTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Covers the three ways Transport reads a 2xx — one(), many(), none() — and the
- * envelope each one enforces. The malformed bodies here are deliberately
- * synthetic: a conforming server cannot produce them.
+ * envelope each one enforces. Well-formed responses are captured from a real
+ * server; the malformed ones are synthetic negatives, because a conforming
+ * server cannot produce them.
  */
 final class TransportTest extends SdkTestCase
 {
     public function testOneUnwrapsTheDataObject(): void
     {
-        $transport = $this->transportWith([new Response(
-            200,
-            ['Content-Type' => 'application/json'],
-            '{"data":{"id":"tag_1","metadata":{"color":"red","sizes":[{"eu":42}]},"parent_id":null}}',
-        )]);
+        $transport = $this->transportWith([self::captured('v1/tags/get')]);
 
+        $data = $transport->one('GET', 'tags/tag_1');
+
+        self::assertSame(self::capturedData('v1/tags/get'), $data);
         // Nested objects come back as arrays, as models expect.
-        self::assertSame(
-            ['id' => 'tag_1', 'metadata' => ['color' => 'red', 'sizes' => [['eu' => 42]]], 'parent_id' => null],
-            $transport->one('GET', 'tags/tag_1'),
-        );
+        self::assertSame(['color' => 'red'], $data['metadata']);
     }
 
     #[DataProvider('bodiesWithoutDataObject')]
-    public function testOneRejectsABodyWithoutADataObject(string $raw): void
+    public function testOneRejectsABodyWithoutADataObject(string $kind, string $raw): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -47,23 +45,25 @@ final class TransportTest extends SdkTestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function bodiesWithoutDataObject(): iterable
     {
-        yield 'unwrapped resource (the pre-fix fixture shape)' => ['{"id":"tag_1","name":"Featured"}'];
-        yield 'empty body' => [''];
-        yield 'data is null' => ['{"data":null}'];
-        yield 'data is an empty object' => ['{"data":{}}'];
-        yield 'data is an empty list' => ['{"data":[]}'];
-        yield 'data is a list' => ['{"data":[{"id":"tag_1"}]}'];
-        yield 'data is a scalar' => ['{"data":"tag_1"}'];
-        yield 'body is a JSON list' => ['[{"id":"tag_1"}]'];
+        yield 'unwrapped resource (the pre-fix fixture shape)' => [SyntheticNegative::MISSING_ENVELOPE, '{"id":"tag_1","name":"Featured"}'];
+        yield 'empty body' => [SyntheticNegative::MISSING_ENVELOPE, ''];
+        yield 'data is null' => [SyntheticNegative::WRONG_TYPE, '{"data":null}'];
+        yield 'data is an empty object' => [SyntheticNegative::MISSING_FIELD, '{"data":{}}'];
+        yield 'data is an empty list' => [SyntheticNegative::WRONG_TYPE, '{"data":[]}'];
+        yield 'data is a list' => [SyntheticNegative::WRONG_TYPE, '{"data":[{"id":"tag_1"}]}'];
+        yield 'data is a scalar' => [SyntheticNegative::WRONG_TYPE, '{"data":"tag_1"}'];
+        yield 'body is a JSON list' => [SyntheticNegative::MISSING_ENVELOPE, '[{"id":"tag_1"}]'];
     }
 
     public function testOneRaisesTransportExceptionForANonJson2xx(): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'text/html'], '<html>proxy</html>')]);
+        $transport = $this->transportWith([
+            self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
+        ]);
 
         $this->expectException(TransportException::class);
 
@@ -72,9 +72,7 @@ final class TransportTest extends SdkTestCase
 
     public function testOneRaisesTheTypedApiExceptionForANon2xx(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(404, ['error' => ['code' => 'not_found', 'message' => 'Resource not found.']]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
 
@@ -83,29 +81,29 @@ final class TransportTest extends SdkTestCase
 
     public function testManyReturnsRowsAndPagination(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(200, [
-                'data' => [['id' => 'tag_1'], ['id' => 'tag_2']],
-                'pagination' => ['limit' => 2, 'offset' => 4, 'count' => 9, 'next' => 'https://n', 'previous' => null],
-            ]),
-        ]);
+        // A middle page, so both links are set.
+        $captured = CapturedFixture::load('v1/tags/list-page');
+        $pagination = $captured->json()['pagination'];
+        $transport = $this->transportWith([$captured]);
 
-        $page = $transport->many('GET', 'tags', ['limit' => '2', 'offset' => '4']);
+        $page = $transport->many('GET', 'tags', ['limit' => '1', 'offset' => '1']);
 
-        self::assertSame([['id' => 'tag_1'], ['id' => 'tag_2']], $page->rows);
-        self::assertSame(2, $page->pagination->limit);
-        self::assertSame(4, $page->pagination->offset);
-        self::assertSame(9, $page->pagination->count);
-        self::assertSame('https://n', $page->pagination->next);
-        self::assertNull($page->pagination->previous);
-        self::assertSame(['limit' => '2', 'offset' => '4'], $this->lastQuery());
+        self::assertSame($captured->data(), $page->rows);
+        self::assertCount(1, $page->rows);
+        self::assertSame(1, $page->pagination->limit);
+        self::assertSame(1, $page->pagination->offset);
+        self::assertSame($pagination['count'], $page->pagination->count);
+        self::assertGreaterThan(2, $page->pagination->count);
+        self::assertSame($pagination['next'], $page->pagination->next);
+        self::assertSame($pagination['previous'], $page->pagination->previous);
+        self::assertNotNull($page->pagination->next);
+        self::assertNotNull($page->pagination->previous);
+        self::assertSame(['limit' => '1', 'offset' => '1'], $this->lastQuery());
     }
 
     public function testManyAcceptsAnEmptyPage(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(200, ['data' => [], 'pagination' => ['limit' => 50, 'offset' => 0, 'count' => 0]]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/tags/list-empty')]);
 
         $page = $transport->many('GET', 'tags');
 
@@ -114,9 +112,9 @@ final class TransportTest extends SdkTestCase
     }
 
     #[DataProvider('bodiesWithBadData')]
-    public function testManyRejectsDataThatIsNotAListOfObjects(string $raw, string $expected): void
+    public function testManyRejectsDataThatIsNotAListOfObjects(string $kind, string $raw, string $expected): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags: ' . $expected);
@@ -125,27 +123,31 @@ final class TransportTest extends SdkTestCase
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{string, string, string}>
      */
     public static function bodiesWithBadData(): iterable
     {
         $pagination = '"pagination":{"limit":50,"offset":0,"count":1}';
+        $notArray = 'expected a JSON array under "data"';
+        $notRow = 'expected every "data" item to be a non-empty JSON object';
 
-        yield 'bare list (the spec shape)' => ['[{"id":"tag_1"}]', 'expected a JSON array under "data"'];
-        yield 'data missing' => ['{' . $pagination . '}', 'expected a JSON array under "data"'];
-        yield 'data is an object' => ['{"data":{"id":"tag_1"},' . $pagination . '}', 'expected a JSON array under "data"'];
+        yield 'bare list (the spec shape)' => [SyntheticNegative::MISSING_ENVELOPE, '[{"id":"tag_1"}]', $notArray];
+        yield 'data missing' => [SyntheticNegative::MISSING_ENVELOPE, '{' . $pagination . '}', $notArray];
+        yield 'data is an object' => [SyntheticNegative::WRONG_TYPE, '{"data":{"id":"tag_1"},' . $pagination . '}', $notArray];
         // Both decode to a PHP list in array mode; they must still be rejected.
-        yield 'data is an empty object' => ['{"data":{},' . $pagination . '}', 'expected a JSON array under "data"'];
-        yield 'data is an object with numeric keys' => ['{"data":{"0":{"id":"tag_1"}},' . $pagination . '}', 'expected a JSON array under "data"'];
-        yield 'row is a scalar' => ['{"data":["tag_1"],' . $pagination . '}', 'expected every "data" item to be a non-empty JSON object'];
-        yield 'row is a list' => ['{"data":[["tag_1"]],' . $pagination . '}', 'expected every "data" item to be a non-empty JSON object'];
-        yield 'row is an empty list' => ['{"data":[[]],' . $pagination . '}', 'expected every "data" item to be a non-empty JSON object'];
-        yield 'row is an empty object' => ['{"data":[{}],' . $pagination . '}', 'expected every "data" item to be a non-empty JSON object'];
+        yield 'data is an empty object' => [SyntheticNegative::WRONG_TYPE, '{"data":{},' . $pagination . '}', $notArray];
+        yield 'data is an object with numeric keys' => [SyntheticNegative::WRONG_TYPE, '{"data":{"0":{"id":"tag_1"}},' . $pagination . '}', $notArray];
+        yield 'row is a scalar' => [SyntheticNegative::WRONG_TYPE, '{"data":["tag_1"],' . $pagination . '}', $notRow];
+        yield 'row is a list' => [SyntheticNegative::WRONG_TYPE, '{"data":[["tag_1"]],' . $pagination . '}', $notRow];
+        yield 'row is an empty list' => [SyntheticNegative::WRONG_TYPE, '{"data":[[]],' . $pagination . '}', $notRow];
+        yield 'row is an empty object' => [SyntheticNegative::MISSING_FIELD, '{"data":[{}],' . $pagination . '}', $notRow];
     }
 
     public function testManyRaisesTransportExceptionForANonJson2xx(): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'text/html'], '<html>proxy</html>')]);
+        $transport = $this->transportWith([
+            self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
+        ]);
 
         $this->expectException(TransportException::class);
 
@@ -153,9 +155,9 @@ final class TransportTest extends SdkTestCase
     }
 
     #[DataProvider('bodiesWithBadPagination')]
-    public function testManyRejectsMissingOrInvalidPagination(string $raw): void
+    public function testManyRejectsMissingOrInvalidPagination(string $kind, string $raw): void
     {
-        $transport = $this->transportWith([new Response(200, ['Content-Type' => 'application/json'], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -166,19 +168,19 @@ final class TransportTest extends SdkTestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, string}>
      */
     public static function bodiesWithBadPagination(): iterable
     {
-        yield 'pagination missing' => ['{"data":[]}'];
-        yield 'pagination is null' => ['{"data":[],"pagination":null}'];
-        yield 'pagination is a list' => ['{"data":[],"pagination":[50,0,1]}'];
-        yield 'pagination is an empty list' => ['{"data":[],"pagination":[]}'];
+        yield 'pagination missing' => [SyntheticNegative::MISSING_ENVELOPE, '{"data":[]}'];
+        yield 'pagination is null' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":null}'];
+        yield 'pagination is a list' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":[50,0,1]}'];
+        yield 'pagination is an empty list' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":[]}'];
     }
 
     public function testNoneSendsTheRequestAndReturnsNothing(): void
     {
-        $transport = $this->transportWith([new Response(204)]);
+        $transport = $this->transportWith([self::captured('v1/tag-assignments/delete')]);
 
         $transport->none('DELETE', 'tag-assignments', [], ['tag_id' => 'tag_1', 'resource_id' => 'r1']);
 
@@ -191,7 +193,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('unexpectedSuccessBodies')]
     public function testNoneIgnoresAnUnexpectedSuccessBody(int $status, string $raw): void
     {
-        $transport = $this->transportWith([new Response($status, [], $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::STRAY_BODY, $status, $raw, [])]);
 
         $transport->none('DELETE', 'tags/tag_1');
 
@@ -210,9 +212,7 @@ final class TransportTest extends SdkTestCase
 
     public function testNoneStillRaisesForANon2xx(): void
     {
-        $transport = $this->transportWith([
-            self::jsonResponse(404, ['error' => ['code' => 'not_found', 'message' => 'Resource not found.']]),
-        ]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
 

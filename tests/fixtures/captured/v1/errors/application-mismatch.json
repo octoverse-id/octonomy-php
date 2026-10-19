@@ -1,0 +1,31 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "merchant-a",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 400,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000029"
+        },
+        "body": {
+            "error": {
+                "code": "application_mismatch",
+                "message": "Tenant-wide grant is required when application_id is omitted.",
+                "details": {
+                    "application_id": [
+                        "Tenant-wide grant is required."
+                    ]
+                },
+                "request_id": "req_00000000000000000000000000000029"
+            }
+        }
+    }
+}

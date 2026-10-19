@@ -1,0 +1,93 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000006"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000005",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "name": "Green",
+                    "slug": "green",
+                    "type": "color",
+                    "description": null,
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 1,
+                    "created_at": "2026-01-01T00:00:08.000000Z",
+                    "updated_at": "2026-01-01T00:00:09.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000006",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "name": "Large",
+                    "slug": "large",
+                    "type": "size",
+                    "description": null,
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000002",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 1,
+                    "created_at": "2026-01-01T00:00:12.000000Z",
+                    "updated_at": "2026-01-01T00:00:13.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000007",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "name": "Maroon",
+                    "slug": "maroon",
+                    "type": "color",
+                    "description": null,
+                    "parent_id": "00000000-0000-4000-8000-000000000008",
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 0,
+                    "created_at": "2026-01-01T00:00:10.000000Z",
+                    "updated_at": "2026-01-01T00:00:11.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000008",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "name": "Red",
+                    "slug": "red",
+                    "type": "color",
+                    "description": "Primary red",
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {
+                        "hex": "#cc0000"
+                    },
+                    "is_active": true,
+                    "usage_count": 2,
+                    "created_at": "2026-01-01T00:00:06.000000Z",
+                    "updated_at": "2026-01-01T00:00:07.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 4,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

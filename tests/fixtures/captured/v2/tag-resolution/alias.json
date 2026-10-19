@@ -1,0 +1,59 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tag-resolution",
+        "query": {
+            "application_id": "harness-app",
+            "slug": "promo"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000004a"
+        },
+        "body": {
+            "data": {
+                "matched_type": "alias",
+                "matched_alias": {
+                    "id": "00000000-0000-4000-8000-00000000002f",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "tag_id": "00000000-0000-4000-8000-00000000002b",
+                    "name": "Promo",
+                    "slug": "promo",
+                    "metadata": {},
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:25.000000Z",
+                    "updated_at": "2026-01-01T00:00:26.000000Z"
+                },
+                "tag": {
+                    "id": "00000000-0000-4000-8000-00000000002b",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "name": "Sale",
+                    "slug": "sale",
+                    "type": "label",
+                    "description": "Merchant A promotion",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 2,
+                    "created_at": "2026-01-01T00:00:23.000000Z",
+                    "updated_at": "2026-01-01T00:00:24.000000Z"
+                }
+            }
+        }
+    }
+}

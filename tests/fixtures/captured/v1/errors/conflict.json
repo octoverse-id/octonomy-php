@@ -1,0 +1,36 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "name": "Featured",
+            "slug": "featured",
+            "type": "label"
+        }
+    },
+    "response": {
+        "status": 409,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000024"
+        },
+        "body": {
+            "error": {
+                "code": "conflict",
+                "message": "An active tag with this tenant, application, type, and slug already exists.",
+                "details": {
+                    "slug": [
+                        "Duplicate active tag slug."
+                    ]
+                },
+                "request_id": "req_00000000000000000000000000000024"
+            }
+        }
+    }
+}

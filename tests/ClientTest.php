@@ -13,6 +13,8 @@ use Octoverse\Octonomy\Exception\ForbiddenException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\ValidationException;
 use Octoverse\Octonomy\RequestOptions;
+use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class ClientTest extends SdkTestCase
@@ -53,7 +55,7 @@ final class ClientTest extends SdkTestCase
 
     public function testSendsAuthAndTenantHeaders(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])]);
+        $client = $this->clientWith([self::captured('v1/tags/get')]);
 
         $client->tags()->get('tag_1');
 
@@ -69,7 +71,7 @@ final class ClientTest extends SdkTestCase
 
     public function testActorHeaderFromConfig(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::captured('v1/tags/get')], ['actor_id' => 'svc-config']);
 
         $client->tags()->get('tag_1');
 
@@ -78,7 +80,7 @@ final class ClientTest extends SdkTestCase
 
     public function testActorHeaderPerCallOverride(): void
     {
-        $client = $this->clientWith([self::jsonResponse(200, ['data' => ['id' => 'tag_1']])], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::captured('v1/tags/get')], ['actor_id' => 'svc-config']);
 
         $client->tags()->get('tag_1', RequestOptions::withActor('svc-call'));
 
@@ -89,48 +91,47 @@ final class ClientTest extends SdkTestCase
      * @param class-string<ApiException> $expected
      */
     #[DataProvider('errorProvider')]
-    public function testErrorEnvelopeMapsToException(int $status, string $code, string $expected): void
+    public function testErrorEnvelopeMapsToException(string $fixture, string $code, string $expected): void
     {
-        $client = $this->clientWith([
-            self::jsonResponse($status, [
-                'error' => [
-                    'code' => $code,
-                    'message' => 'boom',
-                    'details' => ['field' => 'slug'],
-                    'request_id' => 'req_123',
-                ],
-            ]),
-        ]);
+        $captured = CapturedFixture::load($fixture);
+        $error = $captured->json()['error'];
+        self::assertSame($code, $error['code'], "{$fixture} is not the {$code} envelope");
+        $client = $this->clientWith([$captured]);
 
         try {
             $client->tags()->get('tag_1');
             self::fail('expected an ApiException');
         } catch (ApiException $e) {
             self::assertInstanceOf($expected, $e);
-            self::assertSame($status, $e->statusCode);
+            self::assertSame($captured->status, $e->statusCode);
             self::assertSame($code, $e->errorCode);
-            self::assertSame('req_123', $e->requestId);
-            self::assertSame('slug', $e->details['field'] ?? null);
-            self::assertSame('boom', $e->getMessage());
+            self::assertSame($error['request_id'], $e->requestId);
+            self::assertNotNull($e->requestId);
+            self::assertSame($error['details'], $e->details);
+            self::assertSame($error['message'], $e->getMessage());
         }
     }
 
     /**
-     * @return iterable<string, array{int, string, class-string<ApiException>}>
+     * @return iterable<string, array{string, string, class-string<ApiException>}>
      */
     public static function errorProvider(): iterable
     {
-        yield 'not found' => [404, 'not_found', NotFoundException::class];
-        yield 'conflict' => [409, 'conflict', ConflictException::class];
-        yield 'validation' => [400, 'validation_error', ValidationException::class];
-        yield 'tenant mismatch' => [400, 'tenant_mismatch', ValidationException::class];
-        yield 'auth' => [401, 'authentication_required', AuthenticationException::class];
-        yield 'forbidden' => [403, 'forbidden', ForbiddenException::class];
+        yield 'not found' => ['v1/errors/not-found', 'not_found', NotFoundException::class];
+        yield 'conflict' => ['v1/errors/conflict', 'conflict', ConflictException::class];
+        yield 'validation' => ['v1/errors/validation-error', 'validation_error', ValidationException::class];
+        yield 'tenant mismatch' => ['v1/errors/tenant-mismatch', 'tenant_mismatch', ValidationException::class];
+        yield 'application mismatch' => ['v1/errors/application-mismatch', 'application_mismatch', ValidationException::class];
+        yield 'inactive tag' => ['v1/errors/inactive-tag', 'inactive_tag', ValidationException::class];
+        // The server answers a bad or missing token with 403, not 401: it sends no
+        // WWW-Authenticate challenge. The code, not the status, picks the class.
+        yield 'auth' => ['v1/errors/authentication-required', 'authentication_required', AuthenticationException::class];
+        yield 'forbidden' => ['v1/errors/forbidden', 'forbidden', ForbiddenException::class];
     }
 
     public function testErrorFallbackForNonEnvelopeBody(): void
     {
-        $client = $this->clientWith([new \GuzzleHttp\Psr7\Response(502, [], 'upstream down')]);
+        $client = $this->clientWith([self::syntheticNegative(SyntheticNegative::GATEWAY, 502, 'upstream down', [])]);
 
         try {
             $client->tags()->get('tag_1');

@@ -1,0 +1,33 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/v2/tag-assignments/bulk-remove",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "resource_type": "product",
+            "resource_id": "sku-003",
+            "tag_ids": [
+                "00000000-0000-4000-8000-00000000002a"
+            ]
+        }
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000003e"
+        },
+        "body": {
+            "data": {
+                "removed": 1
+            }
+        }
+    }
+}

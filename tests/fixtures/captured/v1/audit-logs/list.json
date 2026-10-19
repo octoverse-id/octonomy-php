@@ -1,0 +1,113 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/audit-logs",
+        "query": {
+            "limit": "3"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000021"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000021",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "tag.deactivated",
+                    "entity_type": "tag",
+                    "entity_id": "00000000-0000-4000-8000-000000000020",
+                    "tag_id": "00000000-0000-4000-8000-000000000020",
+                    "resource_type": null,
+                    "resource_id": null,
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_0000000000000000000000000000001f",
+                    "operation_id": "00000000-0000-4000-8000-000000000022",
+                    "changes": {
+                        "after": {
+                            "is_active": false
+                        },
+                        "before": {
+                            "is_active": true
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:53.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000023",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "tag.created",
+                    "entity_type": "tag",
+                    "entity_id": "00000000-0000-4000-8000-000000000020",
+                    "tag_id": "00000000-0000-4000-8000-000000000020",
+                    "resource_type": null,
+                    "resource_id": null,
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_00000000000000000000000000000022",
+                    "operation_id": "00000000-0000-4000-8000-000000000024",
+                    "changes": {
+                        "after": {
+                            "id": "00000000-0000-4000-8000-000000000020",
+                            "name": "Discontinued",
+                            "slug": "discontinued",
+                            "type": "label",
+                            "metadata": {},
+                            "is_active": true,
+                            "parent_id": null,
+                            "tenant_id": "harness-tenant",
+                            "created_at": "2026-01-01T00:00:50.000000+00:00",
+                            "updated_at": "2026-01-01T00:00:51.000000+00:00",
+                            "description": null,
+                            "vocabulary_id": null,
+                            "application_id": "harness-app"
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:52.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000025",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "action": "tag_alias.deactivated",
+                    "entity_type": "tag_alias",
+                    "entity_id": "00000000-0000-4000-8000-00000000001f",
+                    "tag_id": "00000000-0000-4000-8000-00000000000a",
+                    "resource_type": null,
+                    "resource_id": null,
+                    "actor_id": "octonomy-php-harness",
+                    "request_id": "req_0000000000000000000000000000001c",
+                    "operation_id": "00000000-0000-4000-8000-000000000026",
+                    "changes": {
+                        "after": {
+                            "is_active": false
+                        },
+                        "before": {
+                            "is_active": true
+                        }
+                    },
+                    "metadata": {},
+                    "created_at": "2026-01-01T00:00:49.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 3,
+                "offset": 0,
+                "count": 32,
+                "next": "http://127.0.0.1:8000/api/v1/audit-logs?limit=3&offset=3",
+                "previous": null
+            }
+        }
+    }
+}

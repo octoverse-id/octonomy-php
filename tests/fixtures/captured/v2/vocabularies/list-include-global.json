@@ -1,0 +1,93 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/vocabularies",
+        "query": {
+            "application_id": "harness-app",
+            "include_global": "true"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000002c"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "namespace_type": null,
+                    "namespace_id": null,
+                    "name": "Colors",
+                    "slug": "colors",
+                    "description": "Shared by every application in the tenant",
+                    "metadata": {},
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:02.000000Z",
+                    "updated_at": "2026-01-01T00:00:03.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000027",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "name": "Harness Probe a",
+                    "slug": "harness-probe-a",
+                    "description": null,
+                    "metadata": {},
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:00.000000Z",
+                    "updated_at": "2026-01-01T00:00:01.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000003",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": null,
+                    "namespace_id": null,
+                    "name": "Labels",
+                    "slug": "labels",
+                    "description": "Labels the merchandising team curates",
+                    "metadata": {
+                        "owner": "catalog"
+                    },
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:29.000000Z",
+                    "updated_at": "2026-01-01T00:00:31.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-000000000002",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": null,
+                    "namespace_id": null,
+                    "name": "Sizes",
+                    "slug": "sizes",
+                    "description": null,
+                    "metadata": {},
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:04.000000Z",
+                    "updated_at": "2026-01-01T00:00:05.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 4,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

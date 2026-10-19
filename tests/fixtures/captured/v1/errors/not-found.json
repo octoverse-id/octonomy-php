@@ -1,0 +1,29 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags/00000000-0000-4000-8000-000000000000",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 404,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000023"
+        },
+        "body": {
+            "error": {
+                "code": "not_found",
+                "message": "Resource not found.",
+                "details": {
+                    "detail": "Tag was not found."
+                },
+                "request_id": "req_00000000000000000000000000000023"
+            }
+        }
+    }
+}

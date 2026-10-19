@@ -1,0 +1,33 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "merchant-a",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-b"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 403,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000054"
+        },
+        "body": {
+            "error": {
+                "code": "forbidden",
+                "message": "You do not have permission to perform this action.",
+                "details": {
+                    "detail": "Service client is not granted access to this namespace."
+                },
+                "request_id": "req_00000000000000000000000000000054"
+            }
+        }
+    }
+}

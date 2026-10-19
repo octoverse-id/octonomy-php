@@ -1,0 +1,31 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {
+            "slug": "no-such-tag"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000007"
+        },
+        "body": {
+            "data": [],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 0,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

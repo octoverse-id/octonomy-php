@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
-	harness-up harness-down harness-logs test-integration
+	harness-up harness-down harness-logs test-integration fixtures
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -21,8 +21,10 @@ cs: ## Check coding style (PSR-12 / PER-CS)
 cs-fix: ## Apply coding style fixes
 	vendor/bin/php-cs-fixer fix
 
+# PHPStan's default 128M per worker is not enough for this tree at level 8 (a single process already
+# needs about 135M), and which worker crosses it depends on how the files happen to be split.
 stan: ## Run static analysis
-	vendor/bin/phpstan analyse
+	vendor/bin/phpstan analyse --memory-limit=512M
 
 check: cs stan test ## Fast pre-push gate (style, static analysis, tests)
 
@@ -49,6 +51,20 @@ test-integration: ## Run the integration suite against a booted harness (skips w
 	case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
 	if [ -f "$$env_file" ]; then set -a; . "$$env_file"; set +a; fi; \
 	vendor/bin/phpunit --testsuite integration --fail-on-empty-test-suite
+
+# Re-captures tests/fixtures/captured, the response bodies the unit suite replays, from a real server.
+# Capture writes, so it boots its own fresh harness (replacing a running one, as harness-up always
+# does) and removes it afterwards, leaving nothing behind for the read-only integration suite to trip
+# over. Commit the result in a PR of its own: a refresh is reviewed, never automatic. See
+# docs/development.md.
+fixtures: ## Re-capture the response fixtures from a fresh harness (replaces a running harness)
+	@set -e; \
+	trap 'scripts/octonomy-harness.sh down' EXIT; \
+	scripts/octonomy-harness.sh up; \
+	env_file=$$(scripts/octonomy-harness.sh env); \
+	case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
+	set -a; . "$$env_file"; set +a; \
+	php scripts/capture-fixtures.php
 
 # Before the first release CHANGELOG.md has only [Unreleased], so there is no heading to match and
 # Client::VERSION must stay at this placeholder until the release PR replaces it (docs/versioning.md).

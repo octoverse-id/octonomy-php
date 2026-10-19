@@ -1,0 +1,41 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/vocabularies/00000000-0000-4000-8000-000000000028",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000002f"
+        },
+        "body": {
+            "data": {
+                "id": "00000000-0000-4000-8000-000000000028",
+                "tenant_id": "harness-tenant",
+                "application_id": "harness-app",
+                "namespace_type": "merchant",
+                "namespace_id": "harness-merchant-a",
+                "name": "Labels",
+                "slug": "labels",
+                "description": "Merchandising labels",
+                "metadata": {
+                    "owner": "catalog"
+                },
+                "is_active": true,
+                "created_at": "2026-01-01T00:00:54.000000Z",
+                "updated_at": "2026-01-01T00:00:55.000000Z"
+            }
+        }
+    }
+}

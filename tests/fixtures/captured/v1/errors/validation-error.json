@@ -1,0 +1,39 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "name": "",
+            "slug": "Not A Slug",
+            "type": "label"
+        }
+    },
+    "response": {
+        "status": 400,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000025"
+        },
+        "body": {
+            "error": {
+                "code": "validation_error",
+                "message": "Request validation failed.",
+                "details": {
+                    "name": [
+                        "This field may not be blank."
+                    ],
+                    "slug": {
+                        "slug": "Use lowercase letters, numbers, underscores, or hyphens."
+                    }
+                },
+                "request_id": "req_00000000000000000000000000000025"
+            }
+        }
+    }
+}

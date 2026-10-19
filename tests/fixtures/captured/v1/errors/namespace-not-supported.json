@@ -1,0 +1,33 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tags",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 400,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000002a"
+        },
+        "body": {
+            "error": {
+                "code": "namespace_not_supported",
+                "message": "Namespace headers are not supported on /api/v1.",
+                "details": {
+                    "headers": [
+                        "X-Namespace-Type/X-Namespace-ID require /api/v2."
+                    ]
+                },
+                "request_id": "req_0000000000000000000000000000002a"
+            }
+        }
+    }
+}

@@ -1,0 +1,78 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/v2/tag-assignments/bulk-assign",
+        "query": {},
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": {
+            "application_id": "harness-app",
+            "resource_type": "product",
+            "resource_id": "sku-003",
+            "tag_ids": [
+                "00000000-0000-4000-8000-00000000002d",
+                "00000000-0000-4000-8000-00000000002a"
+            ],
+            "alias_slugs": [
+                "promo"
+            ],
+            "assigned_by": "octonomy-php-capture"
+        }
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000003d"
+        },
+        "body": {
+            "data": {
+                "created": 2,
+                "existing": 1,
+                "skipped": 0,
+                "assignments": [
+                    {
+                        "id": "00000000-0000-4000-8000-00000000002e",
+                        "tenant_id": "harness-tenant",
+                        "application_id": "harness-app",
+                        "namespace_type": "merchant",
+                        "namespace_id": "harness-merchant-a",
+                        "tag_id": "00000000-0000-4000-8000-00000000002d",
+                        "resource_type": "product",
+                        "resource_id": "sku-003",
+                        "assigned_by": "octonomy-php-capture",
+                        "assigned_at": "2026-01-01T00:01:02.000000Z"
+                    },
+                    {
+                        "id": "00000000-0000-4000-8000-000000000036",
+                        "tenant_id": "harness-tenant",
+                        "application_id": "harness-app",
+                        "namespace_type": "merchant",
+                        "namespace_id": "harness-merchant-a",
+                        "tag_id": "00000000-0000-4000-8000-00000000002a",
+                        "resource_type": "product",
+                        "resource_id": "sku-003",
+                        "assigned_by": "octonomy-php-capture",
+                        "assigned_at": "2026-01-01T00:01:06.000000Z"
+                    },
+                    {
+                        "id": "00000000-0000-4000-8000-000000000037",
+                        "tenant_id": "harness-tenant",
+                        "application_id": "harness-app",
+                        "namespace_type": "merchant",
+                        "namespace_id": "harness-merchant-a",
+                        "tag_id": "00000000-0000-4000-8000-00000000002b",
+                        "resource_type": "product",
+                        "resource_id": "sku-003",
+                        "assigned_by": "octonomy-php-capture",
+                        "assigned_at": "2026-01-01T00:01:07.000000Z"
+                    }
+                ]
+            }
+        }
+    }
+}

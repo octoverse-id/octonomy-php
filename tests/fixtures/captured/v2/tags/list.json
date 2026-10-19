@@ -1,0 +1,67 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_00000000000000000000000000000032"
+        },
+        "body": {
+            "data": [
+                {
+                    "id": "00000000-0000-4000-8000-00000000002a",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "name": "Red",
+                    "slug": "red",
+                    "type": "color",
+                    "description": null,
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 1,
+                    "created_at": "2026-01-01T00:00:21.000000Z",
+                    "updated_at": "2026-01-01T00:00:22.000000Z"
+                },
+                {
+                    "id": "00000000-0000-4000-8000-00000000002b",
+                    "tenant_id": "harness-tenant",
+                    "application_id": "harness-app",
+                    "namespace_type": "merchant",
+                    "namespace_id": "harness-merchant-a",
+                    "name": "Sale",
+                    "slug": "sale",
+                    "type": "label",
+                    "description": "Merchant A promotion",
+                    "metadata": {},
+                    "is_active": true,
+                    "usage_count": 1,
+                    "created_at": "2026-01-01T00:00:23.000000Z",
+                    "updated_at": "2026-01-01T00:00:24.000000Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0,
+                "count": 2,
+                "next": null,
+                "previous": null
+            }
+        }
+    }
+}

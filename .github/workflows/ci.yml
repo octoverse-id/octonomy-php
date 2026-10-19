@@ -33,7 +33,7 @@ jobs:
         env:
           PHP_CS_FIXER_IGNORE_ENV: "1"
       - name: Static analysis (phpstan)
-        run: vendor/bin/phpstan analyse --no-progress
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 
   test:
     runs-on: ubuntu-latest

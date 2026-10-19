@@ -1,0 +1,55 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v1/tag-resolution",
+        "query": {
+            "slug": "scarlet"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000001e"
+        },
+        "body": {
+            "data": {
+                "matched_type": "alias",
+                "matched_alias": {
+                    "id": "00000000-0000-4000-8000-00000000000c",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "tag_id": "00000000-0000-4000-8000-000000000008",
+                    "name": "Scarlet",
+                    "slug": "scarlet",
+                    "metadata": {},
+                    "is_active": true,
+                    "created_at": "2026-01-01T00:00:14.000000Z",
+                    "updated_at": "2026-01-01T00:00:15.000000Z"
+                },
+                "tag": {
+                    "id": "00000000-0000-4000-8000-000000000008",
+                    "tenant_id": "harness-tenant",
+                    "application_id": null,
+                    "name": "Red",
+                    "slug": "red",
+                    "type": "color",
+                    "description": "Primary red",
+                    "vocabulary_id": "00000000-0000-4000-8000-000000000001",
+                    "metadata": {
+                        "hex": "#cc0000"
+                    },
+                    "is_active": true,
+                    "usage_count": 3,
+                    "created_at": "2026-01-01T00:00:06.000000Z",
+                    "updated_at": "2026-01-01T00:00:07.000000Z"
+                }
+            }
+        }
+    }
+}
