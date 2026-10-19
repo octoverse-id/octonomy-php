@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decode `{data, pagination}` into a generic `ResultList<T>` and `Pagination` (#6).
 - Strict hydration: every field a model declares for the response's api_version must be present as a
   key, nullable fields included, and have its declared JSON type. A missing key, a wrong type (`"5"`
-  for an integer), or an unparseable timestamp throws `MalformedResponseException` naming the
+  for an integer, a list where an object is declared), or an unparseable timestamp throws `MalformedResponseException` naming the
   endpoint, the api_version and the field (`$field`, e.g. `data.usage_count`) instead of hydrating a
   zero value or coercing one. Tag's `parent_id` and `vocabulary_id`, which the server omits when null,
   are the named exception (#14).

@@ -63,11 +63,13 @@ stays a faithful, ergonomic client.
   replayed with `SdkTestCase::captured()`); hand-written response bodies are banned, because a body
   written from the spec agrees with its author rather than the server (#6 shipped green that way).
   **Carve-out:** negative fixtures (missing envelope, missing field, wrong type, invalid JSON, gateway
-  HTML, a body on a no-content response, mutually exclusive flag states) are synthetic, since a
-  conforming server cannot produce them; build them only with `SdkTestCase::syntheticNegative()`,
-  naming the `SyntheticNegative` kind that applies. `clientWith()`/`transportWith()` accept nothing
-  else, and no test outside the fixture helpers may reference `GuzzleHttp\`. Request-side
-  assertions stay hand-written: they test SDK behavior, not server shape.
+  HTML, a body on a no-content response, mutually exclusive flag states, a field the api_version does
+  not declare) are synthetic, since a conforming server cannot produce them; build them only with
+  `SdkTestCase::syntheticNegative()` or `syntheticNegativeFrom()`, naming the `SyntheticNegative`
+  kind that applies. A body captured from one api_version is not a capture of the other's response.
+  `clientWith()`/`transportWith()` accept nothing else, and no test outside the fixture helpers may
+  reference `GuzzleHttp\`. Request-side assertions stay hand-written: they test SDK behavior, not
+  server shape.
 - Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
   pinned server) and never edited by hand; the manifest records each file's hash and the unit suite
   fails on any difference. A refresh is its own reviewed PR, never automatic. Moving the harness

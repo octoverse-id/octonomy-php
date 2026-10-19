@@ -69,8 +69,8 @@ final class Transport
      *
      * @template T
      *
-     * @param \Closure(array<string, mixed>, string): T $hydrate builds the result from the "data" object
-     *                                                          and the api_version it was read as
+     * @param \Closure(array<string, mixed>, string): T $hydrate builds the result from the "data" object's
+     *                                                          members (Json::members()) and the api_version
      * @param array<string, string> $query
      * @param array<string, mixed>|null $body
      *
@@ -95,7 +95,7 @@ final class Transport
             throw $this->malformed($method, $path, 'expected a non-empty JSON object under "data"');
         }
 
-        return $this->hydrate($method, $path, 'data', $hydrate, Json::objectToArray($data));
+        return $this->hydrate($method, $path, 'data', $hydrate, Json::members($data));
     }
 
     /**
@@ -106,8 +106,8 @@ final class Transport
      *
      * @template T
      *
-     * @param \Closure(array<string, mixed>, string): T $hydrate builds one result from each "data" item
-     *                                                          and the api_version it was read as
+     * @param \Closure(array<string, mixed>, string): T $hydrate builds one result from each "data" item's
+     *                                                          members (Json::members()) and the api_version
      * @param array<string, string> $query
      * @param array<string, mixed>|null $body
      *
@@ -144,12 +144,12 @@ final class Transport
 
         $data = [];
         foreach ($rows as $i => $row) {
-            $data[] = $this->hydrate($method, $path, "data[{$i}]", $hydrate, Json::objectToArray($row));
+            $data[] = $this->hydrate($method, $path, "data[{$i}]", $hydrate, Json::members($row));
         }
 
         return new ResultList(
             $data,
-            $this->hydrate($method, $path, 'pagination', Pagination::fromArray(...), Json::objectToArray($pagination)),
+            $this->hydrate($method, $path, 'pagination', Pagination::fromArray(...), Json::members($pagination)),
         );
     }
 

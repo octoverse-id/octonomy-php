@@ -69,14 +69,37 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
-     * A hydrator for Transport::one() and many() that returns each object as it
-     * was decoded, for tests of the envelope rather than of a model.
+     * A hydrator for Transport::one() and many() that returns each object as
+     * array-mode json_decode() would, to compare with capturedData() in tests of
+     * the envelope rather than of a model.
      *
-     * @return \Closure(array<string, mixed>): array<string, mixed>
+     * @return \Closure(array<string, mixed>): array<array-key, mixed>
      */
     protected static function asDecoded(): \Closure
     {
-        return static fn(array $object): array => $object;
+        return static fn(array $members): array => self::toArrays($members);
+    }
+
+    /**
+     * The "data" object of a single-resource response, as Transport hands it to
+     * a model's fromArray(): its members, with nested objects still \stdClass.
+     * For hydrating a model directly, outside a request.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function members(CapturedFixture|SyntheticNegative $response): array
+    {
+        $decoded = json_decode($response->body, false, 512, JSON_THROW_ON_ERROR);
+        if (!$decoded instanceof \stdClass || !$decoded->data instanceof \stdClass) {
+            throw new \RuntimeException('expected a {"data": {...}} body');
+        }
+
+        $members = [];
+        foreach (get_object_vars($decoded->data) as $key => $value) {
+            $members[(string) $key] = $value;
+        }
+
+        return $members;
     }
 
     protected function lastRequest(): RequestInterface
@@ -165,18 +188,63 @@ abstract class SdkTestCase extends TestCase
      * This is how a negative differs from what the server sent in exactly the
      * one respect its kind names, while everything else stays captured.
      *
+     * $break edits the body as arrays. An object that would not survive that
+     * round trip as an object, {} or one keyed "0", "1"..., is handed over as
+     * the \stdClass it decoded to, so it is re-encoded as the object the server
+     * sent rather than as a list.
+     *
      * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
      */
     protected static function syntheticNegativeFrom(string $name, string $kind, \Closure $break): SyntheticNegative
     {
         $captured = CapturedFixture::load($name);
+        $body = self::editable(json_decode($captured->body, false, 512, JSON_THROW_ON_ERROR));
+        if (!is_array($body)) {
+            throw new \LogicException("{$name} has no JSON object body to break");
+        }
 
         return self::syntheticNegative(
             $kind,
             $captured->status,
-            json_encode($break($captured->json()), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            json_encode($break($body), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
             $captured->headers,
         );
+    }
+
+    /**
+     * A decoded body with each object turned into an array a closure can edit,
+     * except an object that would re-encode as a list (see syntheticNegativeFrom).
+     */
+    private static function editable(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $members = get_object_vars($value);
+            if ($members === [] || array_is_list($members)) {
+                return $value;
+            }
+            $value = $members;
+        }
+
+        return is_array($value) ? array_map(self::editable(...), $value) : $value;
+    }
+
+    /**
+     * $value with every nested \stdClass turned into an array.
+     *
+     * @param array<array-key, mixed> $value
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function toArrays(array $value): array
+    {
+        $decoded = json_decode(
+            json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**

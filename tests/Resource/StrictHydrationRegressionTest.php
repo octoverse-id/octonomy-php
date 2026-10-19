@@ -208,12 +208,18 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
     /**
      * v1 never sends the namespace pair (octonomy/core/serializers.py strips
-     * it), so a v1 body that carries it is drift. Replayed from a real v2
-     * response.
+     * it), so a v1 body that carries it, even as nulls, is drift.
+     *
+     * @param array{namespace_type: string|null, namespace_id: string|null} $pair
      */
-    public function testAV1ResponseCarryingTheNamespacePairRaises(): void
+    #[DataProvider('namespacePairs')]
+    public function testAV1ResponseCarryingTheNamespacePairRaises(array $pair): void
     {
-        $client = $this->clientWith([self::captured('v2/tags/get')]);
+        $client = $this->clientWith([self::syntheticNegativeFrom('v1/tags/get', SyntheticNegative::UNDECLARED_FIELD, static function (array $body) use ($pair): array {
+            $body['data'] += $pair;
+
+            return $body;
+        })]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -224,15 +230,32 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     }
 
     /**
+     * @return iterable<string, array{array{namespace_type: string|null, namespace_id: string|null}}>
+     */
+    public static function namespacePairs(): iterable
+    {
+        yield 'a namespaced pair' => [['namespace_type' => 'merchant', 'namespace_id' => 'harness-merchant-a']];
+        yield 'a global pair' => [['namespace_type' => null, 'namespace_id' => null]];
+    }
+
+    /**
      * v2 always sends the pair, null for a global row, so a v2 body without it
-     * is drift. Replayed from a real v1 response.
+     * is drift. (testEveryRequiredFieldMustBePresent removes each half alone.)
      *
      * @param class-string<Tag|Vocabulary> $model
      */
     #[DataProvider('models')]
     public function testAV2ResponseMissingTheNamespacePairRaises(string $model): void
     {
-        $transport = $this->transportWith([self::captured(self::getFixture($model, ApiVersion::V1))], ApiVersion::V2);
+        $transport = $this->transportWith([self::syntheticNegativeFrom(
+            self::getFixture($model, ApiVersion::V2),
+            SyntheticNegative::MISSING_FIELD,
+            static function (array $body): array {
+                unset($body['data']['namespace_type'], $body['data']['namespace_id']);
+
+                return $body;
+            },
+        )], ApiVersion::V2);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v2/any (api_version v2): field "data.namespace_type" is missing');
@@ -277,16 +300,56 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
     /**
      * A model hydrated outside a request reports the field by its key alone,
-     * with the api_version it was read as.
+     * with the api_version it was read as, whichever reader rejected it.
      */
-    public function testAModelHydratedDirectlyNamesTheFieldAndApiVersion(): void
+    #[DataProvider('directFaults')]
+    public function testAModelHydratedDirectlyNamesTheFieldAndApiVersion(string $kind, \Closure $break, string $expected): void
     {
-        $this->expectException(MalformedResponseException::class);
-        $this->expectExceptionMessage(
-            'octonomy: malformed response (api_version v1): field "namespace_type" is not part of an api_version v1 response',
-        );
+        $members = self::members(self::syntheticNegativeFrom('v1/tags/get', $kind, $break));
 
-        Tag::fromArray(self::capturedData('v2/tags/get'), ApiVersion::V1);
+        $this->expectException(MalformedResponseException::class);
+        $this->expectExceptionMessage('octonomy: malformed response (api_version v1): ' . $expected);
+
+        Tag::fromArray($members, ApiVersion::V1);
+    }
+
+    /**
+     * @return iterable<string, array{string, \Closure(array<array-key, mixed>): array<array-key, mixed>, string}>
+     */
+    public static function directFaults(): iterable
+    {
+        yield 'missing field' => [SyntheticNegative::MISSING_FIELD, static function (array $body): array {
+            unset($body['data']['description']);
+
+            return $body;
+        }, 'field "description" is missing'];
+        yield 'wrong type' => [SyntheticNegative::WRONG_TYPE, static function (array $body): array {
+            $body['data']['usage_count'] = '5';
+
+            return $body;
+        }, 'field "usage_count" must be an integer, got a string'];
+        yield 'undeclared field' => [SyntheticNegative::UNDECLARED_FIELD, static function (array $body): array {
+            $body['data'] += ['namespace_type' => 'merchant', 'namespace_id' => 'harness-merchant-a'];
+
+            return $body;
+        }, 'field "namespace_type" is not part of an api_version v1 response'];
+    }
+
+    /**
+     * metadata is a JSON object. The server sends {} for none, and that
+     * hydrates to an empty array; a JSON list, even an empty one, is rejected
+     * (see testEveryDeclaredFieldRejectsAnotherType), which is why the readers
+     * see nested objects before they are turned into arrays.
+     */
+    public function testAnEmptyMetadataObjectHydratesAsAnEmptyArray(): void
+    {
+        $captured = self::captured('v1/tags/list');
+        self::assertStringContainsString('"metadata":{}', $captured->body);
+
+        $page = $this->clientWith([$captured])->tags()->list();
+
+        $green = array_values(array_filter($page->data, static fn(Tag $t): bool => $t->slug === 'green'))[0];
+        self::assertSame([], $green->metadata);
     }
 
     public function testAnUnknownApiVersionIsRefused(): void
@@ -294,7 +357,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('octonomy: unknown api_version "v3"; expected "v1" or "v2"');
 
-        Tag::fromArray(self::capturedData('v1/tags/get'), 'v3');
+        Tag::fromArray(self::members(self::captured('v1/tags/get')), 'v3');
     }
 
     /**
@@ -355,7 +418,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
                     'string' => ['a string', [5, true, ['x' => 1]]],
                     'int' => ['an integer', ['5', 5.0, true]],
                     'bool' => ['a boolean', ['true', 1, 0]],
-                    'array' => ['an object', ['{}', 1, true]],
+                    'array' => ['an object', [['not-an-object'], [], '{}', 1]],
                     \DateTimeImmutable::class => ['an RFC 3339 timestamp', [1767225600, true]],
                     default => throw new \LogicException("no wrong values for {$declared}: add them here"),
                 };

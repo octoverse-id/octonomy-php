@@ -45,7 +45,8 @@ final class Tag
      * is accepted only where the property is nullable. The namespace pair is
      * declared for v2 alone, so v1 must not carry it.
      *
-     * @param array<string, mixed> $data
+     * @param array<string, mixed> $data the object's members as Transport passes them: nested JSON
+     *                                  objects stay \stdClass, so an object can be told from a list
      * @param string $apiVersion an ApiVersion constant
      *
      * @throws MalformedResponseException when a declared field is absent or has the wrong type,
@@ -53,7 +54,7 @@ final class Tag
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return new self(
+        return Json::readAs($apiVersion, static fn(): self => new self(
             id: Json::string($data, 'id'),
             tenantId: Json::string($data, 'tenant_id'),
             applicationId: Json::nullableString($data, 'application_id'),
@@ -75,6 +76,6 @@ final class Tag
             usageCount: Json::int($data, 'usage_count'),
             createdAt: Json::dateTime($data, 'created_at'),
             updatedAt: Json::dateTime($data, 'updated_at'),
-        );
+        ));
     }
 }

@@ -20,6 +20,10 @@ use Octoverse\Octonomy\Exception\TransportException;
  * server always emits it (octonomy/tags/serializers.py upstream); the readers
  * with "OrAbsent" in their name are the named exceptions to that rule.
  *
+ * The readers take an object's members as members() returns them: nested JSON
+ * objects are still \stdClass, so a reader can tell an object from a list,
+ * which array decoding cannot.
+ *
  * @internal
  */
 final class Json
@@ -52,9 +56,26 @@ final class Json
     }
 
     /**
-     * Convert a JSON object from decode() into the string-keyed array form the
-     * models read. Nested objects become arrays too, matching what array-mode
-     * decoding produces.
+     * The members of a JSON object from decode(), as the string-keyed array the
+     * readers take. Only the top level is converted: a nested object stays
+     * \stdClass and a nested list stays an array, so the reader for that field
+     * can still tell which one the server sent.
+     *
+     * @return array<string, mixed>
+     */
+    public static function members(\stdClass $object): array
+    {
+        $out = [];
+        foreach (get_object_vars($object) as $key => $value) {
+            $out[(string) $key] = $value;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Convert a JSON object from decode() into a string-keyed array, nested
+     * objects included, the form a model exposes once a reader has checked it.
      *
      * @return array<string, mixed>
      */
@@ -66,6 +87,27 @@ final class Json
         }
 
         return $out;
+    }
+
+    /**
+     * Run a model's reads, and mark any field they reject with the api_version
+     * the model read the body as, which the readers themselves do not know.
+     *
+     * @template T
+     *
+     * @param \Closure(): T $read
+     *
+     * @return T
+     *
+     * @throws MalformedResponseException when a read rejects a field
+     */
+    public static function readAs(string $apiVersion, \Closure $read): mixed
+    {
+        try {
+            return $read();
+        } catch (MalformedResponseException $e) {
+            throw $e->readAs($apiVersion);
+        }
     }
 
     /**
@@ -163,7 +205,9 @@ final class Json
     }
 
     /**
-     * Read a nullable JSON object field (e.g. `metadata`).
+     * Read a nullable JSON object field (e.g. `metadata`), converted to an
+     * array once it is known to be an object. A JSON list is rejected, which is
+     * why the members must still hold the \stdClass decode() produced.
      *
      * @param array<string, mixed> $d
      *
@@ -177,11 +221,11 @@ final class Json
         if ($v === null) {
             return null;
         }
-        if (!is_array($v)) {
+        if (!$v instanceof \stdClass) {
             throw self::wrongType($key, 'an object or null', $v);
         }
 
-        return self::stringKeyed($v);
+        return self::objectToArray($v);
     }
 
     /**
@@ -218,17 +262,13 @@ final class Json
     public static function namespaceField(array $d, string $key, string $apiVersion): ?string
     {
         if ($apiVersion === ApiVersion::V2) {
-            if (!array_key_exists($key, $d)) {
-                throw new MalformedResponseException('is missing', $key, null, $apiVersion);
-            }
-
             return self::nullableString($d, $key);
         }
         if ($apiVersion !== ApiVersion::V1) {
             throw new \InvalidArgumentException(sprintf('octonomy: unknown api_version "%s"; expected "v1" or "v2"', $apiVersion));
         }
         if (array_key_exists($key, $d)) {
-            throw new MalformedResponseException('is not part of an api_version v1 response', $key, null, $apiVersion);
+            throw new MalformedResponseException('is not part of an api_version v1 response', $key);
         }
 
         return null;
@@ -256,7 +296,8 @@ final class Json
             is_int($actual) => 'an integer',
             is_float($actual) => 'a number',
             is_string($actual) => 'a string',
-            default => 'an object or array',
+            $actual instanceof \stdClass => 'an object',
+            default => 'an array',
         };
 
         return new MalformedResponseException("must be {$expected}, got {$type}", $key);

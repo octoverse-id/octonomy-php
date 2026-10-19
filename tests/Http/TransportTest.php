@@ -30,8 +30,18 @@ final class TransportTest extends SdkTestCase
         $data = $transport->one('GET', 'tags/tag_1', self::asDecoded());
 
         self::assertSame(self::capturedData('v1/tags/get'), $data);
-        // Nested objects come back as arrays, as models expect.
-        self::assertSame(['color' => 'red'], $data['metadata']);
+    }
+
+    public function testTheHydratorGetsNestedObjectsUndecided(): void
+    {
+        $transport = $this->transportWith([self::captured('v1/tags/get')]);
+
+        // Still a \stdClass, so the field's reader can tell an object from a
+        // list; array decoding would have made {} and [] the same.
+        $metadata = $transport->one('GET', 'tags/tag_1', static fn(array $members): mixed => $members['metadata']);
+
+        self::assertInstanceOf(\stdClass::class, $metadata);
+        self::assertSame(['color' => 'red'], get_object_vars($metadata));
     }
 
     #[DataProvider('bodiesWithoutDataObject')]

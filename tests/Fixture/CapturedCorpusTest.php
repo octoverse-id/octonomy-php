@@ -257,17 +257,17 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedTagHydrates(): void
     {
-        $rows = self::modelRows('tags', static fn(string $operation, array $data): array => match (true) {
+        $rows = self::modelRows('tags', static fn(string $operation, mixed $data): array => match (true) {
             in_array($operation, ['tags/create', 'tags/get', 'tags/update', 'tags/list', 'tags/list-page'], true) => self::oneOrMany($data),
-            str_starts_with($operation, 'tag-resolution/') => [$data['tag']],
-            $operation === 'resources/replace' => $data['tags'],
+            str_starts_with($operation, 'tag-resolution/') => [$data->tag],
+            $operation === 'resources/replace' => $data->tags,
             $operation === 'resources/tags' => array_column($data, 'tag'),
             default => [],
         });
         self::assertGreaterThan(20, count($rows));
 
-        foreach ($rows as [$name, $row]) {
-            $tag = Tag::fromArray($row, self::apiVersion($name));
+        foreach ($rows as [$name, $members, $row]) {
+            $tag = Tag::fromArray($members, self::apiVersion($name));
             self::assertSame($row['id'], $tag->id, $name);
             self::assertSame($row['tenant_id'], $tag->tenantId, $name);
             self::assertSame($row['application_id'], $tag->applicationId, $name);
@@ -291,13 +291,13 @@ final class CapturedCorpusTest extends SdkTestCase
 
     public function testEveryCapturedVocabularyHydrates(): void
     {
-        $rows = self::modelRows('vocabularies', static fn(string $operation, array $data): array => str_starts_with($operation, 'vocabularies/')
+        $rows = self::modelRows('vocabularies', static fn(string $operation, mixed $data): array => str_starts_with($operation, 'vocabularies/')
             ? self::oneOrMany($data)
             : []);
         self::assertGreaterThan(10, count($rows));
 
-        foreach ($rows as [$name, $row]) {
-            $vocabulary = Vocabulary::fromArray($row, self::apiVersion($name));
+        foreach ($rows as [$name, $members, $row]) {
+            $vocabulary = Vocabulary::fromArray($members, self::apiVersion($name));
             self::assertSame($row['id'], $vocabulary->id, $name);
             self::assertSame($row['tenant_id'], $vocabulary->tenantId, $name);
             self::assertSame($row['application_id'], $vocabulary->applicationId, $name);
@@ -340,12 +340,15 @@ final class CapturedCorpusTest extends SdkTestCase
 
     /**
      * The model rows $extract finds in each successful fixture, as [fixture
-     * name, row] pairs. $extract gets the operation ('tags/get') and the
-     * response's "data" member.
+     * name, members, row] triples: the members as Transport hands them to a
+     * model (nested objects still \stdClass), and the same row decoded to
+     * arrays to assert against. $extract gets the operation ('tags/get') and the
+     * response's "data" member decoded with objects kept, so it reads a nested
+     * row as $data->tag.
      *
-     * @param \Closure(string, array<array-key, mixed>): array<array-key, mixed> $extract
+     * @param \Closure(string, mixed): array<array-key, mixed> $extract
      *
-     * @return list<array{string, array<array-key, mixed>}>
+     * @return list<array{string, array<string, mixed>, array<array-key, mixed>}>
      */
     private static function modelRows(string $label, \Closure $extract): array
     {
@@ -356,9 +359,17 @@ final class CapturedCorpusTest extends SdkTestCase
                 continue;
             }
             $operation = substr($name, strlen('v1/'));
-            foreach ($extract($operation, $captured->data()) as $row) {
-                self::assertIsArray($row, "{$name}: a {$label} row that is not an object");
-                $rows[] = ["{$name} ({$label})", $row];
+            $decoded = json_decode($captured->body, false, 512, JSON_THROW_ON_ERROR);
+            self::assertInstanceOf(\stdClass::class, $decoded, $name);
+            foreach ($extract($operation, $decoded->data) as $row) {
+                self::assertInstanceOf(\stdClass::class, $row, "{$name}: a {$label} row that is not an object");
+                $members = [];
+                foreach (get_object_vars($row) as $key => $value) {
+                    $members[(string) $key] = $value;
+                }
+                $array = json_decode(json_encode($row, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION), true, 512, JSON_THROW_ON_ERROR);
+                self::assertIsArray($array);
+                $rows[] = ["{$name} ({$label})", $members, $array];
             }
         }
 
@@ -368,13 +379,11 @@ final class CapturedCorpusTest extends SdkTestCase
     /**
      * A single resource as a one-row list, or a list's rows as they are.
      *
-     * @param array<array-key, mixed> $data
-     *
      * @return array<array-key, mixed>
      */
-    private static function oneOrMany(array $data): array
+    private static function oneOrMany(mixed $data): array
     {
-        return array_is_list($data) ? $data : [$data];
+        return is_array($data) ? $data : [$data];
     }
 
     /**

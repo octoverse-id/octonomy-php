@@ -43,6 +43,17 @@ final class MalformedResponseException extends OctonomyException
     }
 
     /**
+     * The same fault, marked with the api_version the model read the body as.
+     * Json::readAs() calls this, since a field reader does not know the version.
+     *
+     * @internal
+     */
+    public function readAs(string $apiVersion): self
+    {
+        return new self($this->problem, $this->field, null, $apiVersion, $this);
+    }
+
+    /**
      * The same fault, placed in the response it came from. A model reports a
      * field by its key alone; Transport, which knows the request and where in
      * the body the model's object sat ($at, such as "data" or "data[2]"),
