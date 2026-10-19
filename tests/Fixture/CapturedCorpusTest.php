@@ -20,6 +20,95 @@ final class CapturedCorpusTest extends SdkTestCase
 {
     private const NAMESPACE_KEYS = ['namespace_type', 'namespace_id'];
 
+    /**
+     * The operations issue #9 requires in both api_versions: every resource
+     * group's create, get, list, update and delete, the bulk and resolution
+     * shapes, and an error envelope per mapped code. Pinned here rather than
+     * read from the manifest, so a capture that silently stops recording one
+     * fails instead of shrinking the corpus.
+     */
+    private const REQUIRED = [
+        'audit-logs/list',
+        'errors/authentication-required',
+        'errors/conflict',
+        'errors/forbidden',
+        'errors/inactive-tag',
+        'errors/not-found',
+        'errors/tenant-mismatch',
+        'errors/validation-error',
+        'resources/audit-logs',
+        'resources/replace',
+        'resources/tags',
+        'tag-aliases/create',
+        'tag-aliases/delete',
+        'tag-aliases/get',
+        'tag-aliases/list',
+        'tag-aliases/update',
+        'tag-assignments/bulk-assign',
+        'tag-assignments/bulk-remove',
+        'tag-assignments/create',
+        'tag-assignments/create-existing',
+        'tag-assignments/delete',
+        'tag-resolution/alias',
+        'tag-resolution/tag',
+        'tags/aliases',
+        'tags/audit-logs',
+        'tags/create',
+        'tags/delete',
+        'tags/get',
+        'tags/list',
+        'tags/list-empty',
+        'tags/list-page',
+        'tags/resources',
+        'tags/update',
+        'vocabularies/create',
+        'vocabularies/delete',
+        'vocabularies/get',
+        'vocabularies/list',
+        'vocabularies/update',
+    ];
+
+    /**
+     * What only one version can show: v1 refuses namespace headers and an
+     * application-bound grant without its application; v2 lists the global
+     * partition and include_global beside a namespace.
+     */
+    private const REQUIRED_ONLY_IN = [
+        'v1' => ['errors/application-mismatch', 'errors/namespace-not-supported'],
+        'v2' => ['vocabularies/list-global', 'vocabularies/list-include-global'],
+    ];
+
+    /**
+     * The status a conforming server answers each operation with, where it is
+     * not 200. A fixture with another status was not captured from that call.
+     */
+    private const STATUS = [
+        'create' => 201,
+        'delete' => 204,
+        'errors/authentication-required' => 403,
+        'errors/conflict' => 409,
+        'errors/forbidden' => 403,
+        'errors/not-found' => 404,
+    ];
+
+    public function testCorpusHoldsExactlyTheRequiredOperations(): void
+    {
+        foreach (self::REQUIRED_ONLY_IN as $version => $only) {
+            $expected = array_map(static fn(string $operation): string => "{$version}/{$operation}", [...self::REQUIRED, ...$only]);
+            sort($expected);
+            $actual = CapturedFixture::names($version);
+            sort($actual);
+
+            self::assertSame($expected, $actual, "the {$version} corpus does not hold exactly the required operations");
+
+            foreach ($actual as $name) {
+                $operation = substr($name, strlen("{$version}/"));
+                $status = self::STATUS[$operation] ?? self::STATUS[basename($operation)] ?? (str_starts_with($operation, 'errors/') ? 400 : 200);
+                self::assertSame($status, CapturedFixture::load($name)->status, "{$name} was not captured from the call its name says");
+            }
+        }
+    }
+
     public function testManifestNamesTheServerTheHarnessPins(): void
     {
         $script = file_get_contents(dirname(__DIR__, 2) . '/scripts/octonomy-harness.sh');
@@ -119,7 +208,7 @@ final class CapturedCorpusTest extends SdkTestCase
     {
         $captured = CapturedFixture::load($name);
         $body = $captured->json();
-        $transport = $this->transportWith([$captured->response()]);
+        $transport = $this->transportWith([$captured]);
 
         if ($captured->status >= 400) {
             try {

@@ -37,8 +37,11 @@ the wire contract:
   `expectException(...)` or a try/catch on `ApiException`. The responses are never written by hand:
   each test replays one captured from a real server with `self::captured('v1/tags/get')` (see
   [Captured response fixtures](#captured-response-fixtures)). A shape no conforming server sends — a
-  missing envelope, invalid JSON, a gateway's HTML — is built with `self::syntheticNegative()`, which
-  names it as synthetic at the call site.
+  missing envelope, invalid JSON, a gateway's HTML — is built with
+  `self::syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '[]')`, whose first argument names
+  which carve-out applies. `clientWith()` and `transportWith()` accept only these two, and
+  `NoHandWrittenResponseBodiesTest` fails on any `GuzzleHttp\` reference outside the fixture helpers,
+  so there is no third way in.
 
 Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations. Keep new code covered.
 
@@ -151,7 +154,9 @@ order, null versus absent keys, and `{}` versus `[]`.
 
 A refresh is its own PR, reviewed like code: the diff is the server's behavior change. Never edit a
 fixture by hand. `CapturedCorpusTest` fails if a file differs from the hash in the manifest, if a
-file is added or lost, or if the manifest names a different image than the harness pins.
+file is added or lost, if the manifest names a different image than the harness pins, or if the
+corpus stops holding exactly the operations it lists as required. Capturing a new operation means
+adding it to that list in the same PR.
 
 ## Running against your own Octonomy
 

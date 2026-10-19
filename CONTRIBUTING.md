@@ -50,7 +50,8 @@ These mirror [AGENTS.md](AGENTS.md):
   method/path/headers/query/body and the decoded response.
 - Replay responses captured from a real server (`self::captured('v1/tags/get')`); never write a
   response body by hand. Only shapes no conforming server sends go through
-  `self::syntheticNegative()`. See [docs/development.md](docs/development.md#captured-response-fixtures).
+  `self::syntheticNegative(SyntheticNegative::<KIND>, ...)`. See
+  [docs/development.md](docs/development.md#captured-response-fixtures).
 - Cover success, the list envelope, and error→exception mapping.
 - Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations.
 

@@ -12,6 +12,7 @@ use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Http\Transport;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 
@@ -24,19 +25,27 @@ abstract class SdkTestCase extends TestCase
     protected MockHandler $mock;
 
     /**
-     * @param list<Response> $responses
+     * Build a Client whose requests are answered, in order, by $responses.
+     *
+     * Responses enter only as captured fixtures or labelled synthetic negatives,
+     * never as a hand-built Response, and the HTTP client cannot be swapped
+     * through $config: those are the two ways a hand-written body would reach
+     * the SDK (AGENTS.md).
+     *
+     * @param list<CapturedFixture|SyntheticNegative> $responses
      * @param array<string, mixed> $config
      */
     protected function clientWith(array $responses, array $config = []): Client
     {
-        $this->mock = new MockHandler($responses);
-        $guzzle = new GuzzleClient(['handler' => HandlerStack::create($this->mock)]);
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('clientWith() owns the HTTP client; pass captured() or syntheticNegative() responses instead');
+        }
 
         return new Client(array_merge([
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
-            'http_client' => $guzzle,
+            'http_client' => $this->mockedHttpClient($responses),
         ], $config));
     }
 
@@ -44,17 +53,15 @@ abstract class SdkTestCase extends TestCase
      * Build a bare Transport over a MockHandler, for tests of the transport
      * contract itself rather than of a resource service.
      *
-     * @param list<Response> $responses
+     * @param list<CapturedFixture|SyntheticNegative> $responses
      */
     protected function transportWith(array $responses): Transport
     {
-        $this->mock = new MockHandler($responses);
-
         return new Transport(new Config(
             baseUrl: 'https://octonomy.test',
             token: 'test-token',
             tenantId: 'tenant-1',
-            httpClient: new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
+            httpClient: $this->mockedHttpClient($responses),
         ), Client::VERSION);
     }
 
@@ -105,9 +112,9 @@ abstract class SdkTestCase extends TestCase
      * as captured('v1/tags/get'). Every response body a test needs comes from
      * here unless a conforming server could not produce it (syntheticNegative()).
      */
-    protected static function captured(string $name): Response
+    protected static function captured(string $name): CapturedFixture
     {
-        return CapturedFixture::load($name)->response();
+        return CapturedFixture::load($name);
     }
 
     /**
@@ -122,18 +129,32 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
-     * A response no conforming Octonomy sends: a missing envelope or field, a
-     * wrong type, invalid JSON, a gateway's HTML. These are the one carve-out
-     * from captured fixtures (AGENTS.md), since a real server cannot be made to
-     * produce them; the name marks each one at its call site.
+     * A response no conforming Octonomy sends, such as
+     * syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '[]'). These
+     * are the one carve-out from captured fixtures (AGENTS.md), since a real
+     * server cannot be made to produce them; $kind names which carve-out applies.
      *
      * @param array<string, string> $headers
      */
     protected static function syntheticNegative(
+        string $kind,
         int $status,
         string $body = '',
         array $headers = ['Content-Type' => 'application/json'],
-    ): Response {
-        return new Response($status, $headers, $body);
+    ): SyntheticNegative {
+        return new SyntheticNegative($kind, $status, $body, $headers);
+    }
+
+    /**
+     * @param list<CapturedFixture|SyntheticNegative> $responses
+     */
+    private function mockedHttpClient(array $responses): GuzzleClient
+    {
+        $this->mock = new MockHandler(array_map(
+            static fn(CapturedFixture|SyntheticNegative $response): Response => $response->response(),
+            $responses,
+        ));
+
+        return new GuzzleClient(['handler' => HandlerStack::create($this->mock)]);
     }
 }

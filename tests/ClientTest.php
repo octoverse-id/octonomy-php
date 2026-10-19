@@ -14,6 +14,7 @@ use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\ValidationException;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 final class ClientTest extends SdkTestCase
@@ -95,7 +96,7 @@ final class ClientTest extends SdkTestCase
         $captured = CapturedFixture::load($fixture);
         $error = $captured->json()['error'];
         self::assertSame($code, $error['code'], "{$fixture} is not the {$code} envelope");
-        $client = $this->clientWith([$captured->response()]);
+        $client = $this->clientWith([$captured]);
 
         try {
             $client->tags()->get('tag_1');
@@ -130,8 +131,7 @@ final class ClientTest extends SdkTestCase
 
     public function testErrorFallbackForNonEnvelopeBody(): void
     {
-        // A gateway's body, not Octonomy's: synthetic, since no Octonomy sends it.
-        $client = $this->clientWith([self::syntheticNegative(502, 'upstream down', [])]);
+        $client = $this->clientWith([self::syntheticNegative(SyntheticNegative::GATEWAY, 502, 'upstream down', [])]);
 
         try {
             $client->tags()->get('tag_1');
