@@ -4,18 +4,33 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Internal;
 
+use Octoverse\Octonomy\ApiVersion;
+use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
 
 /**
- * Json holds small, defensive helpers for reading values out of a decoded JSON
- * response body. They never throw on a missing/mismatched field — they return a
- * safe zero value — so model hydration stays total. The response envelope itself
- * is not lenient: Transport rejects a 2xx without it before any model sees it.
+ * Json decodes response bodies and reads fields out of them strictly.
+ *
+ * Every reader requires its key to be present and its value to have the JSON
+ * type the model declares, and throws MalformedResponseException naming the
+ * field otherwise. Nothing is defaulted and nothing is coerced: a zero value or
+ * a "5" read as 5 would hide contract drift, which is how six of ten methods
+ * once returned empty models without an error (#6, #14). Nullability governs
+ * the value only. A nullable field's key must still be present, because the
+ * server always emits it (octonomy/tags/serializers.py upstream); the readers
+ * with "OrAbsent" in their name are the named exceptions to that rule.
  *
  * @internal
  */
 final class Json
 {
+    /**
+     * An RFC 3339 timestamp, the form DRF renders a DateTimeField in. Validated
+     * before parsing because \DateTimeImmutable also accepts "now", "yesterday"
+     * and "+1 day", which are no timestamp a server sends.
+     */
+    private const TIMESTAMP = '/^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/';
+
     /**
      * Decode a response body, keeping JSON objects as \stdClass. Decoding to
      * arrays would make {} and [] identical, and would turn {"0": ...} into what
@@ -55,8 +70,9 @@ final class Json
 
     /**
      * Decode leniently, returning an empty array instead of throwing when the
-     * body is missing or not valid JSON. Used for error responses, where a
-     * non-JSON body (e.g. a gateway 502) should fall back gracefully.
+     * body is missing or not valid JSON. Used for error responses only, where a
+     * non-JSON body (e.g. a gateway 502) must still become an ApiException
+     * chosen by its status.
      *
      * @return array<string, mixed>
      */
@@ -73,88 +89,177 @@ final class Json
 
     /**
      * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent or not a string
      */
     public static function string(array $d, string $key): string
     {
-        $v = $d[$key] ?? null;
+        $v = self::present($d, $key);
+        if (!is_string($v)) {
+            throw self::wrongType($key, 'a string', $v);
+        }
 
-        return is_string($v) ? $v : '';
+        return $v;
     }
 
     /**
      * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent, or neither a string nor null
      */
     public static function nullableString(array $d, string $key): ?string
     {
-        $v = $d[$key] ?? null;
+        $v = self::present($d, $key);
+        if ($v !== null && !is_string($v)) {
+            throw self::wrongType($key, 'a string or null', $v);
+        }
 
-        return is_string($v) ? $v : null;
+        return $v;
+    }
+
+    /**
+     * Read a nullable string the server omits, rather than sends as null, when
+     * it has no value. An absent key yields null; a present one must still be a
+     * string or null. Only for a field the server is known to omit, with the
+     * reason at the call site: everywhere else an absent key is drift.
+     *
+     * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is present but neither a string nor null
+     */
+    public static function nullableStringOrAbsent(array $d, string $key): ?string
+    {
+        return array_key_exists($key, $d) ? self::nullableString($d, $key) : null;
     }
 
     /**
      * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent or not a boolean
      */
     public static function bool(array $d, string $key): bool
     {
-        $v = $d[$key] ?? null;
+        $v = self::present($d, $key);
+        if (!is_bool($v)) {
+            throw self::wrongType($key, 'a boolean', $v);
+        }
 
-        return is_bool($v) ? $v : false;
+        return $v;
     }
 
     /**
      * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent or not an integer
      */
     public static function int(array $d, string $key): int
     {
-        $v = $d[$key] ?? null;
-        if (is_int($v)) {
-            return $v;
+        $v = self::present($d, $key);
+        if (!is_int($v)) {
+            throw self::wrongType($key, 'an integer', $v);
         }
 
-        return is_numeric($v) ? (int) $v : 0;
+        return $v;
     }
 
     /**
-     * Read a nullable JSON object/array field (e.g. `metadata`).
+     * Read a nullable JSON object field (e.g. `metadata`).
      *
      * @param array<string, mixed> $d
      *
      * @return array<string, mixed>|null
+     *
+     * @throws MalformedResponseException when the key is absent, or neither an object nor null
      */
     public static function nullableObject(array $d, string $key): ?array
     {
-        $v = $d[$key] ?? null;
+        $v = self::present($d, $key);
+        if ($v === null) {
+            return null;
+        }
+        if (!is_array($v)) {
+            throw self::wrongType($key, 'an object or null', $v);
+        }
 
-        return is_array($v) ? self::stringKeyed($v) : null;
-    }
-
-    /**
-     * Read a JSON object field, defaulting to an empty array.
-     *
-     * @param array<string, mixed> $d
-     *
-     * @return array<string, mixed>
-     */
-    public static function object(array $d, string $key): array
-    {
-        return self::nullableObject($d, $key) ?? [];
+        return self::stringKeyed($v);
     }
 
     /**
      * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent or not an RFC 3339 timestamp
      */
     public static function dateTime(array $d, string $key): \DateTimeImmutable
     {
-        $v = $d[$key] ?? null;
-        if (is_string($v) && $v !== '') {
-            try {
-                return new \DateTimeImmutable($v);
-            } catch (\Exception) {
-                // fall through to epoch
-            }
+        $v = self::present($d, $key);
+        if (!is_string($v)) {
+            throw self::wrongType($key, 'an RFC 3339 timestamp', $v);
+        }
+        if (preg_match(self::TIMESTAMP, $v, $m) !== 1 || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            throw new MalformedResponseException(sprintf('must be an RFC 3339 timestamp, got "%s"', $v), $key);
         }
 
-        return new \DateTimeImmutable('@0');
+        return new \DateTimeImmutable($v);
+    }
+
+    /**
+     * Read one half of the namespace pair (namespace_type, namespace_id), the
+     * one place the field set depends on the api_version. v2 declares the pair
+     * on every namespaced resource and always emits it, null for a global row;
+     * the server strips it from every v1 response (octonomy/core/serializers.py
+     * upstream). So on v2 the key must be present, and on v1 it must be absent
+     * and reads as null, since v1 only ever sees the global partition.
+     *
+     * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when v2 lacks the key, v1 carries it, or the value is
+     *                                    neither a string nor null
+     */
+    public static function namespaceField(array $d, string $key, string $apiVersion): ?string
+    {
+        if ($apiVersion === ApiVersion::V2) {
+            if (!array_key_exists($key, $d)) {
+                throw new MalformedResponseException('is missing', $key, null, $apiVersion);
+            }
+
+            return self::nullableString($d, $key);
+        }
+        if ($apiVersion !== ApiVersion::V1) {
+            throw new \InvalidArgumentException(sprintf('octonomy: unknown api_version "%s"; expected "v1" or "v2"', $apiVersion));
+        }
+        if (array_key_exists($key, $d)) {
+            throw new MalformedResponseException('is not part of an api_version v1 response', $key, null, $apiVersion);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $d
+     *
+     * @throws MalformedResponseException when the key is absent
+     */
+    private static function present(array $d, string $key): mixed
+    {
+        if (!array_key_exists($key, $d)) {
+            throw new MalformedResponseException('is missing', $key);
+        }
+
+        return $d[$key];
+    }
+
+    private static function wrongType(string $key, string $expected, mixed $actual): MalformedResponseException
+    {
+        $type = match (true) {
+            $actual === null => 'null',
+            is_bool($actual) => 'a boolean',
+            is_int($actual) => 'an integer',
+            is_float($actual) => 'a number',
+            is_string($actual) => 'a string',
+            default => 'an object or array',
+        };
+
+        return new MalformedResponseException("must be {$expected}, got {$type}", $key);
     }
 
     private static function toArrays(mixed $value): mixed

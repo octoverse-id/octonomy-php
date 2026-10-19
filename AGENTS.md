@@ -29,12 +29,19 @@ stays a faithful, ergonomic client.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
   `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
-  `MalformedResponseException` rather than hydrating an empty model.
+  `MalformedResponseException` rather than hydrating an empty model. `one()`/`many()` run the model's
+  `fromArray(...)` themselves, so a rejected field is reported with its endpoint and api_version.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.
-- Response models are immutable `readonly` DTOs hydrated via `::fromArray()`. Input DTOs use nullable
-  promoted properties + `toArray()` that omits nulls so PATCH sends only what the caller set.
+- Response models are immutable `readonly` DTOs hydrated via `::fromArray($data, $apiVersion)`.
+  Hydration is strict and the constructor signature is the field registry: every declared field must
+  be present as a key (nullability governs the value only), a wrong JSON type raises, and nothing is
+  coerced or defaulted. The only exceptions are named rules in `Internal\Json` with the server-side
+  reason in a comment: the v2-only namespace pair, and Tag's `parent_id`/`vocabulary_id`, which the
+  server omits when null. Never add a lenient reader.
+- Input DTOs use nullable promoted properties + `toArray()` that omits nulls so PATCH sends only what
+  the caller set.
 - No new public class or method without a doc comment and tests.
 
 ## PHP Conventions

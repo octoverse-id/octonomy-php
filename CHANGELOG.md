@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   injectable `http_client`. Guzzle is the only runtime dependency.
 - Response envelopes: single-resource methods unwrap the server's `{"data": {...}}`, and list methods
   decode `{data, pagination}` into a generic `ResultList<T>` and `Pagination` (#6).
+- Strict hydration: every field a model declares for the response's api_version must be present as a
+  key, nullable fields included, and have its declared JSON type. A missing key, a wrong type (`"5"`
+  for an integer), or an unparseable timestamp throws `MalformedResponseException` naming the
+  endpoint, the api_version and the field (`$field`, e.g. `data.usage_count`) instead of hydrating a
+  zero value or coercing one. Tag's `parent_id` and `vocabulary_id`, which the server omits when null,
+  are the named exception (#14).
+- `ApiVersion::V1` / `ApiVersion::V2`, and the v2 namespace pair on `Tag` and `Vocabulary`
+  (`namespaceType`, `namespaceId`; null on v1, which sees only the global partition). `fromArray()`
+  takes the api_version the data was read as (#14).
 - Typed exception hierarchy: `ApiException` (with `statusCode`, `errorCode`, `details`, `requestId`)
   and `NotFoundException`, `ConflictException`, `ValidationException`, `AuthenticationException`,
   `ForbiddenException`, decoded from the `{error:{code,message,details,request_id}}` envelope; plus

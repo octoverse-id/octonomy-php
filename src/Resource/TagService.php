@@ -25,9 +25,7 @@ final class TagService
      */
     public function create(TagCreate $input, ?RequestOptions $options = null): Tag
     {
-        return Tag::fromArray(
-            $this->transport->one('POST', 'tags', [], $input->toArray(), $options),
-        );
+        return $this->transport->one('POST', 'tags', Tag::fromArray(...), [], $input->toArray(), $options);
     }
 
     /**
@@ -35,8 +33,13 @@ final class TagService
      */
     public function get(string $id, ?RequestOptions $options = null): Tag
     {
-        return Tag::fromArray(
-            $this->transport->one('GET', 'tags/' . rawurlencode($id), [], null, $options),
+        return $this->transport->one(
+            'GET',
+            'tags/' . rawurlencode($id),
+            Tag::fromArray(...),
+            [],
+            null,
+            $options,
         );
     }
 
@@ -47,9 +50,14 @@ final class TagService
      */
     public function list(?TagListParams $params = null, ?RequestOptions $options = null): ResultList
     {
-        $page = $this->transport->many('GET', 'tags', $params?->toQuery() ?? [], null, $options);
-
-        return new ResultList(array_map(Tag::fromArray(...), $page->rows), $page->pagination);
+        return $this->transport->many(
+            'GET',
+            'tags',
+            Tag::fromArray(...),
+            $params?->toQuery() ?? [],
+            null,
+            $options,
+        );
     }
 
     /**
@@ -57,8 +65,13 @@ final class TagService
      */
     public function update(string $id, TagUpdate $input, ?RequestOptions $options = null): Tag
     {
-        return Tag::fromArray(
-            $this->transport->one('PATCH', 'tags/' . rawurlencode($id), [], $input->toArray(), $options),
+        return $this->transport->one(
+            'PATCH',
+            'tags/' . rawurlencode($id),
+            Tag::fromArray(...),
+            [],
+            $input->toArray(),
+            $options,
         );
     }
 

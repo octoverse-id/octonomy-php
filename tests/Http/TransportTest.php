@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests\Http;
 
+use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use Octoverse\Octonomy\Tests\SdkTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * Covers the three ways Transport reads a 2xx — one(), many(), none() — and the
- * envelope each one enforces. Well-formed responses are captured from a real
+ * Covers the three ways Transport reads a 2xx — one(), many(), none() — the
+ * envelope each one enforces, and how a field the hydrator rejects is placed in
+ * the response it came from. Well-formed responses are captured from a real
  * server; the malformed ones are synthetic negatives, because a conforming
  * server cannot produce them.
  */
@@ -24,7 +27,7 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([self::captured('v1/tags/get')]);
 
-        $data = $transport->one('GET', 'tags/tag_1');
+        $data = $transport->one('GET', 'tags/tag_1', self::asDecoded());
 
         self::assertSame(self::capturedData('v1/tags/get'), $data);
         // Nested objects come back as arrays, as models expect.
@@ -38,10 +41,10 @@ final class TransportTest extends SdkTestCase
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
-            'octonomy: malformed response from GET /api/v1/tags/tag_1: expected a non-empty JSON object under "data"',
+            'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): expected a non-empty JSON object under "data"',
         );
 
-        $transport->one('GET', 'tags/tag_1');
+        $transport->one('GET', 'tags/tag_1', self::asDecoded());
     }
 
     /**
@@ -67,7 +70,7 @@ final class TransportTest extends SdkTestCase
 
         $this->expectException(TransportException::class);
 
-        $transport->one('GET', 'tags/tag_1');
+        $transport->one('GET', 'tags/tag_1', self::asDecoded());
     }
 
     public function testOneRaisesTheTypedApiExceptionForANon2xx(): void
@@ -76,7 +79,42 @@ final class TransportTest extends SdkTestCase
 
         $this->expectException(NotFoundException::class);
 
-        $transport->one('GET', 'tags/missing');
+        $transport->one('GET', 'tags/missing', self::asDecoded());
+    }
+
+    public function testOneHydratesWithItsApiVersionAndCallsThatSurface(): void
+    {
+        $transport = $this->transportWith([self::captured('v2/tags/get')], ApiVersion::V2);
+
+        $tag = $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+
+        self::assertSame('/api/v2/tags/tag_1', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(self::capturedData('v2/tags/get')['namespace_type'], $tag->namespaceType);
+        self::assertSame(self::capturedData('v2/tags/get')['namespace_id'], $tag->namespaceId);
+    }
+
+    public function testOnePlacesAFieldTheHydratorRejectsAtTheRequest(): void
+    {
+        $transport = $this->transportWith([self::syntheticNegativeFrom(
+            'v1/tags/get',
+            SyntheticNegative::WRONG_TYPE,
+            static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+        )]);
+
+        try {
+            $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+            self::fail('expected a MalformedResponseException');
+        } catch (MalformedResponseException $e) {
+            self::assertSame(
+                'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): field "data.usage_count" must be an integer, got a string',
+                $e->getMessage(),
+            );
+            self::assertSame('data.usage_count', $e->field);
+            // The model's own report, before Transport placed it, stays chained.
+            $previous = $e->getPrevious();
+            self::assertInstanceOf(MalformedResponseException::class, $previous);
+            self::assertSame('usage_count', $previous->field);
+        }
     }
 
     public function testManyReturnsRowsAndPagination(): void
@@ -86,10 +124,10 @@ final class TransportTest extends SdkTestCase
         $pagination = $captured->json()['pagination'];
         $transport = $this->transportWith([$captured]);
 
-        $page = $transport->many('GET', 'tags', ['limit' => '1', 'offset' => '1']);
+        $page = $transport->many('GET', 'tags', self::asDecoded(), ['limit' => '1', 'offset' => '1']);
 
-        self::assertSame($captured->data(), $page->rows);
-        self::assertCount(1, $page->rows);
+        self::assertSame($captured->data(), $page->data);
+        self::assertCount(1, $page->data);
         self::assertSame(1, $page->pagination->limit);
         self::assertSame(1, $page->pagination->offset);
         self::assertSame($pagination['count'], $page->pagination->count);
@@ -105,9 +143,9 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([self::captured('v1/tags/list-empty')]);
 
-        $page = $transport->many('GET', 'tags');
+        $page = $transport->many('GET', 'tags', self::asDecoded());
 
-        self::assertSame([], $page->rows);
+        self::assertSame([], $page->data);
         self::assertSame(0, $page->pagination->count);
     }
 
@@ -117,9 +155,9 @@ final class TransportTest extends SdkTestCase
         $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
 
         $this->expectException(MalformedResponseException::class);
-        $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags: ' . $expected);
+        $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
 
-        $transport->many('GET', 'tags');
+        $transport->many('GET', 'tags', self::asDecoded());
     }
 
     /**
@@ -151,7 +189,7 @@ final class TransportTest extends SdkTestCase
 
         $this->expectException(TransportException::class);
 
-        $transport->many('GET', 'tags');
+        $transport->many('GET', 'tags', self::asDecoded());
     }
 
     #[DataProvider('bodiesWithBadPagination')]
@@ -161,10 +199,10 @@ final class TransportTest extends SdkTestCase
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
-            'octonomy: malformed response from GET /api/v1/tags: expected a JSON object under "pagination"',
+            'octonomy: malformed response from GET /api/v1/tags (api_version v1): expected a JSON object under "pagination"',
         );
 
-        $transport->many('GET', 'tags');
+        $transport->many('GET', 'tags', self::asDecoded());
     }
 
     /**
@@ -176,6 +214,82 @@ final class TransportTest extends SdkTestCase
         yield 'pagination is null' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":null}'];
         yield 'pagination is a list' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":[50,0,1]}'];
         yield 'pagination is an empty list' => [SyntheticNegative::WRONG_TYPE, '{"data":[],"pagination":[]}'];
+    }
+
+    public function testManyNamesTheRowAFieldFaultIsIn(): void
+    {
+        $transport = $this->transportWith([self::syntheticNegativeFrom(
+            'v1/tags/list',
+            SyntheticNegative::MISSING_FIELD,
+            static function (array $body): array {
+                unset($body['data'][2]['slug']);
+
+                return $body;
+            },
+        )]);
+
+        $this->expectException(MalformedResponseException::class);
+        $this->expectExceptionMessage(
+            'octonomy: malformed response from GET /api/v1/tags (api_version v1): field "data[2].slug" is missing',
+        );
+
+        $transport->many('GET', 'tags', Tag::fromArray(...));
+    }
+
+    /**
+     * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
+     */
+    #[DataProvider('incompletePaginations')]
+    public function testManyRejectsAPaginationFieldThatIsAbsentOrMistyped(string $kind, \Closure $break, string $expected): void
+    {
+        $transport = $this->transportWith([self::syntheticNegativeFrom('v1/tags/list', $kind, $break)]);
+
+        $this->expectException(MalformedResponseException::class);
+        $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
+
+        $transport->many('GET', 'tags', self::asDecoded());
+    }
+
+    /**
+     * @return iterable<string, array{string, \Closure(array<array-key, mixed>): array<array-key, mixed>, string}>
+     */
+    public static function incompletePaginations(): iterable
+    {
+        $without = static fn(string $key): \Closure => static function (array $body) use ($key): array {
+            unset($body['pagination'][$key]);
+
+            return $body;
+        };
+        $with = static fn(string $key, mixed $value): \Closure => static fn(array $body): array => array_replace_recursive(
+            $body,
+            ['pagination' => [$key => $value]],
+        );
+
+        yield 'count absent' => [SyntheticNegative::MISSING_FIELD, $without('count'), 'field "pagination.count" is missing'];
+        // null at an edge, never absent.
+        yield 'next absent' => [SyntheticNegative::MISSING_FIELD, $without('next'), 'field "pagination.next" is missing'];
+        yield 'limit as a numeric string' => [SyntheticNegative::WRONG_TYPE, $with('limit', '50'), 'field "pagination.limit" must be an integer, got a string'];
+        yield 'previous as a number' => [SyntheticNegative::WRONG_TYPE, $with('previous', 0), 'field "pagination.previous" must be a string or null, got an integer'];
+    }
+
+    public function testManyChecksTheWholeEnvelopeBeforeHydratingARow(): void
+    {
+        // A row the model would reject and no pagination: the envelope is
+        // reported, because no row is hydrated until the envelope holds.
+        $transport = $this->transportWith([self::syntheticNegativeFrom(
+            'v1/tags/list',
+            SyntheticNegative::MISSING_ENVELOPE,
+            static function (array $body): array {
+                unset($body['data'][0]['id'], $body['pagination']);
+
+                return $body;
+            },
+        )]);
+
+        $this->expectException(MalformedResponseException::class);
+        $this->expectExceptionMessage('expected a JSON object under "pagination"');
+
+        $transport->many('GET', 'tags', Tag::fromArray(...));
     }
 
     public function testNoneSendsTheRequestAndReturnsNothing(): void

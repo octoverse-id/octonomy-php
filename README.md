@@ -83,8 +83,9 @@ try {
 }
 ```
 
-A 2xx whose body is missing the envelope the endpoint guarantees throws
-`MalformedResponseException`. A network failure, or a 2xx body that is not JSON from a method that
+A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
+carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`
+naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A network failure, or a 2xx body that is not JSON from a method that
 returns data, throws `TransportException` (`delete()` ignores any body). Every SDK exception extends
 `Octoverse\Octonomy\Exception\OctonomyException`.
 

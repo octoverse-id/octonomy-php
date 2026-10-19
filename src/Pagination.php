@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Internal\Json;
 
 /**
@@ -21,7 +22,12 @@ final class Pagination
     ) {}
 
     /**
+     * Hydrate the "pagination" object of a list response. Every field must be
+     * present: $next and $previous are null at an edge, never absent.
+     *
      * @param array<string, mixed> $data
+     *
+     * @throws MalformedResponseException when a field is absent or has the wrong type
      */
     public static function fromArray(array $data): self
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests\Fixture;
 
+use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Model\Vocabulary;
@@ -208,11 +209,11 @@ final class CapturedCorpusTest extends SdkTestCase
     {
         $captured = CapturedFixture::load($name);
         $body = $captured->json();
-        $transport = $this->transportWith([$captured]);
+        $transport = $this->transportWith([$captured], self::apiVersion($name));
 
         if ($captured->status >= 400) {
             try {
-                $transport->one('GET', 'any');
+                $transport->one('GET', 'any', self::asDecoded());
                 self::fail("{$name}: expected an ApiException");
             } catch (ApiException $e) {
                 self::assertSame($captured->status, $e->statusCode);
@@ -231,13 +232,13 @@ final class CapturedCorpusTest extends SdkTestCase
             return;
         }
         if (array_key_exists('pagination', $body)) {
-            $page = $transport->many('GET', 'any');
-            self::assertSame($body['data'], $page->rows);
+            $page = $transport->many('GET', 'any', self::asDecoded());
+            self::assertSame($body['data'], $page->data);
             self::assertSame($body['pagination']['count'], $page->pagination->count);
 
             return;
         }
-        self::assertSame($body['data'], $transport->one('GET', 'any'));
+        self::assertSame($body['data'], $transport->one('GET', 'any', self::asDecoded()));
     }
 
     /**
@@ -252,8 +253,7 @@ final class CapturedCorpusTest extends SdkTestCase
 
     /**
      * Every captured tag, from either version and wherever it is nested,
-     * hydrates with every field intact. The v2 namespace pair is not on the
-     * model yet; the extra keys must not disturb the rest.
+     * hydrates strictly as its own api_version, with every field intact.
      */
     public function testEveryCapturedTagHydrates(): void
     {
@@ -267,19 +267,20 @@ final class CapturedCorpusTest extends SdkTestCase
         self::assertGreaterThan(20, count($rows));
 
         foreach ($rows as [$name, $row]) {
-            $tag = Tag::fromArray($row);
+            $tag = Tag::fromArray($row, self::apiVersion($name));
             self::assertSame($row['id'], $tag->id, $name);
             self::assertSame($row['tenant_id'], $tag->tenantId, $name);
             self::assertSame($row['application_id'], $tag->applicationId, $name);
+            self::assertNamespacePair($name, $row, $tag->namespaceType, $tag->namespaceId);
             self::assertSame($row['name'], $tag->name, $name);
             self::assertSame($row['slug'], $tag->slug, $name);
             self::assertSame($row['type'], $tag->type, $name);
             self::assertSame($row['description'], $tag->description, $name);
-            // The server omits parent_id and vocabulary_id when they are null,
-            // rather than sending null: each is a dotted source through a
-            // nullable relation (parent.id), which DRF skips when it hits None.
-            self::assertSame($row['parent_id'] ?? null, $tag->parentId, $name);
-            self::assertSame($row['vocabulary_id'] ?? null, $tag->vocabularyId, $name);
+            // Tag's two named exceptions to key presence (see Tag::fromArray):
+            // the server omits these instead of sending null. Any other key a
+            // row lacks has already failed hydration above.
+            self::assertSame(array_key_exists('parent_id', $row) ? $row['parent_id'] : null, $tag->parentId, $name);
+            self::assertSame(array_key_exists('vocabulary_id', $row) ? $row['vocabulary_id'] : null, $tag->vocabularyId, $name);
             self::assertSame($row['metadata'], $tag->metadata, $name);
             self::assertSame($row['is_active'], $tag->isActive, $name);
             self::assertSame($row['usage_count'], $tag->usageCount, $name);
@@ -296,10 +297,11 @@ final class CapturedCorpusTest extends SdkTestCase
         self::assertGreaterThan(10, count($rows));
 
         foreach ($rows as [$name, $row]) {
-            $vocabulary = Vocabulary::fromArray($row);
+            $vocabulary = Vocabulary::fromArray($row, self::apiVersion($name));
             self::assertSame($row['id'], $vocabulary->id, $name);
             self::assertSame($row['tenant_id'], $vocabulary->tenantId, $name);
             self::assertSame($row['application_id'], $vocabulary->applicationId, $name);
+            self::assertNamespacePair($name, $row, $vocabulary->namespaceType, $vocabulary->namespaceId);
             self::assertSame($row['name'], $vocabulary->name, $name);
             self::assertSame($row['slug'], $vocabulary->slug, $name);
             self::assertSame($row['description'], $vocabulary->description, $name);
@@ -308,6 +310,32 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $vocabulary->createdAt, $name);
             self::assertEquals(new \DateTimeImmutable($row['updated_at']), $vocabulary->updatedAt, $name);
         }
+    }
+
+    /**
+     * A v2 row's namespace pair arrives as sent, null for a global row; a v1 row
+     * carries no pair, and the model reads null.
+     *
+     * @param array<array-key, mixed> $row
+     */
+    private static function assertNamespacePair(string $name, array $row, ?string $type, ?string $id): void
+    {
+        if (str_starts_with($name, 'v2/')) {
+            self::assertSame($row['namespace_type'], $type, $name);
+            self::assertSame($row['namespace_id'], $id, $name);
+
+            return;
+        }
+        self::assertNull($type, $name);
+        self::assertNull($id, $name);
+    }
+
+    /**
+     * The api_version a fixture was captured from, which leads its name.
+     */
+    private static function apiVersion(string $name): string
+    {
+        return str_starts_with($name, 'v2/') ? ApiVersion::V2 : ApiVersion::V1;
     }
 
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Exception;
 
 use Octoverse\Octonomy\ErrorCode;
-use Octoverse\Octonomy\Internal\Json;
 
 /**
  * ApiException represents a non-2xx response from Octonomy. It carries the HTTP
@@ -40,12 +39,14 @@ class ApiException extends OctonomyException
      */
     public static function fromResponse(int $status, array $body): self
     {
-        $error = Json::object($body, 'error');
+        // Read leniently, unlike a 2xx body: whatever a gateway or proxy sent in
+        // place of the envelope, the status alone still picks the exception.
+        $error = self::member($body, 'error');
 
-        $code = Json::nullableString($error, 'code') ?? self::codeFromStatus($status);
-        $message = Json::nullableString($error, 'message') ?? self::messageFromStatus($status);
-        $details = Json::object($error, 'details');
-        $requestId = Json::nullableString($error, 'request_id');
+        $code = self::text($error, 'code') ?? self::codeFromStatus($status);
+        $message = self::text($error, 'message') ?? self::messageFromStatus($status);
+        $details = self::member($error, 'details');
+        $requestId = self::text($error, 'request_id');
 
         $class = self::classFor($code, $status);
 
@@ -89,5 +90,38 @@ class ApiException extends OctonomyException
     private static function messageFromStatus(int $status): string
     {
         return 'Octonomy request failed with HTTP ' . $status;
+    }
+
+    /**
+     * The JSON object under $key, or an empty array when it is absent or not an object.
+     *
+     * @param array<string, mixed> $a
+     *
+     * @return array<string, mixed>
+     */
+    private static function member(array $a, string $key): array
+    {
+        $value = $a[$key] ?? null;
+        if (!is_array($value)) {
+            return [];
+        }
+        $out = [];
+        foreach ($value as $k => $item) {
+            $out[(string) $k] = $item;
+        }
+
+        return $out;
+    }
+
+    /**
+     * The string under $key, or null when it is absent or not a string.
+     *
+     * @param array<string, mixed> $a
+     */
+    private static function text(array $a, string $key): ?string
+    {
+        $value = $a[$key] ?? null;
+
+        return is_string($value) ? $value : null;
     }
 }

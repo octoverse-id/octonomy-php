@@ -8,6 +8,7 @@ use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Http\Transport;
@@ -51,18 +52,31 @@ abstract class SdkTestCase extends TestCase
 
     /**
      * Build a bare Transport over a MockHandler, for tests of the transport
-     * contract itself rather than of a resource service.
+     * contract itself rather than of a resource service. $apiVersion is the
+     * surface it calls and the field set it hydrates; Client offers only v1 until
+     * the api_version option lands (#15).
      *
      * @param list<CapturedFixture|SyntheticNegative> $responses
      */
-    protected function transportWith(array $responses): Transport
+    protected function transportWith(array $responses, string $apiVersion = ApiVersion::V1): Transport
     {
         return new Transport(new Config(
             baseUrl: 'https://octonomy.test',
             token: 'test-token',
             tenantId: 'tenant-1',
             httpClient: $this->mockedHttpClient($responses),
-        ), Client::VERSION);
+        ), Client::VERSION, $apiVersion);
+    }
+
+    /**
+     * A hydrator for Transport::one() and many() that returns each object as it
+     * was decoded, for tests of the envelope rather than of a model.
+     *
+     * @return \Closure(array<string, mixed>): array<string, mixed>
+     */
+    protected static function asDecoded(): \Closure
+    {
+        return static fn(array $object): array => $object;
     }
 
     protected function lastRequest(): RequestInterface
@@ -143,6 +157,26 @@ abstract class SdkTestCase extends TestCase
         array $headers = ['Content-Type' => 'application/json'],
     ): SyntheticNegative {
         return new SyntheticNegative($kind, $status, $body, $headers);
+    }
+
+    /**
+     * A captured response with its decoded body changed by $break, as the
+     * synthetic negative $kind, such as a captured tag with one field removed.
+     * This is how a negative differs from what the server sent in exactly the
+     * one respect its kind names, while everything else stays captured.
+     *
+     * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
+     */
+    protected static function syntheticNegativeFrom(string $name, string $kind, \Closure $break): SyntheticNegative
+    {
+        $captured = CapturedFixture::load($name);
+
+        return self::syntheticNegative(
+            $kind,
+            $captured->status,
+            json_encode($break($captured->json()), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
+            $captured->headers,
+        );
     }
 
     /**

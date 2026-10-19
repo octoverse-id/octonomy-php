@@ -25,8 +25,13 @@ final class VocabularyService
      */
     public function create(VocabularyCreate $input, ?RequestOptions $options = null): Vocabulary
     {
-        return Vocabulary::fromArray(
-            $this->transport->one('POST', 'vocabularies', [], $input->toArray(), $options),
+        return $this->transport->one(
+            'POST',
+            'vocabularies',
+            Vocabulary::fromArray(...),
+            [],
+            $input->toArray(),
+            $options,
         );
     }
 
@@ -35,8 +40,13 @@ final class VocabularyService
      */
     public function get(string $id, ?RequestOptions $options = null): Vocabulary
     {
-        return Vocabulary::fromArray(
-            $this->transport->one('GET', 'vocabularies/' . rawurlencode($id), [], null, $options),
+        return $this->transport->one(
+            'GET',
+            'vocabularies/' . rawurlencode($id),
+            Vocabulary::fromArray(...),
+            [],
+            null,
+            $options,
         );
     }
 
@@ -47,9 +57,14 @@ final class VocabularyService
      */
     public function list(?VocabularyListParams $params = null, ?RequestOptions $options = null): ResultList
     {
-        $page = $this->transport->many('GET', 'vocabularies', $params?->toQuery() ?? [], null, $options);
-
-        return new ResultList(array_map(Vocabulary::fromArray(...), $page->rows), $page->pagination);
+        return $this->transport->many(
+            'GET',
+            'vocabularies',
+            Vocabulary::fromArray(...),
+            $params?->toQuery() ?? [],
+            null,
+            $options,
+        );
     }
 
     /**
@@ -57,8 +72,13 @@ final class VocabularyService
      */
     public function update(string $id, VocabularyUpdate $input, ?RequestOptions $options = null): Vocabulary
     {
-        return Vocabulary::fromArray(
-            $this->transport->one('PATCH', 'vocabularies/' . rawurlencode($id), [], $input->toArray(), $options),
+        return $this->transport->one(
+            'PATCH',
+            'vocabularies/' . rawurlencode($id),
+            Vocabulary::fromArray(...),
+            [],
+            $input->toArray(),
+            $options,
         );
     }
 
