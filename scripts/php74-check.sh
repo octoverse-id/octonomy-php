@@ -6,9 +6,10 @@
 #   * the tree's php-cs-fixer config (@PSR12) in dry-run mode
 #   * PHPStan at the tree's config (level 8, phpVersion 70400)
 #   * the full suite on PHPUnit 9.6
-#   * that the suite ran exactly the tests main's suite did, data sets included.
-#     A test that loses its data provider in the downgrade, or a test method that
-#     stops being discovered, changes that list even when everything left passes.
+#   * that the suite ran exactly the tests main's suite did, data sets included,
+#     each with the same outcome. A test that loses its data provider in the
+#     downgrade, stops being discovered, or is skipped only on 7.4 changes that
+#     list even when everything left passes.
 #
 # `php -l` alone is never the pass signal. The issue #5 spike saw it pass output
 # that corrupted PATCH bodies or fataled at load.
@@ -50,28 +51,42 @@ lint() {
     echo "$(wc -l < "$work/files" | tr -d ' ') files parse"
 }
 
-# One `Class::method with data set "name"` per test. JUnit is the one format
-# PHPUnit 9 and 11 write alike, though not with their attributes in the same
-# order, so each one is matched by name. The entities are decoded only so a diff
-# reads as the data set names do in the source.
-test_ids() {
-    grep -o '<testcase [^>]*>' "$1" | awk '{
-        match($0, / class="[^"]*"/); class = substr($0, RSTART + 8, RLENGTH - 9)
-        match($0, / name="[^"]*"/); name = substr($0, RSTART + 7, RLENGTH - 8)
-        print class "::" name
-    }' | sed -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' |
+# One `Class::method with data set "name": outcome` per test, the outcome being
+# passed, skipped (PHPUnit logs incomplete tests the same way) or failed. JUnit
+# is the one format PHPUnit 9 and 11 write alike: a passed test is one
+# self-closing <testcase/> line, any other holds its outcome element on the
+# lines before </testcase>. The two order a testcase's attributes differently,
+# so each is matched by name. Entities are decoded only so a diff reads as the
+# data set names do in the source.
+test_outcomes() {
+    awk '
+        function attr(key) {
+            if (!match($0, " " key "=\"[^\"]*\"")) return ""
+            return substr($0, RSTART + length(key) + 3, RLENGTH - length(key) - 4)
+        }
+        /<testcase / {
+            id = attr("class") "::" attr("name")
+            outcome = "passed"
+            if ($0 ~ /\/>[ \t]*$/) { print id ": " outcome; id = "" }
+            next
+        }
+        id == "" { next }
+        /<skipped/ { outcome = "skipped" }
+        /<(failure|error|warning)/ { outcome = "failed" }
+        /<\/testcase>/ { print id ": " outcome; id = "" }
+    ' "$1" | sed -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g' |
         LC_ALL=C sort
 }
 
 same_tests() {
-    test_ids "$main_junit" > "$work/main.ids"
-    test_ids "$work/junit.xml" > "$work/php74.ids"
-    [ -s "$work/main.ids" ] || { echo "$main_junit lists no tests"; return 1; }
-    if ! diff -u "$work/main.ids" "$work/php74.ids"; then
-        echo "the downgraded suite ran different tests from main's (- main, + PHP 7.4)"
+    test_outcomes "$main_junit" > "$work/main.outcomes"
+    test_outcomes "$work/junit.xml" > "$work/php74.outcomes"
+    [ -s "$work/main.outcomes" ] || { echo "$main_junit lists no tests"; return 1; }
+    if ! diff -u "$work/main.outcomes" "$work/php74.outcomes"; then
+        echo "the downgraded suite's tests or outcomes differ from main's (- main, + PHP 7.4)"
         return 1
     fi
-    echo "$(wc -l < "$work/main.ids" | tr -d ' ') tests, the same as main"
+    echo "$(wc -l < "$work/main.outcomes" | tr -d ' ') tests, the same as main with the same outcomes"
 }
 
 failed=''
@@ -90,9 +105,9 @@ step '@PSR12' vendor/bin/php-cs-fixer fix --dry-run --diff --show-progress=none
 step 'phpstan' vendor/bin/phpstan analyse --memory-limit=512M --no-progress
 step 'phpunit' vendor/bin/phpunit --log-junit "$work/junit.xml"
 if [ -f "$work/junit.xml" ]; then
-    step 'same tests as main' same_tests
+    step 'same tests and outcomes as main' same_tests
 else
-    failed="$failed same tests as main (PHPUnit wrote no JUnit log);"
+    failed="$failed same tests and outcomes as main (PHPUnit wrote no JUnit log);"
 fi
 
 echo

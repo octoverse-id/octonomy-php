@@ -3,9 +3,12 @@
 parameters:
     level: 8
     phpVersion: 70400
+    # examples/ too: the 7.4 line ships it, and nothing else would notice an 8.x-only API in it,
+    # since no test runs it.
     paths:
         - src
         - tests
+        - examples
     treatPhpDocTypesAsCertain: false
     ignoreErrors:
         # Rector de-promotes `public readonly ?string $name = null` into a property that keeps the
