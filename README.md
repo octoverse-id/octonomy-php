@@ -60,7 +60,7 @@ Every request carries credentials from the constructor options:
 use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\RequestOptions;
 
-$client->tags()->update($id, new TagUpdate(isActive: false), RequestOptions::withActor('svc-catalog'));
+$client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOptions::withActor('svc-catalog'));
 ```
 
 You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
@@ -70,7 +70,8 @@ You can also pass a configured Guzzle client (e.g. with retries or a custom base
 
 A client calls `/api/v2` unless you construct it with `'api_version' => 'v1'` (`ApiVersion::V1`),
 which an Octonomy server older than 2.0.0 needs. The version is fixed when the client is built; build
-another client to call the other surface. Anything else is rejected with `ConfigurationException`.
+another client to call the other surface. Any value other than `v1` or `v2` throws
+`ConfigurationException` when the client is built.
 
 On v2 a request can be placed in a merchant or sub-tenant namespace. The namespace is per request
 only, never a client default, because the server enforces namespace grants and fails closed:
@@ -87,6 +88,10 @@ $own = $client->tags()->list(new TagListParams(applicationId: 'commerce'), $merc
 
 // The namespace's rows plus the global ones the token may see.
 $all = $client->tags()->list(new TagListParams(applicationId: 'commerce', includeGlobal: true), $merchant);
+
+// get(), update() and delete() take the application as an argument (the application_id query
+// parameter); get() also takes includeGlobal, without which a global tag is a 404 here.
+$tag = $client->tags()->get($id, applicationId: 'commerce', options: $merchant);
 ```
 
 Without a namespace a request reads and writes the global (tenant-shared) partition. A

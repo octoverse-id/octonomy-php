@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client-wide namespace. A blank type or id throws `InvalidArgumentException` (#15).
 - `includeGlobal` on `TagListParams` and `VocabularyListParams` (`include_global`, v2), appended as the
   last parameter so no existing one moves (#15).
+- `get()`, `update()` and `delete()` on both services take `?string $applicationId`, sent as the
+  `application_id` query parameter that a namespaced call needs, and `get()` takes `?bool
+  $includeGlobal`. Both come before `$options`, so a call that passed options positionally now names
+  them (`options:`) (#15).
 - A client-side guard: a namespace or `include_global` on a v1 client throws `LogicException` before
   any request is sent, the one server rule the SDK checks locally (`AGENTS.md` exemption).
   `Tag::$usageCount` is documented as tenant-wide on v1 and limited to what the request can see on v2

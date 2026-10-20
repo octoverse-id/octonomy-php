@@ -14,7 +14,7 @@ changing the types and paths.
 | `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
-| `RequestOptions` | Per-call options: actor (`withActor`) and namespace. |
+| `RequestOptions` | Per-call headers: actor (`withActor`) and namespace. What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |

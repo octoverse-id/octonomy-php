@@ -51,14 +51,7 @@ final class Config
             );
         }
 
-        // Checked explicitly rather than by type: ApiVersion is a set of string
-        // constants, not an enum (the PHP 7.4 line cannot carry one, #5), so
-        // nothing else stops "v3" or "V2" from reaching the URL.
-        if ($apiVersion !== ApiVersion::V1 && $apiVersion !== ApiVersion::V2) {
-            throw new ConfigurationException(
-                sprintf('octonomy: api_version must be "%s" or "%s", got "%s"', ApiVersion::V1, ApiVersion::V2, $apiVersion),
-            );
-        }
+        ApiVersion::check($apiVersion);
     }
 
     /**
@@ -66,7 +59,10 @@ final class Config
      *
      * Recognized keys: base_url, token, tenant_id (required); actor_id,
      * http_client (GuzzleHttp\ClientInterface), timeout, user_agent, api_version
-     * ("v1" or "v2", default "v2") (optional).
+     * ("v1" or "v2", default "v2") (optional). Unlike the other optional keys, an
+     * api_version given as null is refused rather than read as absent: it picks
+     * the contract every response is read against, so a value that was meant to
+     * arrive and did not must not quietly become v2.
      *
      * @param array<string, mixed> $options
      */
@@ -75,6 +71,9 @@ final class Config
         $httpClient = $options['http_client'] ?? null;
         if ($httpClient !== null && !$httpClient instanceof ClientInterface) {
             throw new ConfigurationException('octonomy: http_client must implement GuzzleHttp\\ClientInterface');
+        }
+        if (array_key_exists('api_version', $options) && $options['api_version'] === null) {
+            throw new ConfigurationException('octonomy: api_version must be "v1" or "v2", got null');
         }
 
         return new self(

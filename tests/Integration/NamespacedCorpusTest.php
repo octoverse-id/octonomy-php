@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy\Tests\Integration;
 
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\ForbiddenException;
+use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\Vocabulary;
 use Octoverse\Octonomy\Model\VocabularyListParams;
@@ -56,6 +57,33 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         // usage_count is namespace-scoped on v2: merchant A's red is assigned to
         // sku-001 there, once. The global red reads 2 on v1 (SeededCorpusTest).
         self::assertSame(1, $bySlug['red']->usageCount);
+    }
+
+    /**
+     * A namespaced detail read must name its application, and reaches a global
+     * row only with include_global; get() sends both as query parameters.
+     */
+    public function testANamespacedGetNamesItsApplicationAndOptsIntoGlobalRows(): void
+    {
+        $client = $this->harnessClient(ApiVersion::V2);
+        $app = self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID');
+        $inA = self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID'));
+
+        $sale = $client->tags()->list(new TagListParams(applicationId: $app, slug: 'sale'), $inA)->data[0];
+        self::assertEquals($sale, $client->tags()->get($sale->id, $app, options: $inA));
+
+        $globalRed = $client->tags()->list(new TagListParams(slug: 'red', type: 'color'))->data[0];
+        self::assertNull($globalRed->namespaceId);
+        self::assertSame($globalRed->id, $client->tags()->get($globalRed->id, $app, true, $inA)->id);
+
+        try {
+            $client->tags()->get($globalRed->id, $app, options: $inA);
+            self::fail('expected a namespaced read without include_global to miss the global row');
+        } catch (NotFoundException) {
+        }
+
+        $this->expectException(ForbiddenException::class);
+        $client->tags()->get($sale->id, options: $inA);
     }
 
     public function testIncludeGlobalAddsTheGlobalRowsToANamespacedRead(): void

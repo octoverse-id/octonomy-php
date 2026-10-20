@@ -85,7 +85,7 @@ final class ClientTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/get')], ['actor_id' => 'svc-config']);
 
-        $client->tags()->get('tag_1', RequestOptions::withActor('svc-call'));
+        $client->tags()->get('tag_1', options: RequestOptions::withActor('svc-call'));
 
         self::assertSame('svc-call', $this->lastRequest()->getHeaderLine('X-Actor-ID'));
     }

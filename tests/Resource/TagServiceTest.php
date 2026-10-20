@@ -129,7 +129,7 @@ final class TagServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
-        $client->tags()->get('missing', self::merchantA());
+        $client->tags()->get('missing', 'harness-app', options: self::merchantA());
     }
 
     public function testUpdate(): void
@@ -139,11 +139,13 @@ final class TagServiceTest extends SdkTestCase
         $tag = $client->tags()->update('tag_1', new TagUpdate(
             description: 'Hand-picked by the merchandising team',
             metadata: ['color' => 'red', 'rank' => 1],
-        ), self::merchantA());
+        ), 'harness-app', self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('PATCH', $request->getMethod());
         self::assertSame('/api/v2/tags/tag_1', $request->getUri()->getPath());
+        // The application scopes the request; it is not a field of the patch.
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
         self::assertSame([
             'description' => 'Hand-picked by the merchandising team',
             'metadata' => ['color' => 'red', 'rank' => 1],
@@ -156,11 +158,36 @@ final class TagServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/delete')]);
 
-        $client->tags()->delete('tag_1', self::merchantA());
+        $client->tags()->delete('tag_1', 'harness-app', self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('DELETE', $request->getMethod());
         self::assertSame('/api/v2/tags/tag_1', $request->getUri()->getPath());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
+    }
+
+    public function testGetSendsItsScope(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/get')]);
+
+        $tag = $client->tags()->get('tag_1', 'harness-app', true, self::merchantA());
+
+        self::assertSame('/api/v2/tags/tag_1', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(['application_id' => 'harness-app', 'include_global' => 'true'], $this->lastQuery());
+        self::assertSame(self::capturedData('v2/tags/get')['id'], $tag->id);
+    }
+
+    public function testADetailCallWithoutAScopeSendsNoQuery(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/get'), self::captured('v2/tags/delete')]);
+
+        $client->tags()->get('tag_1');
+        $get = $this->lastRequest();
+        $client->tags()->delete('tag_1');
+        $delete = $this->lastRequest();
+
+        self::assertSame(['GET', ''], [$get->getMethod(), $get->getUri()->getQuery()]);
+        self::assertSame(['DELETE', ''], [$delete->getMethod(), $delete->getUri()->getQuery()]);
     }
 
     /**

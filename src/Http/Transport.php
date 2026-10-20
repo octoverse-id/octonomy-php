@@ -10,6 +10,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Exception\ApiException;
+use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\Json;
@@ -49,11 +50,16 @@ final class Transport
      * The api_version is read from $config here, once: it is the surface every
      * request calls and the field set every response hydrates, for the life of
      * this Transport.
+     *
+     * @throws ConfigurationException when $config carries an unknown api_version
      */
     public function __construct(Config $config, string $sdkVersion)
     {
+        // Checked again, not trusted from Config: the PHP 7.4 line loses
+        // readonly in the downgrade, so a Config can be changed after its
+        // constructor checked it.
+        $this->apiVersion = ApiVersion::check($config->apiVersion);
         $this->actorId = $config->actorId;
-        $this->apiVersion = $config->apiVersion;
         $this->baseUri = rtrim($config->baseUrl, '/') . '/api/' . $this->apiVersion . '/';
         $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
         $this->defaultHeaders = [

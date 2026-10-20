@@ -85,6 +85,46 @@ final class ApiVersionTest extends SdkTestCase
         new Client(['base_url' => 'https://octonomy.test', 'token' => 't', 'tenant_id' => 'acme', 'api_version' => 2]);
     }
 
+    /**
+     * An absent key means v2; a key that is present but null is a value that
+     * was meant to arrive, and is refused rather than read as the default.
+     */
+    public function testAnExplicitNullApiVersionThrowsAtConstruction(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('octonomy: api_version must be "v1" or "v2", got null');
+
+        new Client(['base_url' => 'https://octonomy.test', 'token' => 't', 'tenant_id' => 'acme', 'api_version' => null]);
+    }
+
+    /**
+     * The client checks the version it reads from a Config, rather than trusting
+     * that the Config's constructor checked it. The PHP 7.4 line loses readonly,
+     * so there a Config can be changed to "v3" after it was built; this builds
+     * one that never ran its constructor, which reaches the same state on both
+     * lines without relying on readonly either way.
+     */
+    public function testAClientChecksTheApiVersionOfTheConfigItIsGiven(): void
+    {
+        $valid = new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme');
+        $class = new \ReflectionClass(Config::class);
+        $config = $class->newInstanceWithoutConstructor();
+        foreach ($class->getProperties() as $property) {
+            $property->setValue($config, $property->getName() === 'apiVersion' ? 'v3' : $property->getValue($valid));
+        }
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('octonomy: api_version must be "v1" or "v2", got "v3"');
+
+        new Client($config);
+    }
+
+    public function testCheckReturnsAKnownApiVersion(): void
+    {
+        self::assertSame(ApiVersion::V1, ApiVersion::check('v1'));
+        self::assertSame(ApiVersion::V2, ApiVersion::check('v2'));
+    }
+
     public function testTheApiVersionCannotChangeAfterConstruction(): void
     {
         // Nothing on a Client can set it: every public method but the

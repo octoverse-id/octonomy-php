@@ -53,9 +53,10 @@ final class VocabularyServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/get')]);
 
-        $vocab = $client->vocabularies()->get('voc_1', self::merchantA());
+        $vocab = $client->vocabularies()->get('voc_1', 'harness-app', options: self::merchantA());
 
         self::assertSame('/api/v2/vocabularies/voc_1', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
         self::assertSame(self::capturedData('v2/vocabularies/get')['id'], $vocab->id);
         self::assertSame('labels', $vocab->slug);
     }
@@ -108,12 +109,14 @@ final class VocabularyServiceTest extends SdkTestCase
         $vocab = $client->vocabularies()->update(
             'voc_1',
             new VocabularyUpdate(description: 'Labels the merchandising team curates'),
+            'harness-app',
             self::merchantA(),
         );
 
         $request = $this->lastRequest();
         self::assertSame('PATCH', $request->getMethod());
         self::assertSame('/api/v2/vocabularies/voc_1', $request->getUri()->getPath());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
         self::assertSame(['description' => 'Labels the merchandising team curates'], $this->lastJsonBody());
         self::assertSame('Labels the merchandising team curates', $vocab->description);
     }
@@ -122,11 +125,12 @@ final class VocabularyServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/delete')]);
 
-        $client->vocabularies()->delete('voc_1', self::merchantA());
+        $client->vocabularies()->delete('voc_1', 'harness-app', self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('DELETE', $request->getMethod());
         self::assertSame('/api/v2/vocabularies/voc_1', $request->getUri()->getPath());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
     }
 
     /**
