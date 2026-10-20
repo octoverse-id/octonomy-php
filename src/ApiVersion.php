@@ -11,8 +11,13 @@ namespace Octoverse\Octonomy;
  * pair from every v1 response (octonomy/core/serializers.py upstream). Model
  * hydration therefore needs to know which surface a response came from.
  *
+ * A Client calls V2 unless constructed with 'api_version' => ApiVersion::V1,
+ * which an Octonomy server older than 2.0.0 needs. Only v2 has the namespace
+ * axis: NamespaceScope and include_global are refused on a v1 client.
+ *
  * These are string constants, not an enum, because the 1.x line is downgraded
- * to PHP 7.4 and Rector cannot carry an enum there (issue #5).
+ * to PHP 7.4 and Rector cannot carry an enum there (issue #5). Config therefore
+ * checks the value itself and rejects anything else with ConfigurationException.
  */
 final class ApiVersion
 {

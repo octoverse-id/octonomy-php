@@ -1,6 +1,7 @@
 # Architecture
 
-`octonomy-php` is a thin, hand-written client for the Octonomy REST **v1** API, built on Guzzle. The
+`octonomy-php` is a thin, hand-written client for the Octonomy REST API (`/api/v2` by default,
+`/api/v1` on request), built on Guzzle. The
 design goal is that an agent (or human) can add a new resource by copying an existing service file and
 changing the types and paths.
 
@@ -8,11 +9,12 @@ changing the types and paths.
 
 | File / namespace | Responsibility |
 | ---------------- | -------------- |
-| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()`. |
-| `Config` | Validated configuration (base URL, token, tenant, actor, http client, timeout, user agent). |
-| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant headers, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
-| `ApiVersion` | `V1` / `V2` string constants. The field set a model hydrates depends on which surface answered. |
-| `RequestOptions` | Per-call options (`withActor`). |
+| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()` and `apiVersion()`. |
+| `Config` | Validated configuration (base URL, token, tenant, actor, http client, timeout, user agent, api_version). |
+| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
+| `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
+| `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
+| `RequestOptions` | Per-call options: actor (`withActor`) and namespace. |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
@@ -27,8 +29,10 @@ changing the types and paths.
    - `one()` for a single resource (create/get/update) → the model hydrated from `{"data": {...}}`;
    - `many()` for a list → a `ResultList` of models + `Pagination` from `{"data": [...], "pagination": {...}}`;
    - `none()` for a 204 (delete/deactivate) → nothing; any body is ignored.
-2. `Transport` builds `base_url + /api/{version}/ + path` (`Client` uses v1 until #15), attaches
-   headers, and JSON-encodes the body (`http_errors` is off so the SDK owns status handling).
+2. `Transport` refuses a v2-only feature (a namespace, `include_global`) on a v1 client before
+   anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
+   construction, attaches headers (the namespace pair only when the request names one), and
+   JSON-encodes the body (`http_errors` is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
@@ -39,8 +43,9 @@ changing the types and paths.
    are wrapped in `TransportException`.
 
 ```
-Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/v1
+Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/{v1|v2}
                                    │
+                                   ├─ v1 + namespace or include_global → throw LogicException, nothing sent
                                    ├─ 2xx, envelope ok      → data object → Model::fromArray($object, $apiVersion)
                                    │                         → rows        → ResultList<Model>
                                    ├─ 2xx, envelope missing → throw MalformedResponseException
@@ -84,12 +89,17 @@ Two named rules sit on top (issue #14):
   caller set (PATCH-friendly) via `toArray()`.
 - **No hidden behavior:** the client never retries, logs, or mutates global state. Retries, timeouts,
   and transport tuning belong to the injected Guzzle client.
+- **One server rule, checked locally:** a v2-only feature on a v1 client throws before the request.
+  `AGENTS.md` records this as the exemption from "do not encode server-side validation": the answer is
+  knowable from the client's own configuration, and v1 would otherwise drop `include_global` silently.
 
 ## Multi-tenancy
 
 Every request is scoped to one tenant via `X-Tenant-ID` (`tenant_id`, required). Tags and vocabularies
 may be shared (`application_id === null`) or application-specific; assignments always carry an
-`application_id`. The SDK passes these through faithfully — the server enforces isolation.
+`application_id`. On v2, a request may also name a merchant or sub-tenant namespace
+(`NamespaceScope`, per request only). The SDK passes these through faithfully — the server enforces
+isolation and namespace grants.
 
 ## Extending the client
 

@@ -53,7 +53,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
             unset($body['data']['description']);
 
             return $body;
-        })]);
+        })], ['api_version' => ApiVersion::V1]);
 
         try {
             $call($client);
@@ -81,7 +81,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
         self::assertNull($rows[$slug][$key]);
 
         $bySlug = [];
-        foreach ($list($this->clientWith([self::captured($fixture)])) as $model) {
+        foreach ($list($this->clientWith([self::captured($fixture)], ['api_version' => ApiVersion::V1])) as $model) {
             $bySlug[$model->slug] = $model;
         }
 
@@ -162,7 +162,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
             $body['data']['usage_count'] = '5';
 
             return $body;
-        })]);
+        })], ['api_version' => ApiVersion::V1]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -183,7 +183,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
             $body['data']['created_at'] = $timestamp;
 
             return $body;
-        })]);
+        })], ['api_version' => ApiVersion::V1]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(sprintf('field "data.created_at" must be an RFC 3339 timestamp, got "%s"', $timestamp));
@@ -219,7 +219,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
             $body['data'] += $pair;
 
             return $body;
-        })]);
+        })], ['api_version' => ApiVersion::V1]);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -274,7 +274,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
         $fixture = self::getFixture($model, ApiVersion::V1);
         self::assertSame([], array_intersect(self::NAMESPACE_PAIR, array_keys(self::capturedData($fixture))));
 
-        $hydrated = $this->transportWith([self::captured($fixture)])->one('GET', 'any', self::hydrator($model));
+        $hydrated = $this->transportWith([self::captured($fixture)], ApiVersion::V1)->one('GET', 'any', self::hydrator($model));
 
         self::assertNull($hydrated->namespaceType);
         self::assertNull($hydrated->namespaceId);
@@ -346,7 +346,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
         $captured = self::captured('v1/tags/list');
         self::assertStringContainsString('"metadata":{}', $captured->body);
 
-        $page = $this->clientWith([$captured])->tags()->list();
+        $page = $this->clientWith([$captured], ['api_version' => ApiVersion::V1])->tags()->list();
 
         $green = array_values(array_filter($page->data, static fn(Tag $t): bool => $t->slug === 'green'))[0];
         self::assertSame([], $green->metadata);

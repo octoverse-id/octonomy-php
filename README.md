@@ -5,7 +5,8 @@
 
 The official PHP client for [Octonomy](https://github.com/octoverse-id/octonomy) — a multi-tenant,
 multi-application tag management and taxonomy service. A hand-written, Guzzle-based client for the
-stable REST **v1** API.
+Octonomy REST API: **`/api/v2`** by default, with merchant and sub-tenant namespaces, or `/api/v1` on
+request.
 
 > **Status:** unreleased and early. No version has been tagged or published to Packagist yet, so the
 > install command below works once the first release ships. The transport, auth, error, and pagination
@@ -30,7 +31,7 @@ use Octoverse\Octonomy\Exception\ConflictException;
 use Octoverse\Octonomy\Model\TagCreate;
 
 $client = new Client([
-    'base_url'  => 'https://octonomy.example.com', // SDK appends /api/v1
+    'base_url'  => 'https://octonomy.example.com', // SDK appends /api/v2
     'token'     => 'svc_live_...',                 // Authorization: Bearer
     'tenant_id' => 'acme',                         // X-Tenant-ID
 ]);
@@ -65,6 +66,36 @@ $client->tags()->update($id, new TagUpdate(isActive: false), RequestOptions::wit
 You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
 `http_client` option.
 
+## API version and namespaces
+
+A client calls `/api/v2` unless you construct it with `'api_version' => 'v1'` (`ApiVersion::V1`),
+which an Octonomy server older than 2.0.0 needs. The version is fixed when the client is built; build
+another client to call the other surface. Anything else is rejected with `ConfigurationException`.
+
+On v2 a request can be placed in a merchant or sub-tenant namespace. The namespace is per request
+only, never a client default, because the server enforces namespace grants and fails closed:
+
+```php
+use Octoverse\Octonomy\Model\TagListParams;
+use Octoverse\Octonomy\NamespaceScope;
+use Octoverse\Octonomy\RequestOptions;
+
+$merchant = new RequestOptions(namespace: new NamespaceScope('merchant', 'm-42'));
+
+// X-Namespace-Type: merchant, X-Namespace-ID: m-42. A namespaced request must name its application.
+$own = $client->tags()->list(new TagListParams(applicationId: 'commerce'), $merchant);
+
+// The namespace's rows plus the global ones the token may see.
+$all = $client->tags()->list(new TagListParams(applicationId: 'commerce', includeGlobal: true), $merchant);
+```
+
+Without a namespace a request reads and writes the global (tenant-shared) partition. A
+`NamespaceScope` needs both a type and an id. A tag's `usageCount` is tenant-wide on v1 and counts only
+the assignments the request can see on v2.
+
+A v1 client refuses a namespace or `includeGlobal` with a `LogicException` before sending anything:
+`/api/v1` has no namespace axis, and would reject the headers or silently drop the parameter.
+
 ## Errors
 
 Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exception\ApiException`, which
@@ -86,8 +117,10 @@ try {
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`
 naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A network failure, or a 2xx body that is not JSON from a method that
-returns data, throws `TransportException` (`delete()` ignores any body). Every SDK exception extends
-`Octoverse\Octonomy\Exception\OctonomyException`.
+returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
+extends `Octoverse\Octonomy\Exception\OctonomyException`. A mistake in the call itself, caught before
+anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id), throws
+PHP's `LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to retry.
 
 ## Pagination
 

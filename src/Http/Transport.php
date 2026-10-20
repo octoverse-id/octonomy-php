@@ -13,14 +13,17 @@ use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\Json;
+use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
 
 /**
  * Transport is the single HTTP entry point for the SDK. It builds requests under
- * the /api/{version} prefix, attaches the auth/tenant headers, sends them through
- * a Guzzle client, and converts non-2xx responses into typed exceptions.
+ * the /api/{version} prefix of the configured api_version, attaches the
+ * auth/tenant headers and any per-request namespace pair, sends them through a
+ * Guzzle client, and converts non-2xx responses into typed exceptions. A v2-only
+ * feature on a v1 client is refused before anything is sent.
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -43,13 +46,15 @@ final class Transport
     private readonly array $defaultHeaders;
 
     /**
-     * @param string $apiVersion an ApiVersion constant: the surface to call, and the field set to hydrate
+     * The api_version is read from $config here, once: it is the surface every
+     * request calls and the field set every response hydrates, for the life of
+     * this Transport.
      */
-    public function __construct(Config $config, string $sdkVersion, string $apiVersion = ApiVersion::V1)
+    public function __construct(Config $config, string $sdkVersion)
     {
         $this->actorId = $config->actorId;
-        $this->apiVersion = $apiVersion;
-        $this->baseUri = rtrim($config->baseUrl, '/') . '/api/' . $apiVersion . '/';
+        $this->apiVersion = $config->apiVersion;
+        $this->baseUri = rtrim($config->baseUrl, '/') . '/api/' . $this->apiVersion . '/';
         $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
         $this->defaultHeaders = [
             'Authorization' => 'Bearer ' . $config->token,
@@ -57,6 +62,14 @@ final class Transport
             'Accept' => 'application/json',
             'User-Agent' => $config->userAgent ?? 'octonomy-php/' . $sdkVersion,
         ];
+    }
+
+    /**
+     * The api_version this Transport calls, an ApiVersion constant.
+     */
+    public function apiVersion(): string
+    {
+        return $this->apiVersion;
     }
 
     /**
@@ -79,6 +92,7 @@ final class Transport
      * @throws MalformedResponseException when the 2xx body has no "data" object, or $hydrate rejects it
      * @throws ApiException                when the server answers with a non-2xx status
      * @throws TransportException          when no response arrives or a 2xx body is not JSON
+     * @throws \LogicException             when a v1 client is given a v2-only feature (nothing is sent)
      */
     public function one(
         string $method,
@@ -117,6 +131,7 @@ final class Transport
      *                                    is not an object, or either fails to hydrate
      * @throws ApiException                when the server answers with a non-2xx status
      * @throws TransportException          when no response arrives or a 2xx body is not JSON
+     * @throws \LogicException             when a v1 client is given a v2-only feature (nothing is sent)
      */
     public function many(
         string $method,
@@ -163,6 +178,7 @@ final class Transport
      *
      * @throws ApiException       when the server answers with a non-2xx status
      * @throws TransportException when no response arrives
+     * @throws \LogicException    when a v1 client is given a v2-only feature (nothing is sent)
      */
     public function none(
         string $method,
@@ -188,6 +204,9 @@ final class Transport
         ?array $body,
         ?RequestOptions $options,
     ): string {
+        $namespace = $options?->namespace;
+        $this->refuseV2OnlyFeatures($namespace, $query);
+
         $headers = $this->defaultHeaders;
         $actor = $this->actorId;
         if ($options !== null && $options->actorId !== null) {
@@ -195,6 +214,10 @@ final class Transport
         }
         if ($actor !== null && $actor !== '') {
             $headers['X-Actor-ID'] = $actor;
+        }
+        if ($namespace !== null) {
+            $headers['X-Namespace-Type'] = $namespace->type;
+            $headers['X-Namespace-ID'] = $namespace->id;
         }
 
         $requestOptions = [
@@ -224,6 +247,34 @@ final class Transport
         }
 
         return $raw;
+    }
+
+    /**
+     * Refuse a v2-only feature on a v1 client, before anything is sent.
+     *
+     * This is the one place the SDK checks a request against the server's
+     * rules, an exemption AGENTS.md records. It is allowed because the answer is
+     * knowable from this client's own configuration, never from server state:
+     * /api/v1 has no namespace axis. The server rejects namespace headers there
+     * with 400 namespace_not_supported, so refusing them here only saves the
+     * round trip. It drops include_global there without a word, so refusing it
+     * here is the only way the caller learns it did nothing.
+     *
+     * @param array<string, string> $query
+     *
+     * @throws \LogicException when this client is v1 and the request carries either feature
+     */
+    private function refuseV2OnlyFeatures(?NamespaceScope $namespace, array $query): void
+    {
+        if ($this->apiVersion === ApiVersion::V2) {
+            return;
+        }
+        if ($namespace !== null) {
+            throw new \LogicException(sprintf('octonomy: a namespace requires api_version v2; this client is %s', $this->apiVersion));
+        }
+        if (array_key_exists('include_global', $query)) {
+            throw new \LogicException(sprintf('octonomy: include_global requires api_version v2; this client is %s', $this->apiVersion));
+        }
     }
 
     /**

@@ -43,7 +43,9 @@ the wire contract:
   as a field removed or mistyped, is built with `self::syntheticNegativeFrom('v1/tags/get',
   SyntheticNegative::MISSING_FIELD, $break)`, which applies `$break` to the captured body and keeps
   everything else as the server sent it. A capture from one api_version replayed as the other's is a
-  negative too (`SyntheticNegative::UNDECLARED_FIELD` for the namespace pair on v1), never a capture. `clientWith()` and `transportWith()` accept only these, and
+  negative too (`SyntheticNegative::UNDECLARED_FIELD` for the namespace pair on v1), never a capture. `clientWith()` and `transportWith()` accept only these,
+  refuse a capture (or a negative made from one) on a client of the other api_version, which is v2
+  unless the test passes `['api_version' => ApiVersion::V1]`, and
   `NoHandWrittenResponseBodiesTest` fails on any `GuzzleHttp\` reference outside the fixture helpers,
   so there is no third way in.
 

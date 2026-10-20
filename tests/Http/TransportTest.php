@@ -25,7 +25,7 @@ final class TransportTest extends SdkTestCase
 {
     public function testOneUnwrapsTheDataObject(): void
     {
-        $transport = $this->transportWith([self::captured('v1/tags/get')]);
+        $transport = $this->transportWith([self::captured('v1/tags/get')], ApiVersion::V1);
 
         $data = $transport->one('GET', 'tags/tag_1', self::asDecoded());
 
@@ -34,7 +34,7 @@ final class TransportTest extends SdkTestCase
 
     public function testTheHydratorGetsNestedObjectsUndecided(): void
     {
-        $transport = $this->transportWith([self::captured('v1/tags/get')]);
+        $transport = $this->transportWith([self::captured('v1/tags/get')], ApiVersion::V1);
 
         // Still a \stdClass, so the field's reader can tell an object from a
         // list; array decoding would have made {} and [] the same.
@@ -47,7 +47,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('bodiesWithoutDataObject')]
     public function testOneRejectsABodyWithoutADataObject(string $kind, string $raw): void
     {
-        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -76,7 +76,7 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([
             self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
-        ]);
+        ], ApiVersion::V1);
 
         $this->expectException(TransportException::class);
 
@@ -85,7 +85,7 @@ final class TransportTest extends SdkTestCase
 
     public function testOneRaisesTheTypedApiExceptionForANon2xx(): void
     {
-        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')], ApiVersion::V1);
 
         $this->expectException(NotFoundException::class);
 
@@ -109,7 +109,7 @@ final class TransportTest extends SdkTestCase
             'v1/tags/get',
             SyntheticNegative::WRONG_TYPE,
             static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
-        )]);
+        )], ApiVersion::V1);
 
         try {
             $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
@@ -132,7 +132,7 @@ final class TransportTest extends SdkTestCase
         // A middle page, so both links are set.
         $captured = CapturedFixture::load('v1/tags/list-page');
         $pagination = $captured->json()['pagination'];
-        $transport = $this->transportWith([$captured]);
+        $transport = $this->transportWith([$captured], ApiVersion::V1);
 
         $page = $transport->many('GET', 'tags', self::asDecoded(), ['limit' => '1', 'offset' => '1']);
 
@@ -151,7 +151,7 @@ final class TransportTest extends SdkTestCase
 
     public function testManyAcceptsAnEmptyPage(): void
     {
-        $transport = $this->transportWith([self::captured('v1/tags/list-empty')]);
+        $transport = $this->transportWith([self::captured('v1/tags/list-empty')], ApiVersion::V1);
 
         $page = $transport->many('GET', 'tags', self::asDecoded());
 
@@ -162,7 +162,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('bodiesWithBadData')]
     public function testManyRejectsDataThatIsNotAListOfObjects(string $kind, string $raw, string $expected): void
     {
-        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
@@ -195,7 +195,7 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([
             self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
-        ]);
+        ], ApiVersion::V1);
 
         $this->expectException(TransportException::class);
 
@@ -205,7 +205,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('bodiesWithBadPagination')]
     public function testManyRejectsMissingOrInvalidPagination(string $kind, string $raw): void
     {
-        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)]);
+        $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -236,7 +236,7 @@ final class TransportTest extends SdkTestCase
 
                 return $body;
             },
-        )]);
+        )], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
@@ -252,7 +252,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('incompletePaginations')]
     public function testManyRejectsAPaginationFieldThatIsAbsentOrMistyped(string $kind, \Closure $break, string $expected): void
     {
-        $transport = $this->transportWith([self::syntheticNegativeFrom('v1/tags/list', $kind, $break)]);
+        $transport = $this->transportWith([self::syntheticNegativeFrom('v1/tags/list', $kind, $break)], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
@@ -294,7 +294,7 @@ final class TransportTest extends SdkTestCase
 
                 return $body;
             },
-        )]);
+        )], ApiVersion::V1);
 
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('expected a JSON object under "pagination"');
@@ -304,7 +304,7 @@ final class TransportTest extends SdkTestCase
 
     public function testNoneSendsTheRequestAndReturnsNothing(): void
     {
-        $transport = $this->transportWith([self::captured('v1/tag-assignments/delete')]);
+        $transport = $this->transportWith([self::captured('v1/tag-assignments/delete')], ApiVersion::V1);
 
         $transport->none('DELETE', 'tag-assignments', [], ['tag_id' => 'tag_1', 'resource_id' => 'r1']);
 
@@ -317,7 +317,7 @@ final class TransportTest extends SdkTestCase
     #[DataProvider('unexpectedSuccessBodies')]
     public function testNoneIgnoresAnUnexpectedSuccessBody(int $status, string $raw): void
     {
-        $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::STRAY_BODY, $status, $raw, [])]);
+        $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::STRAY_BODY, $status, $raw, [])], ApiVersion::V1);
 
         $transport->none('DELETE', 'tags/tag_1');
 
@@ -336,7 +336,7 @@ final class TransportTest extends SdkTestCase
 
     public function testNoneStillRaisesForANon2xx(): void
     {
-        $transport = $this->transportWith([self::captured('v1/errors/not-found')]);
+        $transport = $this->transportWith([self::captured('v1/errors/not-found')], ApiVersion::V1);
 
         $this->expectException(NotFoundException::class);
 

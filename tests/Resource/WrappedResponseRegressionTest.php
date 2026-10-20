@@ -20,9 +20,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * Octonomy wraps every single-resource 2xx as {"data": {...}}. The SDK used to
  * hydrate the wrapper itself, so every create/get/update returned a model with
  * id '', isActive false, usageCount 0 and createdAt 1970-01-01, and raised
- * nothing. Each case replays the real server's response to that call, first
- * proves the captured row sets every nullable field (so a zero value could not
- * pass for a hydrated one), then asserts every field arrives.
+ * nothing. Each case replays the real server's response to that call, on each
+ * api_version, first proves the captured row sets every nullable field (so a
+ * zero value could not pass for a hydrated one), then asserts every field
+ * arrives.
  */
 final class WrappedResponseRegressionTest extends SdkTestCase
 {
@@ -39,7 +40,8 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         self::assertNotEmpty($row['metadata']);
         self::assertTrue($row['is_active']);
 
-        $tag = $call($this->clientWith([self::captured($fixture)]));
+        $captured = self::captured($fixture);
+        $tag = $call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()]));
 
         self::assertSame($row['id'], $tag->id);
         self::assertSame($row['tenant_id'], $tag->tenantId);
@@ -47,6 +49,9 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         self::assertSame($row['name'], $tag->name);
         self::assertSame($row['slug'], $tag->slug);
         self::assertSame($row['type'], $tag->type);
+        // Absent from v1, which reads it as null; set on v2, captured in a namespace.
+        self::assertSame($row['namespace_type'] ?? null, $tag->namespaceType);
+        self::assertSame($row['namespace_id'] ?? null, $tag->namespaceId);
         self::assertSame($row['description'], $tag->description);
         self::assertSame($row['parent_id'], $tag->parentId);
         self::assertSame($row['vocabulary_id'], $tag->vocabularyId);
@@ -62,16 +67,18 @@ final class WrappedResponseRegressionTest extends SdkTestCase
      */
     public static function tagCalls(): iterable
     {
-        yield 'tags()->create()' => ['v1/tags/create', static fn(Client $c): Tag => $c->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label'),
-        )];
-        // Captured once the tag is assigned, so usage_count is not the zero
-        // value either.
-        yield 'tags()->get()' => ['v1/tags/get', static fn(Client $c): Tag => $c->tags()->get('tag_1')];
-        yield 'tags()->update()' => ['v1/tags/update', static fn(Client $c): Tag => $c->tags()->update(
-            'tag_1',
-            new TagUpdate(name: 'Featured'),
-        )];
+        foreach (['v1', 'v2'] as $v) {
+            yield "{$v} tags()->create()" => ["{$v}/tags/create", static fn(Client $c): Tag => $c->tags()->create(
+                new TagCreate(name: 'Featured', slug: 'featured', type: 'label'),
+            )];
+            // Captured once the tag is assigned, so usage_count is not the zero
+            // value either.
+            yield "{$v} tags()->get()" => ["{$v}/tags/get", static fn(Client $c): Tag => $c->tags()->get('tag_1')];
+            yield "{$v} tags()->update()" => ["{$v}/tags/update", static fn(Client $c): Tag => $c->tags()->update(
+                'tag_1',
+                new TagUpdate(name: 'Featured'),
+            )];
+        }
     }
 
     /**
@@ -87,13 +94,16 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         self::assertNotEmpty($row['metadata']);
         self::assertTrue($row['is_active']);
 
-        $vocabulary = $call($this->clientWith([self::captured($fixture)]));
+        $captured = self::captured($fixture);
+        $vocabulary = $call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()]));
 
         self::assertSame($row['id'], $vocabulary->id);
         self::assertSame($row['tenant_id'], $vocabulary->tenantId);
         self::assertSame($row['application_id'], $vocabulary->applicationId);
         self::assertSame($row['name'], $vocabulary->name);
         self::assertSame($row['slug'], $vocabulary->slug);
+        self::assertSame($row['namespace_type'] ?? null, $vocabulary->namespaceType);
+        self::assertSame($row['namespace_id'] ?? null, $vocabulary->namespaceId);
         self::assertSame($row['description'], $vocabulary->description);
         self::assertSame($row['metadata'], $vocabulary->metadata);
         self::assertTrue($vocabulary->isActive);
@@ -106,13 +116,15 @@ final class WrappedResponseRegressionTest extends SdkTestCase
      */
     public static function vocabularyCalls(): iterable
     {
-        yield 'vocabularies()->create()' => ['v1/vocabularies/create', static fn(Client $c): Vocabulary => $c->vocabularies()->create(
-            new VocabularyCreate(name: 'Labels', slug: 'labels'),
-        )];
-        yield 'vocabularies()->get()' => ['v1/vocabularies/get', static fn(Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
-        yield 'vocabularies()->update()' => ['v1/vocabularies/update', static fn(Client $c): Vocabulary => $c->vocabularies()->update(
-            'voc_1',
-            new VocabularyUpdate(name: 'Labels'),
-        )];
+        foreach (['v1', 'v2'] as $v) {
+            yield "{$v} vocabularies()->create()" => ["{$v}/vocabularies/create", static fn(Client $c): Vocabulary => $c->vocabularies()->create(
+                new VocabularyCreate(name: 'Labels', slug: 'labels'),
+            )];
+            yield "{$v} vocabularies()->get()" => ["{$v}/vocabularies/get", static fn(Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
+            yield "{$v} vocabularies()->update()" => ["{$v}/vocabularies/update", static fn(Client $c): Vocabulary => $c->vocabularies()->update(
+                'voc_1',
+                new VocabularyUpdate(name: 'Labels'),
+            )];
+        }
     }
 }

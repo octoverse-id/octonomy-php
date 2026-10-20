@@ -58,18 +58,30 @@ final class SyntheticNegative
 
     /**
      * @param array<string, string> $headers
+     * @param string|null $capturedFrom the api_version of the captured response this one breaks, or
+     *                                  null for one written from nothing
      */
     public function __construct(
         public readonly string $kind,
         private readonly int $status,
         public readonly string $body,
         private readonly array $headers,
+        private readonly ?string $capturedFrom = null,
     ) {
         if (!in_array($kind, self::KINDS, true)) {
             throw new \InvalidArgumentException(
                 "'{$kind}' is not a synthetic-negative kind; anything a real server can send must be captured (make fixtures)",
             );
         }
+    }
+
+    /**
+     * The api_version of the captured response this negative was made from, so
+     * it replays only on that surface; null when it was written from nothing.
+     */
+    public function apiVersion(): ?string
+    {
+        return $this->capturedFrom;
     }
 
     public function response(): Response

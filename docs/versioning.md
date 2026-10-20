@@ -8,7 +8,7 @@ source of truth for how a change maps to a version bump.
 | Surface | Where | Meaning |
 | ------- | ----- | ------- |
 | **SDK version** | `Client::VERSION` + git tag `vX.Y.Z` | Canonical SemVer for the SDK and CHANGELOG. Composer/Packagist resolve versions from git tags. |
-| **Targeted server contract** | this document + the vendored `docs/openapi.yaml` | Which Octonomy REST contract the SDK is written against (currently **v1**, server `1.0.0`). |
+| **Targeted server contract** | this document + the vendored `docs/openapi.yaml` | Which Octonomy REST contract the SDK is written against: `/api/v2` by default and `/api/v1` on request, both as served since server `2.0.0` (unchanged through `3.x`). The vendored spec is still the v1 contract from server `1.0.0`; #21 adds the v2 spec. |
 | **Captured server release** | `tests/fixtures/captured/manifest.json` | The server build the unit suite's response bodies were captured from (currently `3.2.1`, the harness pin). It moves only in a reviewed fixture-refresh PR. |
 
 The SDK versions **independently** of the Octonomy server. `make version-check` asserts `Client::VERSION`
@@ -47,10 +47,12 @@ Backward-**incompatible** changes to the public API.
 
 ## Relationship to the server's API version
 
-The Octonomy server keeps the `/api/v1` URL contract for its entire `1.x` line. As long as the SDK
-targets `/api/v1`, server minor/patch releases are additive and require at most a **minor** SDK bump to
-surface new fields or endpoints. A server **major** (`/api/v2`) would be tracked by a corresponding
-major SDK effort.
+`/api/v2` became the server's primary surface at server `2.0.0`, adding the merchant/sub-tenant
+namespace axis. `/api/v1` is still served and not deprecated, and server `3.x` changed neither REST
+contract; there is no `/api/v3`. The SDK calls v2 unless a client is constructed with
+`api_version` v1, which a server older than `2.0.0` needs. Server minor/patch releases that keep these
+contracts are additive and require at most a **minor** SDK bump to surface new fields or endpoints. A
+new server URL contract would be tracked by a corresponding major SDK effort.
 
 ## Where this shows up
 
