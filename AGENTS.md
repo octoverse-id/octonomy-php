@@ -87,7 +87,8 @@ stays a faithful, ergonomic client.
 - Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
   pinned server) and never edited by hand; the manifest records each file's hash and the unit suite
   fails on any difference. A refresh is its own reviewed PR, never automatic. Moving the harness
-  image pin requires re-capturing in the same PR.
+  image pin requires re-capturing, and re-vendoring both OpenAPI specs from that release, in the same
+  PR.
 - Cover success paths, the `{data, pagination}` list envelope, and error→exception mapping
   (404 → `NotFoundException`, 409 → `ConflictException`, 400 → `ValidationException`).
 - Use PHPUnit attributes, not doc-comment annotations. `#[DataProvider]` is the only one the 7.4

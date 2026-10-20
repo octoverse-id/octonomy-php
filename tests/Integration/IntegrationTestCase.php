@@ -37,14 +37,9 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Build a Client on $apiVersion, authenticated as the harness token in
-     * $tokenVariable (the wildcard token unless a test names an exact merchant
-     * grant's), or skip the test when no harness is running.
-     *
-     * @param string $apiVersion an ApiVersion constant, named by every caller so a suite says
-     *                           which surface it reads
+     * The harness's base URL, or skip the test when no harness is running.
      */
-    protected function harnessClient(string $apiVersion, string $tokenVariable = 'OCTONOMY_TEST_TOKEN'): Client
+    protected static function harnessBaseUrl(): string
     {
         $baseUrl = self::harnessEnv('OCTONOMY_TEST_BASE_URL');
         if ($baseUrl === '') {
@@ -59,6 +54,20 @@ abstract class IntegrationTestCase extends TestCase
             );
         }
 
+        return $baseUrl;
+    }
+
+    /**
+     * Build a Client on $apiVersion, authenticated as the harness token in
+     * $tokenVariable (the wildcard token unless a test names an exact merchant
+     * grant's), or skip the test when no harness is running.
+     *
+     * @param string $apiVersion an ApiVersion constant, named by every caller so a suite says
+     *                           which surface it reads
+     */
+    protected function harnessClient(string $apiVersion, string $tokenVariable = 'OCTONOMY_TEST_TOKEN'): Client
+    {
+        $baseUrl = self::harnessBaseUrl();
         $token = self::harnessEnv($tokenVariable);
         $tenantId = self::harnessEnv('OCTONOMY_TEST_TENANT_ID');
         if ($token === '' || $tenantId === '') {

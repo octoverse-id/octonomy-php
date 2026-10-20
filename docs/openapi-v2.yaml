@@ -8,9 +8,11 @@
 # the tag in docs/versioning.md. tests/VendoredSpecTest.php checks the hash and the tag.
 #
 # KNOWN DIVERGENCES. Wherever they differ, the server, and the responses captured from it in
-# tests/fixtures/captured, win over this spec. Each item was checked against server v3.2.1 and those
-# captures. No SDK code reads this file, required-ness included.
+# tests/fixtures/captured, win over this spec. Each item below was checked against the server source
+# at v3.2.1 and against every 2xx response captured from it. No SDK code reads this file,
+# required-ness included.
 #
+# The three issue #21 recorded:
 #  1. Neither response envelope is modelled. Lists are declared as bare arrays and single resources
 #     as a bare $ref, but the server wraps every single resource as {"data": {...}}
 #     (octonomy/core/responses.py) and every list as {"data": [...], "pagination": {...}}
@@ -22,11 +24,18 @@
 #     {"data": {"created", "existing", "skipped", "assignments"}} (octonomy/assignments/views.py).
 #     Replacing a resource's tags (POST /resources/{resource_type}/{resource_id}/tags) is declared
 #     as an array of ResourceTag, but returns {"data": {"created", "removed", "tags"}}. [both specs]
-#  Found when this copy was vendored, beyond the three issue #21 lists:
+#
+# Found when this copy was vendored:
 #  4. POST /tag-assignments/bulk-remove declares no 200 body; the server sends
 #     {"data": {"removed": <count>}}. [both specs]
-#  5. Tag lists parent_id and vocabulary_id as required, but the server omits each one when it is
+#  5. Other required lists leave out fields the server always sends: Assignment's assigned_by;
+#     Tag's and Vocabulary's description, is_active and metadata; TagAlias's is_active and
+#     metadata. [both specs]
+#  6. Tag lists parent_id and vocabulary_id as required, but the server omits each one when it is
 #     null instead of sending null (Tag::fromArray reads both as absent-or-null). [both specs]
+#  7. GET /health/live and /health/ready declare no body; the server sends a bare {"status": "ok"},
+#     with no "data" envelope, and /health/ready answers an undeclared 503 {"status": "unavailable"}
+#     when its database is unreachable (octonomy/core/views.py). [both specs]
 openapi: 3.0.3
 info:
   title: Octonomy API

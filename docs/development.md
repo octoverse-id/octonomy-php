@@ -78,8 +78,9 @@ harness, not an absent one.
 
 **Images** are pinned by digest (Octonomy `3.2.1`, Postgres `16`), and an override through
 `OCTONOMY_HARNESS_IMAGE` / `OCTONOMY_HARNESS_POSTGRES_IMAGE` that is not a digest is refused unless
-`OCTONOMY_HARNESS_ALLOW_UNPINNED=1` is set. Moving the Octonomy pin means re-capturing the fixtures in
-the same PR (`make fixtures`); the unit suite fails until you do. Every other knob is an `OCTONOMY_HARNESS_*` variable read
+`OCTONOMY_HARNESS_ALLOW_UNPINNED=1` is set. Moving the Octonomy pin means re-capturing the fixtures
+(`make fixtures`) and re-vendoring both specs ([Keeping the contract current](#keeping-the-contract-current))
+in the same PR; the unit suite fails until you do. Every other knob is an `OCTONOMY_HARNESS_*` variable read
 at the top of the script; `OCTONOMY_HARNESS_PORT` (default `8000`) is the one you are most likely to
 need.
 
@@ -219,17 +220,22 @@ php examples/quickstart.php
 
 ## Keeping the contract current
 
-`docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) are vendored from the Octonomy server, both
-from the same release tag. Each is the server's file byte for byte below a comment header that names
-the tag, the commit, and the file's sha256, and lists the known divergences from what the server
-sends. To refresh them for a new server release:
+`docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) are vendored from the Octonomy server at the
+release the harness pins, the same one the fixtures are captured from. Each is the server's file byte
+for byte below a comment header that names the tag, the commit, and the file's sha256, and lists the
+known divergences from what the server sends. Moving the harness pin therefore means re-vendoring both
+specs in the same PR. To refresh them:
 
 1. Copy each file from the tag, not from a working tree: `git -C <octonomy> show vX.Y.Z:docs/openapi.yaml`
    and `...:docs/openapi-v2.yaml`.
 2. Keep each header, updating its tag, commit, and sha256 (`sha256sum` of the server's file).
-3. Re-check every divergence in the note against the server source and `tests/fixtures/captured`, and
-   add any new one. A divergence the server has fixed comes out of the note.
+3. Re-check every divergence in the note against the server source and every 2xx response in
+   `tests/fixtures/captured`, and add any new one. A divergence the server has fixed comes out of the
+   note.
 4. Name the tag in [versioning.md](versioning.md), and reconcile any model changes.
 
-`VendoredSpecTest` fails if a spec's body no longer hashes to its header, if the two specs name
-different tags, if `versioning.md` does not name the tag, or if SDK code starts reading a spec.
+`VendoredSpecTest` fails if a spec's body no longer hashes to its header, if a spec's tag is not the
+harness pin, if the specs name different commits, if `versioning.md` does not name the tag, if the
+divergence note loses an item, or if shipped PHP (`src/`, `examples/`) names a spec. Those checks read
+only this repository. `Integration\VendoredSpecMatchesServerTest` is the independent one: it compares
+each body with what the pinned server serves at `/api/v1/schema/` and `/api/v2/schema/`.

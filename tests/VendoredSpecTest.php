@@ -4,71 +4,91 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests;
 
+use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\VendoredSpec;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Holds the vendored OpenAPI specs to what they claim to be (#21): each one is
- * the server's own file at a release tag, byte for byte below a comment header,
- * both come from the same tag, docs/versioning.md names it, and each header
- * records where the spec and the server disagree.
+ * the server's own file, byte for byte below a comment header, both come from
+ * the server release the harness pins (the one the fixtures are captured from),
+ * docs/versioning.md names it, and each header records where the spec and the
+ * server disagree.
+ *
+ * This suite checks the files against themselves and the pin. That the bodies
+ * really are what that server serves is checked against the running harness, in
+ * Integration\VendoredSpecMatchesServerTest.
  *
  * The specs are a reference, never the source of truth: nothing in the SDK
  * reads them, and the last test keeps it that way.
  */
 final class VendoredSpecTest extends TestCase
 {
-    private const ROOT = __DIR__ . '/..';
-
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{string}>
      */
-    public static function specs(): iterable
+    public static function apiVersions(): iterable
     {
-        yield 'v1' => ['docs/openapi.yaml', 'v1'];
-        yield 'v2' => ['docs/openapi-v2.yaml', 'v2'];
+        yield 'v1' => ['v1'];
+        yield 'v2' => ['v2'];
     }
 
-    #[DataProvider('specs')]
-    public function testTheSpecIsTheServerFileAtTheTagItNames(string $file, string $apiVersion): void
+    #[DataProvider('apiVersions')]
+    public function testTheBodyIsTheServerFileTheHeaderNames(string $apiVersion): void
     {
-        [$header, $body] = self::split($file);
+        $spec = VendoredSpec::load($apiVersion);
 
-        self::assertStringContainsString("for api_version {$apiVersion} (/api/{$apiVersion})", $header);
-        if (preg_match('/\b([0-9a-f]{64})\b/', $header, $sha) !== 1) {
-            self::fail("{$file} records no sha256");
-        }
-        self::assertSame($sha[1], hash('sha256', $body), "{$file} was edited below its header: re-vendor it from the server tag instead");
-        self::assertSame(ltrim(self::tag($file), 'v'), self::infoVersion($body), "{$file}'s info.version is not the tag its header names");
+        self::assertStringContainsString("for api_version {$apiVersion} (/api/{$apiVersion})", $spec->header);
+        self::assertNotNull($spec->commit(), "{$spec->file}'s header names no server commit");
+        self::assertSame($spec->recordedSha256(), hash('sha256', $spec->body), "{$spec->file} was edited below its header: re-vendor it from the server tag instead");
+        self::assertNotNull($spec->tag(), "{$spec->file}'s header names no server tag");
+        self::assertSame(ltrim((string) $spec->tag(), 'v'), $spec->infoVersion(), "{$spec->file}'s info.version is not the tag its header names");
 
-        preg_match_all('/^  (\/\S*):$/m', $body, $paths);
+        preg_match_all('/^  (\/\S*):$/m', $spec->body, $paths);
         self::assertNotSame([], $paths[1]);
         foreach ($paths[1] as $path) {
-            self::assertMatchesRegularExpression("#^/(api/{$apiVersion}|health)/#", $path, "{$file} declares a path of another surface");
+            self::assertMatchesRegularExpression("#^/(api/{$apiVersion}|health)/#", $path, "{$spec->file} declares a path of another surface");
         }
     }
 
-    public function testBothSpecsComeFromOneServerTagThatVersioningNames(): void
+    /**
+     * One server release backs the harness, the captured fixtures and both
+     * specs, so moving the harness pin without re-vendoring fails here, before
+     * the integration suite ever runs.
+     */
+    public function testBothSpecsTrackTheServerReleaseTheHarnessPins(): void
     {
-        $tag = self::tag('docs/openapi.yaml');
+        $pinned = 'v' . CapturedFixture::manifest()['server']['version'];
+        $v1 = VendoredSpec::load('v1');
+        $v2 = VendoredSpec::load('v2');
 
-        self::assertSame($tag, self::tag('docs/openapi-v2.yaml'), 'the two specs must be vendored from the same server release tag');
-        self::assertStringContainsString("`{$tag}`", self::read('docs/versioning.md'), 'docs/versioning.md must name the tag the specs track');
+        self::assertSame($pinned, $v1->tag(), 'docs/openapi.yaml must come from the server release the harness pins');
+        self::assertSame($pinned, $v2->tag(), 'docs/openapi-v2.yaml must come from the server release the harness pins');
+        self::assertSame($v1->commit(), $v2->commit(), 'the two specs must come from the same server commit');
+
+        $versioning = file_get_contents(__DIR__ . '/../docs/versioning.md');
+        self::assertIsString($versioning);
+        self::assertStringContainsString("`{$pinned}`", $versioning, 'docs/versioning.md must name the tag the specs track');
     }
 
-    #[DataProvider('specs')]
-    public function testTheSpecCarriesTheKnownDivergenceNote(string $file): void
+    #[DataProvider('apiVersions')]
+    public function testTheHeaderRecordsEveryKnownDivergence(string $apiVersion): void
     {
-        [$header] = self::split($file);
+        $spec = VendoredSpec::load($apiVersion);
 
         foreach ([
             'KNOWN DIVERGENCES',
-            'Neither response envelope is modelled',
-            "Assignment's required list omits namespace_type and namespace_id",
-            'POST /tag-assignments/bulk-assign is declared as an array',
+            '1. Neither response envelope is modelled',
+            "2. Assignment's required list omits namespace_type and namespace_id",
+            '3. POST /tag-assignments/bulk-assign is declared as an array',
             'POST /resources/{resource_type}/{resource_id}/tags',
+            '4. POST /tag-assignments/bulk-remove declares no 200 body',
+            "5. Other required lists leave out fields the server always sends: Assignment's assigned_by",
+            '6. Tag lists parent_id and vocabulary_id as required',
+            '7. GET /health/live and /health/ready declare no body',
         ] as $item) {
-            self::assertStringContainsString($item, $header, "{$file}'s divergence note lost an item");
+            self::assertStringContainsString($item, $spec->header, "{$spec->file}'s divergence note lost an item");
         }
     }
 
@@ -82,7 +102,7 @@ final class VendoredSpecTest extends TestCase
     {
         $offenders = [];
         foreach (['src', 'examples'] as $dir) {
-            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(self::ROOT . "/{$dir}", \FilesystemIterator::SKIP_DOTS));
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__ . "/../{$dir}", \FilesystemIterator::SKIP_DOTS));
             foreach ($files as $path) {
                 \assert($path instanceof \SplFileInfo);
                 $source = file_get_contents($path->getPathname());
@@ -93,47 +113,5 @@ final class VendoredSpecTest extends TestCase
         }
 
         self::assertSame([], $offenders);
-    }
-
-    /**
-     * The leading comment block and the server's file after it.
-     *
-     * @return array{string, string}
-     */
-    private static function split(string $file): array
-    {
-        $raw = self::read($file);
-        if (preg_match('/\A((?:#[^\n]*\n)+)(.*)\z/s', $raw, $m) !== 1) {
-            self::fail("{$file} has no comment header");
-        }
-
-        return [$m[1], $m[2]];
-    }
-
-    private static function tag(string $file): string
-    {
-        [$header] = self::split($file);
-        if (preg_match('/at tag (v\d+\.\d+\.\d+)/', $header, $m) !== 1) {
-            self::fail("{$file}'s header names no server tag");
-        }
-
-        return $m[1];
-    }
-
-    private static function infoVersion(string $body): string
-    {
-        if (preg_match('/^info:\n(?: [^\n]*\n)*?  version: (\S+)$/m', $body, $m) !== 1) {
-            self::fail('no info.version');
-        }
-
-        return $m[1];
-    }
-
-    private static function read(string $file): string
-    {
-        $raw = file_get_contents(self::ROOT . "/{$file}");
-        self::assertIsString($raw);
-
-        return $raw;
     }
 }
