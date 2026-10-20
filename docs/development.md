@@ -162,6 +162,48 @@ file is added or lost, if the manifest names a different image than the harness 
 corpus stops holding exactly the operations it lists as required. Capturing a new operation means
 adding it to that list in the same PR.
 
+## The PHP 7.4 line
+
+`main` is the only source. The 1.x line for PHP 7.4 (epic #4) is generated from it by Rector, and CI
+proves on every PR and every push to `main` that the generated tree works on a real PHP 7.4. The
+proof runs in a throwaway directory and commits nothing. `support/php7.4` does not exist yet: P5
+generates it once with the same script, reviews it, and freezes it.
+
+```bash
+make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
+```
+
+`make php74` takes about a minute and needs Docker. The pieces, which CI's `php74` job runs one by one:
+
+| Piece | What it is |
+| ----- | ---------- |
+| `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. Bump it in a PR of its own; Dependabot opens those. |
+| `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8`, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
+| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/` and the harness script into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
+| `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, compared through each run's JUnit log. It reports every failing check, not just the first. |
+
+`phpVersion: 70400` applies to the downgraded tree only. On `main` it would flag every 8.x construct
+`main` deliberately uses.
+
+**What `main` must not do.** Rector downgrades most of 8.2, but not everything:
+
+- **No enums.** Rector turns an enum case into a plain string constant, so code that tells a case
+  apart by type stops working, and it crashes on a named-argument call that skips an enum default
+  (#5). Use a class of string constants, like `ApiVersion`.
+- **No behavior that depends on a union type, `readonly`, or another 8.x-only check.** The downgrade
+  deletes union types and the `readonly` keyword, so on 7.4 a wrong type passes and a model's
+  properties can be written. When a test asserts a refusal, make the check explicit, as
+  `SdkTestCase::mockedHttpClient()` does.
+- **No PHPUnit attribute but `#[DataProvider]`.** PHPUnit 9 reads annotations only, and the stock
+  downgrade deletes an attribute it is not configured for, or writes a bare `@dataProvider` without
+  the method name. `tools/rector/src/DataProviderAttributeToAnnotationRector.php` writes the
+  annotation with the name, and fails the run on any other PHPUnit attribute (`#[Test]`, `#[Depends]`,
+  ...) rather than let it be deleted. Teach that rule a new attribute before using it.
+
+PHPStan on the 7.4 tree ignores exactly one error, `property.readOnlyByPhpDocDefaultValue`. Rector
+keeps a promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. The
+ignore is checked for staleness, so it fails once Rector stops doing this.
+
 ## Running against your own Octonomy
 
 Start an Octonomy server (see that repo's README), create a service token, then run the example:

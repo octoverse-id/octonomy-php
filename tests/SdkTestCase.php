@@ -252,6 +252,17 @@ abstract class SdkTestCase extends TestCase
      */
     private function mockedHttpClient(array $responses): GuzzleClient
     {
+        // Checked here rather than left to the closure's union type below: the PHP 7.4
+        // downgrade deletes union types, and the 7.4 line must refuse the same inputs (#10).
+        foreach ($responses as $response) {
+            if (!$response instanceof CapturedFixture && !$response instanceof SyntheticNegative) {
+                throw new \TypeError(sprintf(
+                    'responses must come from captured() or syntheticNegative(), got %s',
+                    is_object($response) ? $response::class : gettype($response),
+                ));
+            }
+        }
+
         $this->mock = new MockHandler(array_map(
             static fn(CapturedFixture|SyntheticNegative $response): Response => $response->response(),
             $responses,

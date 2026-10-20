@@ -48,6 +48,10 @@ stays a faithful, ergonomic client.
 
 - Target PHP **8.2+**. `declare(strict_types=1)` in every file. PSR-4 autoloading, PSR-12 / `@PER-CS`
   style (enforced by php-cs-fixer).
+- `main` must also downgrade to PHP 7.4 (CI's `php74` job, `make php74`; see
+  `docs/development.md#the-php-74-line`). No enums: use string class constants (#5). Never rely on a
+  union type or `readonly` for behavior a test asserts, since the downgrade deletes both; make the
+  check explicit.
 - Guzzle (`guzzlehttp/guzzle`) is the **only** runtime dependency. Do not add others without a strong
   reason; dev tools (phpunit, phpstan, php-cs-fixer) are require-dev.
 - Keep the tree php-cs-fixer-clean and PHPStan-clean at the configured level (`phpstan.neon.dist`).
@@ -76,7 +80,8 @@ stays a faithful, ergonomic client.
   image pin requires re-capturing in the same PR.
 - Cover success paths, the `{data, pagination}` list envelope, and error→exception mapping
   (404 → `NotFoundException`, 409 → `ConflictException`, 400 → `ValidationException`).
-- Use PHPUnit attributes (`#[DataProvider]`, …), not doc-comment annotations.
+- Use PHPUnit attributes, not doc-comment annotations. `#[DataProvider]` is the only one the 7.4
+  downgrade converts; any other fails it until `tools/rector`'s rule learns to convert it.
 - Integration tests live in `tests/Integration/`, extend `IntegrationTestCase`, and run against
   `scripts/octonomy-harness.sh` (`make harness-up`, then `make test-integration`). They must skip when
   `OCTONOMY_TEST_BASE_URL` is empty and must only read, so the suite reruns against one harness.
@@ -86,7 +91,8 @@ stays a faithful, ergonomic client.
 
 ## Local Development
 
-- Run `make check` before pushing and `make release-check` before a release.
+- Run `make check` before pushing and `make release-check` before a release. Run `make php74` (needs
+  Docker) when a change touches `src/`, `tests/`, `tools/rector/` or `compat/`.
 - Keep the README quickstart, `examples/quickstart.php`, and `composer.json`/`Makefile` scripts current
   with the public API.
 - Refresh the vendored `docs/openapi.yaml` from the Octonomy server when targeting a new contract, and
