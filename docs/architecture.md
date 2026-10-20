@@ -10,41 +10,68 @@ changing the types and paths.
 | ---------------- | -------------- |
 | `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()`. |
 | `Config` | Validated configuration (base URL, token, tenant, actor, http client, timeout, user agent). |
-| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/v1`, auth/tenant headers, JSON, status → exception, and the response-envelope check. No method returns a raw body. |
-| `Http\Envelope` | A validated list response (`rows` + `Pagination`) returned by `Transport::many()`; `@internal`. |
+| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant headers, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
+| `ApiVersion` | `V1` / `V2` string constants. The field set a model hydrates depends on which surface answered. |
 | `RequestOptions` | Per-call options (`withActor`). |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
 | `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
-| `Internal\Json` | Defensive helpers for reading decoded JSON; `@internal`. |
+| `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion; `@internal`. |
 
 ## Request lifecycle
 
-1. A service method calls the `Transport` method that matches the endpoint's response shape, each
-   taking `($method, $path, $query, $body, $options)`:
-   - `one()` for a single resource (create/get/update) → the object unwrapped from `{"data": {...}}`;
-   - `many()` for a list → an `Envelope` of rows + `Pagination` from `{"data": [...], "pagination": {...}}`;
+1. A service method calls the `Transport` method that matches the endpoint's response shape.
+   `one()` and `many()` take `($method, $path, $hydrate, $query, $body, $options)`, where `$hydrate` is
+   the model's `fromArray(...)`; `none()` takes the same without `$hydrate`:
+   - `one()` for a single resource (create/get/update) → the model hydrated from `{"data": {...}}`;
+   - `many()` for a list → a `ResultList` of models + `Pagination` from `{"data": [...], "pagination": {...}}`;
    - `none()` for a 204 (delete/deactivate) → nothing; any body is ignored.
-2. `Transport` builds `base_url + /api/v1/ + path`, attaches headers, and JSON-encodes the body
-   (`http_errors` is off so the SDK owns status handling).
+2. `Transport` builds `base_url + /api/{version}/ + path` (`Client` uses v1 until #15), attaches
+   headers, and JSON-encodes the body (`http_errors` is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
-   `MalformedResponseException` instead of hydrating an empty model. A non-JSON 2xx throws
-   `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the `{error:{...}}`
-   envelope and returns the most specific subclass. Guzzle network failures are wrapped in
-   `TransportException`.
+   `MalformedResponseException` instead of hydrating an empty model. Then they call
+   `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
+   rejects comes back as a `MalformedResponseException` naming the endpoint, the api_version and the
+   field's path in the body (`data.usage_count`, `data[2].slug`, `pagination.count`). A non-JSON 2xx
+   throws `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the
+   `{error:{...}}` envelope leniently and returns the most specific subclass. Guzzle network failures
+   are wrapped in `TransportException`.
 
 ```
 Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/v1
                                    │
-                                   ├─ 2xx, envelope ok      → data object → Model::fromArray
-                                   │                         → Envelope    → ResultList<Model>
+                                   ├─ 2xx, envelope ok      → data object → Model::fromArray($object, $apiVersion)
+                                   │                         → rows        → ResultList<Model>
                                    ├─ 2xx, envelope missing → throw MalformedResponseException
+                                   ├─ 2xx, field rejected   → throw MalformedResponseException (endpoint, api_version, field)
                                    └─ !2xx                  → throw ApiException subclass (statusCode, errorCode, details, requestId)
 ```
 
 Services never see a raw body. That is deliberate: the server wraps every single-resource response,
 and a service that hydrated the body directly would get a zero-valued model with no error (issue #6).
+
+## Strict hydration
+
+A model's constructor signature is its field registry. `fromArray($data, $apiVersion)` reads each
+parameter's key through an `Internal\Json` reader that matches the declared type, and every reader
+requires the key to be present: nullability governs the value only, because the server always emits
+its nullable fields (`octonomy/tags/serializers.py` upstream). A wrong JSON type raises; nothing is
+coerced (`"5"` is not an `int`) or defaulted, and a timestamp must be RFC 3339 (`"yesterday"` raises).
+`Transport` hands a model its object's members with nested objects still `\stdClass`
+(`Json::members()`), so an object field such as `metadata` rejects a JSON list, which array
+decoding would have made indistinguishable. `fromArray()` wraps its reads in `Json::readAs()`, so a
+fault names the api_version even when a model is hydrated outside a request.
+Two named rules sit on top (issue #14):
+
+- **The namespace pair is per api_version.** v2 declares `namespace_type`/`namespace_id` on every
+  namespaced resource and always sends both, null for a global row; the server strips them from v1
+  (`octonomy/core/serializers.py`). So v2 requires the keys, v1 must not carry them, and on v1 the
+  model reads null. `Json::namespaceField()` is the one place this lives.
+- **Tag's `parent_id` and `vocabulary_id` may be absent.** The server omits them when null instead of
+  sending null (each is a dotted source through a nullable relation, which DRF skips at `None`), in
+  every release since 1.0.0. An absent key hydrates to null; a present one must still be a string or
+  null (`Json::nullableStringOrAbsent()`).
 
 ## Conventions that keep it faithful
 

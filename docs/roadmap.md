@@ -10,11 +10,14 @@ Copy `src/Resource/TagService.php` (+ its models and `tests/Resource/TagServiceT
 template, then:
 
 1. Read the matching schema(s) in [`openapi.yaml`](openapi.yaml).
-2. Add `Model/<Resource>.php` (readonly, `::fromArray()`), the `*Create`/`*Update` input DTOs
+2. Add `Model/<Resource>.php` (readonly, `::fromArray($data, $apiVersion)` reading each field through
+   the strict `Internal\Json` reader for its declared type, plus `Json::namespaceField()` if v2 adds
+   the namespace pair to it), the `*Create`/`*Update` input DTOs
    (`toArray()` omitting nulls), and any `*ListParams` (`toQuery()`).
 3. Add `Resource/<Resource>Service.php` with methods that take inputs first and
    `?RequestOptions $options = null` last, delegating to `Transport::one()` (single resource),
-   `many()` (list) or `none()` (204). There is no raw-body method, by design.
+   `many()` (list) or `none()` (204), passing the model's `fromArray(...)` to the first two. There is
+   no raw-body method, by design.
 4. Wire an accessor onto `Client`.
 5. Add `MockHandler`-based tests (assert method/path/headers/query/body; cover the error envelope)
    that replay captured fixtures, adding the resource's calls to `scripts/capture-fixtures.php` and

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Model;
 
+use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Internal\Json;
 
 /**
  * Vocabulary is a tenant-scoped grouping for tags. A vocabulary with a null
  * $applicationId is shared across all applications in the tenant; otherwise it is
- * scoped to a single application.
+ * scoped to a single application. $namespaceType and $namespaceId place it in a
+ * merchant or sub-tenant namespace; both are null for a global vocabulary, and
+ * always null from api_version v1, which sees only the global partition.
  */
 final class Vocabulary
 {
@@ -20,6 +23,8 @@ final class Vocabulary
         public readonly string $id,
         public readonly string $tenantId,
         public readonly ?string $applicationId,
+        public readonly ?string $namespaceType,
+        public readonly ?string $namespaceId,
         public readonly string $name,
         public readonly string $slug,
         public readonly ?string $description,
@@ -30,14 +35,26 @@ final class Vocabulary
     ) {}
 
     /**
-     * @param array<string, mixed> $data
+     * Hydrate a vocabulary from one resource object of a response read as
+     * $apiVersion. Every field declared above must be present with its declared
+     * type, and null is accepted only where the property is nullable. The
+     * namespace pair is declared for v2 alone, so v1 must not carry it.
+     *
+     * @param array<string, mixed> $data the object's members as Transport passes them: nested JSON
+     *                                  objects stay \stdClass, so an object can be told from a list
+     * @param string $apiVersion an ApiVersion constant
+     *
+     * @throws MalformedResponseException when a declared field is absent or has the wrong type,
+     *                                    or an undeclared namespace field is present
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, string $apiVersion): self
     {
-        return new self(
+        return Json::readAs($apiVersion, static fn(): self => new self(
             id: Json::string($data, 'id'),
             tenantId: Json::string($data, 'tenant_id'),
             applicationId: Json::nullableString($data, 'application_id'),
+            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
+            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
             name: Json::string($data, 'name'),
             slug: Json::string($data, 'slug'),
             description: Json::nullableString($data, 'description'),
@@ -45,6 +62,6 @@ final class Vocabulary
             isActive: Json::bool($data, 'is_active'),
             createdAt: Json::dateTime($data, 'created_at'),
             updatedAt: Json::dateTime($data, 'updated_at'),
-        );
+        ));
     }
 }

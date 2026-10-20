@@ -39,7 +39,9 @@ These mirror [AGENTS.md](AGENTS.md):
 - Services read responses only through `Transport::one()` / `many()` / `none()`; never hydrate a
   raw body.
 - Non-2xx responses throw typed exceptions extending `ApiException`; never return error codes.
-- Response models are `readonly` DTOs with `::fromArray()`; input DTOs use nullable promoted
+- Response models are `readonly` DTOs with `::fromArray($data, $apiVersion)`, reading every field
+  through a strict `Internal\Json` reader that matches its declared type (see
+  [docs/architecture.md](docs/architecture.md#strict-hydration)); input DTOs use nullable promoted
   properties + `toArray()` that omits nulls.
 - Keep models faithful to `docs/openapi.yaml`; document any deliberate divergence.
 - Every public class and method has a doc comment.

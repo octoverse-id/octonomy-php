@@ -29,12 +29,19 @@ stays a faithful, ergonomic client.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
   `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
-  `MalformedResponseException` rather than hydrating an empty model.
+  `MalformedResponseException` rather than hydrating an empty model. `one()`/`many()` run the model's
+  `fromArray(...)` themselves, so a rejected field is reported with its endpoint and api_version.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.
-- Response models are immutable `readonly` DTOs hydrated via `::fromArray()`. Input DTOs use nullable
-  promoted properties + `toArray()` that omits nulls so PATCH sends only what the caller set.
+- Response models are immutable `readonly` DTOs hydrated via `::fromArray($data, $apiVersion)`.
+  Hydration is strict and the constructor signature is the field registry: every declared field must
+  be present as a key (nullability governs the value only), a wrong JSON type raises, and nothing is
+  coerced or defaulted. The only exceptions are named rules in `Internal\Json` with the server-side
+  reason in a comment: the v2-only namespace pair, and Tag's `parent_id`/`vocabulary_id`, which the
+  server omits when null. Never add a lenient reader.
+- Input DTOs use nullable promoted properties + `toArray()` that omits nulls so PATCH sends only what
+  the caller set.
 - No new public class or method without a doc comment and tests.
 
 ## PHP Conventions
@@ -56,11 +63,13 @@ stays a faithful, ergonomic client.
   replayed with `SdkTestCase::captured()`); hand-written response bodies are banned, because a body
   written from the spec agrees with its author rather than the server (#6 shipped green that way).
   **Carve-out:** negative fixtures (missing envelope, missing field, wrong type, invalid JSON, gateway
-  HTML, a body on a no-content response, mutually exclusive flag states) are synthetic, since a
-  conforming server cannot produce them; build them only with `SdkTestCase::syntheticNegative()`,
-  naming the `SyntheticNegative` kind that applies. `clientWith()`/`transportWith()` accept nothing
-  else, and no test outside the fixture helpers may reference `GuzzleHttp\`. Request-side
-  assertions stay hand-written: they test SDK behavior, not server shape.
+  HTML, a body on a no-content response, mutually exclusive flag states, a field the api_version does
+  not declare) are synthetic, since a conforming server cannot produce them; build them only with
+  `SdkTestCase::syntheticNegative()` or `syntheticNegativeFrom()`, naming the `SyntheticNegative`
+  kind that applies. A body captured from one api_version is not a capture of the other's response.
+  `clientWith()`/`transportWith()` accept nothing else, and no test outside the fixture helpers may
+  reference `GuzzleHttp\`. Request-side assertions stay hand-written: they test SDK behavior, not
+  server shape.
 - Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
   pinned server) and never edited by hand; the manifest records each file's hash and the unit suite
   fails on any difference. A refresh is its own reviewed PR, never automatic. Moving the harness

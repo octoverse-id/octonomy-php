@@ -69,6 +69,7 @@ Two failures are not HTTP errors and do not extend `ApiException`:
 | Condition | Exception |
 | --------- | --------- |
 | 2xx whose body lacks its envelope: a non-empty `data` object, or a `data` array of non-empty objects + a `pagination` object | `MalformedResponseException` |
+| 2xx whose resource breaks the field set for the api_version: a declared key absent (nullable fields included), a value of the wrong JSON type, an unparseable timestamp, or the namespace pair missing on v2 / present on v1 | `MalformedResponseException`, with `$field` set to the field's path in the body (e.g. `data.usage_count`) |
 | Network failure, timeout, or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException` |
 
 ## Not yet implemented

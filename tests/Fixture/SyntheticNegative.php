@@ -39,6 +39,12 @@ final class SyntheticNegative
     /** Feature-flag states the server never combines. */
     public const EXCLUSIVE_FLAGS = 'mutually exclusive flag states';
 
+    /**
+     * A field the response's api_version does not declare, such as the
+     * namespace pair on v1, which the server strips there.
+     */
+    public const UNDECLARED_FIELD = 'undeclared field';
+
     private const KINDS = [
         self::MISSING_ENVELOPE,
         self::MISSING_FIELD,
@@ -47,6 +53,7 @@ final class SyntheticNegative
         self::GATEWAY,
         self::STRAY_BODY,
         self::EXCLUSIVE_FLAGS,
+        self::UNDECLARED_FIELD,
     ];
 
     /**
@@ -55,7 +62,7 @@ final class SyntheticNegative
     public function __construct(
         public readonly string $kind,
         private readonly int $status,
-        private readonly string $body,
+        public readonly string $body,
         private readonly array $headers,
     ) {
         if (!in_array($kind, self::KINDS, true)) {

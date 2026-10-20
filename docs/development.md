@@ -39,7 +39,11 @@ the wire contract:
   [Captured response fixtures](#captured-response-fixtures)). A shape no conforming server sends — a
   missing envelope, invalid JSON, a gateway's HTML — is built with
   `self::syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '[]')`, whose first argument names
-  which carve-out applies. `clientWith()` and `transportWith()` accept only these two, and
+  which carve-out applies. A negative that differs from a captured response in one named respect, such
+  as a field removed or mistyped, is built with `self::syntheticNegativeFrom('v1/tags/get',
+  SyntheticNegative::MISSING_FIELD, $break)`, which applies `$break` to the captured body and keeps
+  everything else as the server sent it. A capture from one api_version replayed as the other's is a
+  negative too (`SyntheticNegative::UNDECLARED_FIELD` for the namespace pair on v1), never a capture. `clientWith()` and `transportWith()` accept only these, and
   `NoHandWrittenResponseBodiesTest` fails on any `GuzzleHttp\` reference outside the fixture helpers,
   so there is no third way in.
 
