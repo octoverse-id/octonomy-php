@@ -25,7 +25,9 @@ make test    # phpunit
 ```
 
 `make check` bundles all three; `make release-check` runs the full pre-release gate. Apply style
-fixes with `make cs-fix`.
+fixes with `make cs-fix`. CI also downgrades the tree to PHP 7.4 and runs it there; `make php74`
+does the same locally with Docker (see
+[docs/development.md](docs/development.md#the-php-74-line)).
 
 ## Coding conventions
 
@@ -55,7 +57,8 @@ These mirror [AGENTS.md](AGENTS.md):
   `self::syntheticNegative(SyntheticNegative::<KIND>, ...)`. See
   [docs/development.md](docs/development.md#captured-response-fixtures).
 - Cover success, the list envelope, and error→exception mapping.
-- Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations.
+- Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations. `#[DataProvider]` is the
+  only one the PHP 7.4 downgrade converts.
 
 ## Branches, commits, and PRs
 

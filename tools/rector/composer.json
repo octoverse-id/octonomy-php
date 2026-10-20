@@ -1,0 +1,19 @@
+{
+    "name": "octoverse-id/octonomy-php-rector",
+    "description": "Isolated tools project that downgrades octonomy-php to PHP 7.4. Not part of the package.",
+    "type": "project",
+    "license": "Apache-2.0",
+    "require": {
+        "php": ">=8.2",
+        "rector/rector": "2.7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Octoverse\\Octonomy\\Tools\\Rector\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    }
+}

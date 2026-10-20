@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
-	harness-up harness-down harness-logs test-integration fixtures
+	harness-up harness-down harness-logs test-integration fixtures php74
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -65,6 +65,23 @@ fixtures: ## Re-capture the response fixtures from a fresh harness (replaces a r
 	case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
 	set -a; . "$$env_file"; set +a; \
 	php scripts/capture-fixtures.php
+
+# The PHP 7.4 line (epic #4). scripts/php74-downgrade.sh writes the Rector-downgraded tree into a
+# temp dir, and scripts/php74-check.sh proves it on a real PHP 7.4 in Docker: lint, @PSR12, PHPStan at
+# phpVersion 70400, and PHPUnit 9.6 running exactly the tests main runs. CI's php74 job runs the same
+# two scripts. The tree's dependencies are resolved on the host, for PHP 7.4.33 by compat/composer.json's
+# platform setting. The image is pinned by digest, like the harness's.
+PHP74_IMAGE := php:7.4-cli@sha256:620a6b9f4d4feef2210026172570465e9d0c1de79766418d3affd09190a7fda5
+
+php74: ## Downgrade into a temp dir and prove it on PHP 7.4 (needs Docker)
+	@set -e; \
+	work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
+	composer install --working-dir=tools/rector --no-interaction --no-progress --quiet; \
+	scripts/php74-downgrade.sh "$$work/tree"; \
+	vendor/bin/phpunit --log-junit "$$work/main-junit.xml"; \
+	composer install --working-dir="$$work/tree" --no-interaction --no-progress --quiet; \
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$$PWD/scripts:/scripts:ro" -v "$$work:/work" \
+		$(PHP74_IMAGE) /scripts/php74-check.sh /work/tree /work/main-junit.xml
 
 # Before the first release CHANGELOG.md has only [Unreleased], so there is no heading to match and
 # Client::VERSION must stay at this placeholder until the release PR replaces it (docs/versioning.md).

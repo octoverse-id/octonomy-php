@@ -16,6 +16,16 @@ updates:
           - "minor"
           - "patch"
 
+  # The Rector that downgrades main to PHP 7.4 (tools/rector). It is pinned to one exact version
+  # because its output ships on the 7.4 line, so every bump arrives as its own PR and is proven by
+  # CI's php74 job before it lands.
+  - package-ecosystem: "composer"
+    directory: "/tools/rector"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

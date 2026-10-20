@@ -1,0 +1,19 @@
+# The PHP 7.4 line's PHPStan config. phpVersion 70400 belongs here and only here: on main it would
+# flag every 8.x construct main deliberately uses, which the downgrade removes.
+parameters:
+    level: 8
+    phpVersion: 70400
+    # examples/ too: the 7.4 line ships it, and nothing else would notice an 8.x-only API in it,
+    # since no test runs it.
+    paths:
+        - src
+        - tests
+        - examples
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Rector de-promotes `public readonly ?string $name = null` into a property that keeps the
+        # parameter's default and gains a @readonly tag. The constructor always assigns it, so the
+        # default is never read, but PHPStan refuses a default on any readonly property. If Rector
+        # stops doing this, PHPStan reports the ignore as unmatched and it must go.
+        -
+            identifier: property.readOnlyByPhpDocDefaultValue

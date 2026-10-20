@@ -66,6 +66,7 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
     public function testClientWithRefusesAResponseThatIsNotAFixture(): void
     {
         $this->expectException(\TypeError::class);
+        $this->expectExceptionMessage('responses must come from captured() or syntheticNegative(), got stdClass');
 
         /** @phpstan-ignore argument.type (passing the wrong type is the point) */
         $this->clientWith([new \stdClass()]);
