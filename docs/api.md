@@ -1,7 +1,8 @@
 # API mapping
 
-How SDK methods map to Octonomy REST endpoints. The vendored [`openapi.yaml`](openapi.yaml) is the v1
-contract (the v2 spec is #21); this page is the client-side view.
+How SDK methods map to Octonomy REST endpoints. The vendored specs, [`openapi.yaml`](openapi.yaml) (v1)
+and [`openapi-v2.yaml`](openapi-v2.yaml) (v2), are the contract reference; read the known-divergence
+note at the top of each before trusting a response shape in them. This page is the client-side view.
 
 ## Base URL and API version
 

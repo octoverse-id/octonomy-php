@@ -45,7 +45,9 @@ These mirror [AGENTS.md](AGENTS.md):
   through a strict `Internal\Json` reader that matches its declared type (see
   [docs/architecture.md](docs/architecture.md#strict-hydration)); input DTOs use nullable promoted
   properties + `toArray()` that omits nulls.
-- Keep models faithful to `docs/openapi.yaml`; document any deliberate divergence.
+- Keep models faithful to `docs/openapi-v2.yaml` / `docs/openapi.yaml`, except where the server
+  sends something else (see the divergence note at the top of each spec); document any deliberate
+  divergence.
 - Every public class and method has a doc comment.
 
 ## Testing expectations

@@ -80,11 +80,13 @@ Two named rules sit on top (issue #14):
 
 ## Conventions that keep it faithful
 
-- **Contract reference:** `docs/openapi.yaml` is vendored from the server. Models mirror it
-  field-for-field. The deliberate divergences are the two response envelopes the generated spec omits:
-  the server wraps every single resource in `{data: {...}}` (`octonomy/core/responses.py` upstream)
-  and every list in `{data, pagination}` (`octonomy/core/pagination.py`). The SDK follows the server,
-  enforces both envelopes in `Transport`, and notes the divergence in code.
+- **Contract reference:** `docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) are vendored from
+  the server, byte for byte from one release tag. Models mirror them field-for-field, except where the
+  server sends something else; the note at the top of each spec lists those places. The largest is
+  the two response envelopes the generated specs omit: the server wraps every single resource in
+  `{data: {...}}` (`octonomy/core/responses.py` upstream) and every list in `{data, pagination}`
+  (`octonomy/core/pagination.py`). The SDK follows the server, enforces both envelopes in
+  `Transport`, and notes the divergence in code. No SDK code reads the specs.
 - **Immutability:** response models and input DTOs are `readonly`. Input DTOs send only the fields the
   caller set (PATCH-friendly) via `toArray()`.
 - **No hidden behavior:** the client never retries, logs, or mutates global state. Retries, timeouts,
@@ -105,7 +107,8 @@ isolation and namespace grants.
 
 To add a resource, follow `Resource/TagService.php`:
 
-1. Read the matching schema(s) in `docs/openapi.yaml`.
+1. Read the matching schema(s) in `docs/openapi-v2.yaml` (and `docs/openapi.yaml` for v1), and the
+   divergence note at the top of each.
 2. Add `Model/<Resource>.php` (+ `*Create`/`*Update`/`*ListParams`) and `Resource/<Resource>Service.php`.
 3. Wire the accessor onto `Client`.
 4. Add `MockHandler`-based tests that replay captured fixtures, and a CHANGELOG entry.

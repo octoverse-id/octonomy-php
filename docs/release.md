@@ -49,6 +49,6 @@ the GitHub webhook so future tags auto-update. Subsequent releases need only the
 
 ## Server contract changes
 
-If a release targets a new Octonomy server contract, refresh the vendored `docs/openapi.yaml`,
-reconcile models, and update the "targeted server contract" note in [versioning.md](versioning.md) in
-the same release PR.
+If a release targets a new Octonomy server contract, refresh the vendored `docs/openapi.yaml` and
+`docs/openapi-v2.yaml` ([development.md](development.md#keeping-the-contract-current)), reconcile models,
+and update the "targeted server contract" note in [versioning.md](versioning.md) in the same release PR.

@@ -1,12 +1,13 @@
 #!/bin/sh
 # Generates the PHP 7.4 tree of octonomy-php into a directory of your choosing.
 #
-# Copies src/, tests/, examples/ and the harness there, downgrades the PHP with Rector
-# (tools/rector), lays the 7.4 line's config over the top (compat/), and formats
-# the result at @PSR12. The working tree is never touched, and nothing is
-# committed: CI runs this into a throwaway directory on every push and proves the
-# output on a real PHP 7.4 (scripts/php74-check.sh). support/php7.4 does not exist
-# until P5 of epic #4, which generates it once with this same script.
+# Copies src/, tests/, examples/, the harness and the vendored OpenAPI specs there,
+# downgrades the PHP with Rector (tools/rector), lays the 7.4 line's config over
+# the top (compat/), and formats the result at @PSR12. The working tree is never
+# touched, and nothing is committed: CI runs this into a throwaway directory on
+# every push and proves the output on a real PHP 7.4 (scripts/php74-check.sh).
+# support/php7.4 does not exist until P5 of epic #4, which generates it once with
+# this same script.
 #
 # Usage:
 #   scripts/php74-downgrade.sh <dir>    # <dir> must be missing or empty
@@ -45,6 +46,9 @@ cp -R "$root/src" "$root/tests" "$root/examples" "$out/"
 # The harness is POSIX sh and serves both lines; CapturedCorpusTest reads its pin.
 mkdir "$out/scripts"
 cp "$root/scripts/octonomy-harness.sh" "$out/scripts/"
+# So are the vendored specs; VendoredSpecTest reads them and the tag versioning.md names.
+mkdir "$out/docs"
+cp "$root/docs/openapi.yaml" "$root/docs/openapi-v2.yaml" "$root/docs/versioning.md" "$out/docs/"
 cp "$root/compat/composer.json" "$root/compat/phpunit.xml.dist" "$root/compat/phpstan.neon.dist" \
     "$root/compat/.php-cs-fixer.dist.php" "$out/"
 

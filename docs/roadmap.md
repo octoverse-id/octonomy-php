@@ -9,7 +9,8 @@ unit that follows the established pattern.
 Copy `src/Resource/TagService.php` (+ its models and `tests/Resource/TagServiceTest.php`) as the
 template, then:
 
-1. Read the matching schema(s) in [`openapi.yaml`](openapi.yaml).
+1. Read the matching schema(s) in [`openapi-v2.yaml`](openapi-v2.yaml) (and
+   [`openapi.yaml`](openapi.yaml) for v1), minding the known-divergence note at the top of each.
 2. Add `Model/<Resource>.php` (readonly, `::fromArray($data, $apiVersion)` reading each field through
    the strict `Internal\Json` reader for its declared type, plus `Json::namespaceField()` if v2 adds
    the namespace pair to it), the `*Create`/`*Update` input DTOs

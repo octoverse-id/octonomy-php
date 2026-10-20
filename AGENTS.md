@@ -26,10 +26,11 @@ stays a faithful, ergonomic client.
   `DELETE` and must document the deactivation semantics rather than implying data loss.
 - Tag aliases are alternate identifiers that resolve to canonical tags and follow tenant/application
   compatibility rules.
-- Keep the SDK faithful to `docs/openapi.yaml`, the bundled contract reference. Where the live server
-  diverges from the generated spec — notably the `{data: {...}}` single-resource wrapper and the
-  `{data, pagination}` list envelope, both of which the spec omits — trust the server's real behavior
-  and document the divergence in a comment.
+- Keep the SDK faithful to `docs/openapi-v2.yaml` and `docs/openapi.yaml` (v1), the bundled contract
+  references. Where the live server diverges from the generated specs — notably the `{data: {...}}`
+  single-resource wrapper and the `{data, pagination}` list envelope, both of which the specs omit —
+  trust the server's real behavior and document the divergence in a comment. Each spec's header lists
+  the known divergences; never read required-ness or shapes from a spec in code.
 
 ## API Client Rules
 
@@ -104,8 +105,9 @@ stays a faithful, ergonomic client.
   Docker) when a change touches `src/`, `tests/`, `tools/rector/` or `compat/`.
 - Keep the README quickstart, `examples/quickstart.php`, and `composer.json`/`Makefile` scripts current
   with the public API.
-- Refresh the vendored `docs/openapi.yaml` from the Octonomy server when targeting a new contract, and
-  record the server version it tracks in `docs/versioning.md`.
+- Refresh both vendored specs (`docs/openapi.yaml`, `docs/openapi-v2.yaml`) from one Octonomy server
+  release tag when targeting a new contract, following `docs/development.md#keeping-the-contract-current`,
+  and record the tag in `docs/versioning.md`.
 
 ## Development Pipeline
 
