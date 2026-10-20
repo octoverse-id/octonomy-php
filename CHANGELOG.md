@@ -13,9 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`, `Accept`, and `User-Agent`, and an
   injectable `http_client`. Guzzle is the only runtime dependency.
 - `api_version` option (`Config::$apiVersion`, `Client::apiVersion()`): the client calls **`/api/v2`**
-  by default, or `/api/v1` with `'api_version' => 'v1'` for an Octonomy server older than 2.0.0. It is
-  set at construction only and never per request, and any other value throws `ConfigurationException`
-  when the client is built (#15).
+  by default, or `/api/v1` with `'api_version' => 'v1'`, which current servers still serve and a server
+  older than 2.0.0 needs. It is set at construction only and never per request, and any other value
+  throws `ConfigurationException` when the client is built (#15).
 - `NamespaceScope`, an atomic merchant/sub-tenant namespace type + id pair passed per request as
   `RequestOptions(namespace: ...)` and sent as `X-Namespace-Type` / `X-Namespace-ID`. There is no
   client-wide namespace. A blank type or id throws `InvalidArgumentException` (#15).
