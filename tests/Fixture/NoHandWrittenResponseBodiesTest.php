@@ -91,6 +91,57 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         self::captured($name);
     }
 
+    /**
+     * A body captured from one api_version is not a capture of the other's
+     * response (AGENTS.md). An error or a 204 replayed across would not even
+     * fail hydration, so the helpers refuse the mismatch outright.
+     *
+     * @param \Closure(self): mixed $replay
+     */
+    #[DataProvider('crossVersionReplays')]
+    public function testACaptureReplaysOnlyOnTheApiVersionItCameFrom(\Closure $replay, string $expected): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage($expected);
+
+        $replay($this);
+    }
+
+    /**
+     * @return iterable<string, array{\Closure(self): mixed, string}>
+     */
+    public static function crossVersionReplays(): iterable
+    {
+        $v1OnV2 = 'a response captured from api_version v1 cannot be replayed on a v2 client';
+        $v2OnV1 = 'a response captured from api_version v2 cannot be replayed on a v1 client';
+
+        yield 'a v1 error on a default client' => [
+            static fn(self $t): mixed => $t->clientWith([self::captured('v1/errors/not-found')]),
+            $v1OnV2,
+        ];
+        yield 'a v2 204 on a v1 client' => [
+            static fn(self $t): mixed => $t->clientWith([self::captured('v2/tags/delete')], ['api_version' => 'v1']),
+            $v2OnV1,
+        ];
+        yield 'a negative broken from a v1 capture, on a v2 transport' => [
+            static fn(self $t): mixed => $t->transportWith([self::syntheticNegativeFrom(
+                'v1/tags/get',
+                SyntheticNegative::WRONG_TYPE,
+                static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+            )]),
+            $v1OnV2,
+        ];
+    }
+
+    public function testANegativeWrittenFromNothingReplaysOnEitherApiVersion(): void
+    {
+        $gateway = self::syntheticNegative(SyntheticNegative::GATEWAY, 502, 'upstream down', []);
+
+        self::assertNull($gateway->apiVersion());
+        self::assertSame('v1', $this->clientWith([$gateway], ['api_version' => 'v1'])->apiVersion());
+        self::assertSame('v2', $this->clientWith([$gateway])->apiVersion());
+    }
+
     public function testASyntheticNegativeMustNameACarveOut(): void
     {
         $this->expectException(\InvalidArgumentException::class);

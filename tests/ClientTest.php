@@ -55,23 +55,26 @@ final class ClientTest extends SdkTestCase
 
     public function testSendsAuthAndTenantHeaders(): void
     {
-        $client = $this->clientWith([self::captured('v1/tags/get')]);
+        $client = $this->clientWith([self::captured('v2/tags/get')]);
 
         $client->tags()->get('tag_1');
 
         $request = $this->lastRequest();
         self::assertSame('GET', $request->getMethod());
-        self::assertSame('/api/v1/tags/tag_1', $request->getUri()->getPath());
+        self::assertSame('/api/v2/tags/tag_1', $request->getUri()->getPath());
         self::assertSame('Bearer test-token', $request->getHeaderLine('Authorization'));
         self::assertSame('tenant-1', $request->getHeaderLine('X-Tenant-ID'));
         self::assertSame('application/json', $request->getHeaderLine('Accept'));
         self::assertSame('octonomy-php/' . Client::VERSION, $request->getHeaderLine('User-Agent'));
         self::assertSame('', $request->getHeaderLine('X-Actor-ID'));
+        // No namespace was named, so none is sent: the global partition.
+        self::assertFalse($request->hasHeader('X-Namespace-Type'));
+        self::assertFalse($request->hasHeader('X-Namespace-ID'));
     }
 
     public function testActorHeaderFromConfig(): void
     {
-        $client = $this->clientWith([self::captured('v1/tags/get')], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::captured('v2/tags/get')], ['actor_id' => 'svc-config']);
 
         $client->tags()->get('tag_1');
 
@@ -80,9 +83,9 @@ final class ClientTest extends SdkTestCase
 
     public function testActorHeaderPerCallOverride(): void
     {
-        $client = $this->clientWith([self::captured('v1/tags/get')], ['actor_id' => 'svc-config']);
+        $client = $this->clientWith([self::captured('v2/tags/get')], ['actor_id' => 'svc-config']);
 
-        $client->tags()->get('tag_1', RequestOptions::withActor('svc-call'));
+        $client->tags()->get('tag_1', options: RequestOptions::withActor('svc-call'));
 
         self::assertSame('svc-call', $this->lastRequest()->getHeaderLine('X-Actor-ID'));
     }
@@ -96,7 +99,7 @@ final class ClientTest extends SdkTestCase
         $captured = CapturedFixture::load($fixture);
         $error = $captured->json()['error'];
         self::assertSame($code, $error['code'], "{$fixture} is not the {$code} envelope");
-        $client = $this->clientWith([$captured]);
+        $client = $this->clientWith([$captured], ['api_version' => $captured->apiVersion()]);
 
         try {
             $client->tags()->get('tag_1');
@@ -117,16 +120,19 @@ final class ClientTest extends SdkTestCase
      */
     public static function errorProvider(): iterable
     {
-        yield 'not found' => ['v1/errors/not-found', 'not_found', NotFoundException::class];
-        yield 'conflict' => ['v1/errors/conflict', 'conflict', ConflictException::class];
-        yield 'validation' => ['v1/errors/validation-error', 'validation_error', ValidationException::class];
-        yield 'tenant mismatch' => ['v1/errors/tenant-mismatch', 'tenant_mismatch', ValidationException::class];
-        yield 'application mismatch' => ['v1/errors/application-mismatch', 'application_mismatch', ValidationException::class];
-        yield 'inactive tag' => ['v1/errors/inactive-tag', 'inactive_tag', ValidationException::class];
-        // The server answers a bad or missing token with 403, not 401: it sends no
-        // WWW-Authenticate challenge. The code, not the status, picks the class.
-        yield 'auth' => ['v1/errors/authentication-required', 'authentication_required', AuthenticationException::class];
-        yield 'forbidden' => ['v1/errors/forbidden', 'forbidden', ForbiddenException::class];
+        foreach (['v1', 'v2'] as $v) {
+            yield "{$v} not found" => ["{$v}/errors/not-found", 'not_found', NotFoundException::class];
+            yield "{$v} conflict" => ["{$v}/errors/conflict", 'conflict', ConflictException::class];
+            yield "{$v} validation" => ["{$v}/errors/validation-error", 'validation_error', ValidationException::class];
+            yield "{$v} tenant mismatch" => ["{$v}/errors/tenant-mismatch", 'tenant_mismatch', ValidationException::class];
+            yield "{$v} inactive tag" => ["{$v}/errors/inactive-tag", 'inactive_tag', ValidationException::class];
+            // The server answers a bad or missing token with 403, not 401: it sends no
+            // WWW-Authenticate challenge. The code, not the status, picks the class.
+            yield "{$v} auth" => ["{$v}/errors/authentication-required", 'authentication_required', AuthenticationException::class];
+            yield "{$v} forbidden" => ["{$v}/errors/forbidden", 'forbidden', ForbiddenException::class];
+        }
+        // Captured on v1 only: v2 cannot produce it from the harness corpus.
+        yield 'v1 application mismatch' => ['v1/errors/application-mismatch', 'application_mismatch', ValidationException::class];
     }
 
     public function testErrorFallbackForNonEnvelopeBody(): void

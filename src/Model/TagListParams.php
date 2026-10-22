@@ -8,6 +8,13 @@ namespace Octoverse\Octonomy\Model;
  * TagListParams filters and pages the tag list. All fields are optional; a null
  * field is omitted from the query string. $query maps to the server's free-text
  * `q` parameter.
+ *
+ * $includeGlobal (api_version v2 only) asks a namespaced read to return the
+ * global (tenant-shared) rows the caller may see as well as the namespace's own.
+ * The server fails closed: a grant without global authority still sees none. A
+ * v1 client refuses the request before sending it, because /api/v1 would drop
+ * the parameter without a word. It is the last parameter so that adding it
+ * moved no existing one.
  */
 final class TagListParams
 {
@@ -22,6 +29,7 @@ final class TagListParams
         public readonly ?string $vocabularyId = null,
         public readonly ?int $limit = null,
         public readonly ?int $offset = null,
+        public readonly ?bool $includeGlobal = null,
     ) {}
 
     /**
@@ -59,6 +67,9 @@ final class TagListParams
         }
         if ($this->offset !== null) {
             $query['offset'] = (string) $this->offset;
+        }
+        if ($this->includeGlobal !== null) {
+            $query['include_global'] = $this->includeGlobal ? 'true' : 'false';
         }
 
         return $query;

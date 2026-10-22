@@ -1,11 +1,18 @@
 # API mapping
 
-How SDK methods map to Octonomy REST **v1** endpoints. The authoritative contract is the vendored
-[`openapi.yaml`](openapi.yaml); this page is the client-side view.
+How SDK methods map to Octonomy REST endpoints. The vendored [`openapi.yaml`](openapi.yaml) is the v1
+contract (the v2 spec is #21); this page is the client-side view.
 
-## Base URL and headers
+## Base URL and API version
 
-The client targets `base_url + /api/v1`. Every request carries:
+The client targets `base_url + /api/v2`, or `base_url + /api/v1` when constructed with
+`'api_version' => 'v1'` (`ApiVersion::V1`). The two surfaces carry the same paths; v2 adds the
+namespace axis below. The version is read once, at construction, and cannot change afterwards or per
+request. Any other value throws `ConfigurationException` when the client is built.
+
+## Headers
+
+Every request carries:
 
 | Header | Source | Required |
 | ------ | ------ | -------- |
@@ -15,6 +22,39 @@ The client targets `base_url + /api/v1`. Every request carries:
 | `Accept: application/json` | always | — |
 | `Content-Type: application/json` | requests with a body | — |
 | `User-Agent` | `user_agent` (default `octonomy-php/<version>`) | — |
+| `X-Namespace-Type`, `X-Namespace-ID` | `RequestOptions(namespace: new NamespaceScope($type, $id))` | no; v2 only |
+
+## Namespaces (v2)
+
+A `NamespaceScope` places one request in a merchant or sub-tenant namespace. It is an atomic pair:
+a blank type or id throws `InvalidArgumentException`. It is set per request only, through
+`RequestOptions`, never on `Config`, because the server enforces namespace grants and fails closed.
+Omit it for the global (tenant-shared) partition. A namespaced request must also name its application,
+or the server answers 403: `applicationId` on the list params and in the create body, and the
+`$applicationId` argument of `get()`, `update()` and `delete()`, which is sent as the `application_id`
+query parameter. On `update()` it scopes the request and cannot move the row: an application is fixed
+at creation (`409 scope_immutable`).
+
+`includeGlobal` (`include_global`) on `TagListParams`, `VocabularyListParams` and the `get()` methods
+widens a namespaced read to the global rows the token may also see. Without it, a namespaced `get()`
+of a global row answers 404.
+
+`Tag::$usageCount` is the same field with two meanings: on v1 it counts the tag's assignments across
+the tenant; on v2 only those the request can see, in its namespace (plus global ones the caller may see)
+and within its application scope.
+
+### v2-only features on a v1 client
+
+A v1 client throws before sending the request:
+
+| Request | Exception |
+| ------- | --------- |
+| any method with `RequestOptions(namespace: ...)` | `LogicException`: `octonomy: a namespace requires api_version v2; this client is v1` |
+| a list or `get()` with `includeGlobal` set (`true` or `false`) | `LogicException`: `octonomy: include_global requires api_version v2; this client is v1` |
+
+This is the SDK's one check against a server rule (an `AGENTS.md` exemption). `/api/v1` answers
+namespace headers with `400 namespace_not_supported` and drops `include_global` without a word, so
+the SDK refuses both up front.
 
 ## Scopes
 
@@ -26,22 +66,22 @@ methods need `tags:read`; mutating methods need `tags:write`.
 | SDK method | HTTP | Path |
 | ---------- | ---- | ---- |
 | `vocabularies()->create()` | POST | `/vocabularies` |
-| `vocabularies()->get()` | GET | `/vocabularies/{id}` |
+| `vocabularies()->get()` | GET | `/vocabularies/{id}` (`?application_id`, `?include_global`) |
 | `vocabularies()->list()` | GET | `/vocabularies` |
-| `vocabularies()->update()` | PATCH | `/vocabularies/{id}` |
-| `vocabularies()->delete()` | DELETE | `/vocabularies/{id}` |
+| `vocabularies()->update()` | PATCH | `/vocabularies/{id}` (`?application_id`) |
+| `vocabularies()->delete()` | DELETE | `/vocabularies/{id}` (`?application_id`) |
 | `tags()->create()` | POST | `/tags` |
-| `tags()->get()` | GET | `/tags/{id}` |
+| `tags()->get()` | GET | `/tags/{id}` (`?application_id`, `?include_global`) |
 | `tags()->list()` | GET | `/tags` |
-| `tags()->update()` | PATCH | `/tags/{id}` |
-| `tags()->delete()` | DELETE | `/tags/{id}` |
+| `tags()->update()` | PATCH | `/tags/{id}` (`?application_id`) |
+| `tags()->delete()` | DELETE | `/tags/{id}` (`?application_id`) |
 
 ### List parameters
 
 `TagListParams` exposes the full server filter set: `application_id`, `include_shared`, `is_active`,
-`parent_id`, `q` (as `query`), `slug`, `type`, `vocabulary_id`, plus `limit`/`offset`.
-`VocabularyListParams` exposes `application_id`, `include_shared`, `is_active`, and paging. Boolean
-params are serialized as `"true"`/`"false"`.
+`parent_id`, `q` (as `query`), `slug`, `type`, `vocabulary_id`, plus `limit`/`offset` and, on v2,
+`include_global`. `VocabularyListParams` exposes `application_id`, `include_shared`, `is_active`,
+paging, and, on v2, `include_global`. Boolean params are serialized as `"true"`/`"false"`.
 
 ## Responses
 

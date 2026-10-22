@@ -42,30 +42,46 @@ abstract class SdkTestCase extends TestCase
             throw new \LogicException('clientWith() owns the HTTP client; pass captured() or syntheticNegative() responses instead');
         }
 
-        return new Client(array_merge([
+        $client = new Client(array_merge([
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
             'http_client' => $this->mockedHttpClient($responses),
         ], $config));
+        self::refuseCrossVersionReplay($client->apiVersion(), $responses);
+
+        return $client;
     }
 
     /**
      * Build a bare Transport over a MockHandler, for tests of the transport
      * contract itself rather than of a resource service. $apiVersion is the
-     * surface it calls and the field set it hydrates; Client offers only v1 until
-     * the api_version option lands (#15).
+     * surface it calls and the field set it hydrates, v2 by default as on a
+     * Client.
      *
      * @param list<CapturedFixture|SyntheticNegative> $responses
      */
-    protected function transportWith(array $responses, string $apiVersion = ApiVersion::V1): Transport
+    protected function transportWith(array $responses, string $apiVersion = ApiVersion::V2): Transport
     {
-        return new Transport(new Config(
+        $transport = new Transport(new Config(
             baseUrl: 'https://octonomy.test',
             token: 'test-token',
             tenantId: 'tenant-1',
             httpClient: $this->mockedHttpClient($responses),
-        ), Client::VERSION, $apiVersion);
+            apiVersion: $apiVersion,
+        ), Client::VERSION);
+        self::refuseCrossVersionReplay($transport->apiVersion(), $responses);
+
+        return $transport;
+    }
+
+    /**
+     * Assert that no request reached the HTTP stack: the SDK refused the call
+     * before sending it.
+     */
+    protected function assertNothingSent(): void
+    {
+        self::assertNull($this->mock->getLastRequest(), 'expected the SDK to refuse the call before sending a request');
     }
 
     /**
@@ -203,12 +219,38 @@ abstract class SdkTestCase extends TestCase
             throw new \LogicException("{$name} has no JSON object body to break");
         }
 
-        return self::syntheticNegative(
+        return new SyntheticNegative(
             $kind,
             $captured->status,
             json_encode($break($body), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION),
             $captured->headers,
+            $captured->apiVersion(),
         );
+    }
+
+    /**
+     * Refuse to replay a response on a surface it was not captured from. A body
+     * captured from one api_version is not a capture of the other's response
+     * (AGENTS.md), and an error or 204 replayed across would pass silently, since
+     * neither is hydrated. A synthetic negative written from nothing names no
+     * api_version and fits either.
+     *
+     * @param list<CapturedFixture|SyntheticNegative> $responses
+     */
+    private static function refuseCrossVersionReplay(string $apiVersion, array $responses): void
+    {
+        foreach ($responses as $response) {
+            $from = $response->apiVersion();
+            if ($from !== null && $from !== $apiVersion) {
+                throw new \LogicException(sprintf(
+                    'a response captured from api_version %s cannot be replayed on a %s client; capture or pick a %s fixture, or set api_version to %s',
+                    $from,
+                    $apiVersion,
+                    $apiVersion,
+                    $from,
+                ));
+            }
+        }
     }
 
     /**

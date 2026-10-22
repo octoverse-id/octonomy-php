@@ -13,7 +13,14 @@ use Octoverse\Octonomy\Internal\Json;
  * $namespaceId place the tag in a merchant or sub-tenant namespace; both are null
  * for a global tag, and always null from api_version v1, which sees only the
  * global partition. $parentId and $vocabularyId are set when the tag is nested or
- * grouped. $usageCount is server-computed and read-only.
+ * grouped.
+ *
+ * $usageCount is server-computed and read-only, and means something different
+ * per api_version. On v1 it counts the tag's assignments across the whole
+ * tenant. On v2 it counts only the assignments the request can see: those in
+ * its namespace (plus global ones when the caller may see global rows) and
+ * within its application scope (octonomy/tags/selectors.py upstream). So the
+ * same tag can report different counts from the two surfaces.
  */
 final class Tag
 {

@@ -2,7 +2,8 @@
 
 `octonomy-php` is the official PHP client SDK for [Octonomy](https://github.com/octoverse-id/octonomy),
 a multi-tenant, multi-application tag management / taxonomy service. The SDK is a hand-written,
-Guzzle-based client for the stable REST **v1** API (`/api/v1`).
+Guzzle-based client for the REST API: `/api/v2` by default, `/api/v1` when a client is constructed with
+`api_version` v1.
 
 ## Product Rules
 
@@ -10,6 +11,14 @@ These mirror server semantics the client must respect — business rules live on
 stays a faithful, ergonomic client.
 
 - The SDK adds ergonomics, not behavior. Do not encode server-side validation or invariants here.
+  **One exemption (#15):** a v2-only feature on a v1 client (a `NamespaceScope`, `include_global`)
+  throws `LogicException` in `Transport` before any request. It is knowable from the client's own
+  configuration, never from server state, and `/api/v1` would reject the namespace headers
+  (`400 namespace_not_supported`) or silently drop `include_global`. It mirrors the Go SDK's resolved
+  decision. Do not widen it into other server rules without amending this exemption.
+- `api_version` is chosen at construction only (default v2) and never per request. A namespace is
+  per request only (`RequestOptions`), never a `Config` field: the server fails closed on namespace
+  grants, so the SDK must never default one.
 - Every request is tenant-scoped via the `X-Tenant-ID` header; `tenant_id` is required config.
 - `application_id` is optional on tags and vocabularies (`null` = shared across the tenant) and is
   required for assignments.

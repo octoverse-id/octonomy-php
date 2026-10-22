@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests\Integration;
 
+use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Model\TagListParams;
@@ -18,10 +19,10 @@ use Octoverse\Octonomy\Model\Vocabulary;
  * Only a real server can say whether a Tag hydrates. The corpus is fixed (the
  * table at seed_corpus in the harness), so these assertions can name exact rows.
  *
- * The SDK targets /api/v1, which cannot address a namespace. The merchant rows
- * are seeded all the same, and the v1 assertions here prove they stay out of
- * view. Every test only reads, so the suite can run any number of times
- * against one harness.
+ * This suite reads /api/v1 (api_version v1), which cannot address a namespace.
+ * The merchant rows are seeded all the same, and the v1 assertions here prove
+ * they stay out of view; NamespacedCorpusTest reads them through v2. Every test
+ * only reads, so the suite can run any number of times against one harness.
  */
 final class SeededCorpusTest extends IntegrationTestCase
 {
@@ -29,7 +30,7 @@ final class SeededCorpusTest extends IntegrationTestCase
 
     public function testGlobalTagHydratesFullyFromBothListAndGet(): void
     {
-        $client = $this->harnessClient();
+        $client = $this->harnessClient(ApiVersion::V1);
 
         // color/red is seeded three times: globally and in each merchant
         // namespace. /api/v1 sees only the global partition, so one row.
@@ -86,7 +87,7 @@ final class SeededCorpusTest extends IntegrationTestCase
 
     public function testNamespacedRowsAreInvisibleToV1(): void
     {
-        $client = $this->harnessClient();
+        $client = $this->harnessClient(ApiVersion::V1);
 
         // label tags exist only inside the merchant namespaces (sale in A,
         // clearance in B), and so does the harness's probe vocabulary.
@@ -102,7 +103,7 @@ final class SeededCorpusTest extends IntegrationTestCase
 
     public function testUnknownTagRaisesNotFoundFromTheRealErrorEnvelope(): void
     {
-        $client = $this->harnessClient();
+        $client = $this->harnessClient(ApiVersion::V1);
 
         try {
             $client->tags()->get('00000000-0000-4000-8000-000000000000');
@@ -119,7 +120,7 @@ final class SeededCorpusTest extends IntegrationTestCase
      */
     private function onlyTag(string $slug, string $type): Tag
     {
-        $page = $this->harnessClient()->tags()->list(new TagListParams(slug: $slug, type: $type));
+        $page = $this->harnessClient(ApiVersion::V1)->tags()->list(new TagListParams(slug: $slug, type: $type));
         self::assertCount(1, $page->data, "expected exactly one global {$type}/{$slug} tag in the seeded corpus");
 
         return $page->data[0];
@@ -130,7 +131,7 @@ final class SeededCorpusTest extends IntegrationTestCase
      */
     private function vocabulary(string $slug): Vocabulary
     {
-        foreach ($this->harnessClient()->vocabularies()->list()->data as $vocabulary) {
+        foreach ($this->harnessClient(ApiVersion::V1)->vocabularies()->list()->data as $vocabulary) {
             if ($vocabulary->slug === $slug) {
                 return $vocabulary;
             }

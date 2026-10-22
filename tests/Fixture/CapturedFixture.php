@@ -120,6 +120,15 @@ final class CapturedFixture
     }
 
     /**
+     * The api_version the exchange was captured from, which leads its name:
+     * 'v1' for 'v1/tags/get'.
+     */
+    public function apiVersion(): string
+    {
+        return explode('/', $this->name, 2)[0];
+    }
+
+    /**
      * The captured response, ready to queue on a MockHandler.
      */
     public function response(): Response

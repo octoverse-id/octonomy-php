@@ -8,10 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Client foundation targeting the Octonomy REST **v1** API (`/api/v1`): `Client` with
+- Client foundation targeting the Octonomy REST API: `Client` with
   options-array/`Config` construction and validation, a Guzzle-backed `Transport` that sets
   `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`, `Accept`, and `User-Agent`, and an
   injectable `http_client`. Guzzle is the only runtime dependency.
+- `api_version` option (`Config::$apiVersion`, `Client::apiVersion()`): the client calls **`/api/v2`**
+  by default, or `/api/v1` with `'api_version' => 'v1'`, which current servers still serve and a server
+  older than 2.0.0 needs. It is set at construction only and never per request, and any other value
+  throws `ConfigurationException` when the client is built (#15).
+- `NamespaceScope`, an atomic merchant/sub-tenant namespace type + id pair passed per request as
+  `RequestOptions(namespace: ...)` and sent as `X-Namespace-Type` / `X-Namespace-ID`. There is no
+  client-wide namespace. A blank type or id throws `InvalidArgumentException` (#15).
+- `includeGlobal` on `TagListParams` and `VocabularyListParams` (`include_global`, v2), appended as the
+  last parameter so no existing one moves (#15).
+- `get()`, `update()` and `delete()` on both services take `?string $applicationId`, sent as the
+  `application_id` query parameter that a namespaced call needs, and `get()` takes `?bool
+  $includeGlobal`. Both come before `$options`, so a call that passed options positionally now names
+  them (`options:`) (#15).
+- A client-side guard: a namespace or `include_global` on a v1 client throws `LogicException` before
+  any request is sent, the one server rule the SDK checks locally (`AGENTS.md` exemption).
+  `Tag::$usageCount` is documented as tenant-wide on v1 and limited to what the request can see on v2
+  (#15).
 - Response envelopes: single-resource methods unwrap the server's `{"data": {...}}`, and list methods
   decode `{data, pagination}` into a generic `ResultList<T>` and `Pagination` (#6).
 - Strict hydration: every field a model declares for the response's api_version must be present as a

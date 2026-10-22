@@ -37,10 +37,14 @@ abstract class IntegrationTestCase extends TestCase
     }
 
     /**
-     * Build a Client authenticated as the harness's wildcard service token, or
-     * skip the test when no harness is running.
+     * Build a Client on $apiVersion, authenticated as the harness token in
+     * $tokenVariable (the wildcard token unless a test names an exact merchant
+     * grant's), or skip the test when no harness is running.
+     *
+     * @param string $apiVersion an ApiVersion constant, named by every caller so a suite says
+     *                           which surface it reads
      */
-    protected function harnessClient(): Client
+    protected function harnessClient(string $apiVersion, string $tokenVariable = 'OCTONOMY_TEST_TOKEN'): Client
     {
         $baseUrl = self::harnessEnv('OCTONOMY_TEST_BASE_URL');
         if ($baseUrl === '') {
@@ -55,11 +59,11 @@ abstract class IntegrationTestCase extends TestCase
             );
         }
 
-        $token = self::harnessEnv('OCTONOMY_TEST_TOKEN');
+        $token = self::harnessEnv($tokenVariable);
         $tenantId = self::harnessEnv('OCTONOMY_TEST_TENANT_ID');
         if ($token === '' || $tenantId === '') {
             self::fail(
-                'OCTONOMY_TEST_BASE_URL is set but OCTONOMY_TEST_TOKEN/OCTONOMY_TEST_TENANT_ID are not: '
+                "OCTONOMY_TEST_BASE_URL is set but {$tokenVariable}/OCTONOMY_TEST_TENANT_ID are not: "
                 . 'the harness env is incomplete',
             );
         }
@@ -69,6 +73,7 @@ abstract class IntegrationTestCase extends TestCase
             'token' => $token,
             'tenant_id' => $tenantId,
             'actor_id' => 'octonomy-php-integration',
+            'api_version' => $apiVersion,
         ]);
     }
 }

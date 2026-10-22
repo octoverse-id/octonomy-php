@@ -12,6 +12,10 @@ use Octoverse\Octonomy\Resource\VocabularyService;
  * Client is the entry point to the Octonomy API. Construct it with an options
  * array (or a Config) and reach resources through the service accessors.
  *
+ * A Client calls one REST surface for its whole life: /api/v2 by default, or
+ * /api/v1 with 'api_version' => 'v1' (ApiVersion::V1). The version is fixed at
+ * construction; build another Client to call the other surface.
+ *
  * ```php
  * $client = new Client([
  *     'base_url'  => 'https://octonomy.example.com',
@@ -35,11 +39,23 @@ final class Client
 
     /**
      * @param array<string, mixed>|Config $config an options array (see Config::fromArray) or a Config
+     *
+     * @throws Exception\ConfigurationException when the configuration is invalid, an unknown
+     *                                          api_version included
      */
     public function __construct(array|Config $config)
     {
         $resolved = $config instanceof Config ? $config : Config::fromArray($config);
         $this->transport = new Transport($resolved, self::VERSION);
+    }
+
+    /**
+     * The api_version this client calls, an ApiVersion constant, as fixed at
+     * construction.
+     */
+    public function apiVersion(): string
+    {
+        return $this->transport->apiVersion();
     }
 
     /**

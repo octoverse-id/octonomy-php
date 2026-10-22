@@ -35,6 +35,7 @@ $client = new Client([
     'token' => env('OCTONOMY_TOKEN', 'svc_local_dev'),
     'tenant_id' => env('OCTONOMY_TENANT_ID', 'acme'),
     'actor_id' => 'quickstart-example',
+    // 'api_version' => 'v1', // v2 is the default; v1 is still served, and a server older than 2.0.0 has only v1
 ]);
 
 try {
