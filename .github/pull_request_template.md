@@ -14,7 +14,7 @@ Closes #
 - [ ] `composer cs` passes (php-cs-fixer)
 - [ ] `composer stan` passes (phpstan)
 - [ ] `composer test` passes (phpunit)
-- [ ] New/changed models stay faithful to `docs/openapi.yaml` (divergences documented)
+- [ ] New/changed models stay faithful to `docs/openapi-v2.yaml` / `docs/openapi.yaml` (divergences documented)
 - [ ] Public classes and methods have doc comments
 - [ ] Docs updated (README / `docs/`) if behavior or usage changed
 - [ ] CHANGELOG `[Unreleased]` updated for user-facing changes

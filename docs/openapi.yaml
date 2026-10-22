@@ -1,7 +1,45 @@
+# Octonomy REST contract for api_version v1 (/api/v1): a reference copy, never the SDK's source
+# of truth.
+#
+# Vendored from octoverse-id/octonomy at tag v3.2.1 (commit 00edbb9227ad67a55bdaca5bee008f273565293a),
+# file docs/openapi.yaml. Everything below this comment block is that file byte for byte, sha256
+# 2f7caf4e988e37dc5ee03371fbd31e4d0160842c9d4a0bf94c838fbe005c40a1.
+# Do not edit it: re-vendor both specs from one server release tag (docs/development.md) and name
+# the tag in docs/versioning.md. tests/VendoredSpecTest.php checks the hash and the tag.
+#
+# KNOWN DIVERGENCES. Wherever they differ, the server, and the responses captured from it in
+# tests/fixtures/captured, win over this spec. Each item below was checked against the server source
+# at v3.2.1 and against every 2xx response captured from it. No SDK code reads this file,
+# required-ness included.
+#
+# The three issue #21 recorded:
+#  1. Neither response envelope is modelled. Lists are declared as bare arrays and single resources
+#     as a bare $ref, but the server wraps every single resource as {"data": {...}}
+#     (octonomy/core/responses.py) and every list as {"data": [...], "pagination": {...}}
+#     (octonomy/core/pagination.py). [both specs]
+#  2. Assignment's required list omits namespace_type and namespace_id, which AssignmentSerializer
+#     always emits on v2, as null for a global row. [openapi-v2.yaml; openapi.yaml declares no
+#     namespace pair at all, which is right for v1]
+#  3. POST /tag-assignments/bulk-assign is declared as an array of Assignment, but the server returns
+#     {"data": {"created", "existing", "skipped", "assignments"}} (octonomy/assignments/views.py).
+#     Replacing a resource's tags (POST /resources/{resource_type}/{resource_id}/tags) is declared
+#     as an array of ResourceTag, but returns {"data": {"created", "removed", "tags"}}. [both specs]
+#
+# Found when this copy was vendored:
+#  4. POST /tag-assignments/bulk-remove declares no 200 body; the server sends
+#     {"data": {"removed": <count>}}. [both specs]
+#  5. Other required lists leave out fields the server always sends: Assignment's assigned_by;
+#     Tag's and Vocabulary's description, is_active and metadata; TagAlias's is_active and
+#     metadata. [both specs]
+#  6. Tag lists parent_id and vocabulary_id as required, but the server omits each one when it is
+#     null instead of sending null (Tag::fromArray reads both as absent-or-null). [both specs]
+#  7. GET /health/live and /health/ready declare no body; the server sends a bare {"status": "ok"},
+#     with no "data" envelope, and /health/ready answers an undeclared 503 {"status": "unavailable"}
+#     when its database is unreachable (octonomy/core/views.py). [both specs]
 openapi: 3.0.3
 info:
   title: Octonomy API
-  version: 1.0.0
+  version: 3.2.1
   description: Multi-tenant tag management and taxonomy service.
 paths:
   /api/v1/audit-logs:
@@ -312,6 +350,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/TagAlias'
           description: ''
+        '409':
+          description: The request tried to change a row's application_id, namespace_type,
+            or namespace_id. Scope is fixed at creation (NS-1); the error envelope
+            carries code scope_immutable. Re-create the row in the target scope instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       operationId: api_v1_tag_aliases_destroy
       parameters:
@@ -415,6 +461,10 @@ paths:
       parameters:
       - in: query
         name: application_id
+        schema:
+          type: string
+      - in: query
+        name: scope
         schema:
           type: string
       - in: query
@@ -561,6 +611,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Tag'
           description: ''
+        '409':
+          description: The request tried to change a row's application_id, namespace_type,
+            or namespace_id. Scope is fixed at creation (NS-1); the error envelope
+            carries code scope_immutable. Re-create the row in the target scope instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       operationId: api_v1_tags_destroy
       parameters:
@@ -808,6 +866,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Vocabulary'
           description: ''
+        '409':
+          description: The request tried to change a row's application_id, namespace_type,
+            or namespace_id. Scope is fixed at creation (NS-1); the error envelope
+            carries code scope_immutable. Re-create the row in the target scope instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       operationId: api_v1_vocabularies_destroy
       parameters:
@@ -1186,6 +1252,7 @@ components:
         metadata: {}
         is_active:
           type: boolean
+          default: true
         usage_count:
           type: integer
           readOnly: true
@@ -1236,6 +1303,7 @@ components:
         metadata: {}
         is_active:
           type: boolean
+          default: true
         created_at:
           type: string
           format: date-time
@@ -1374,6 +1442,7 @@ components:
         metadata: {}
         is_active:
           type: boolean
+          default: true
         created_at:
           type: string
           format: date-time
@@ -1413,3 +1482,24 @@ components:
       required:
       - name
       - slug
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+            request_id:
+              type: string
+              nullable: true
+          required:
+          - code
+          - message
+      required:
+      - error

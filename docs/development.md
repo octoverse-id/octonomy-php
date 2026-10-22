@@ -78,8 +78,9 @@ harness, not an absent one.
 
 **Images** are pinned by digest (Octonomy `3.2.1`, Postgres `16`), and an override through
 `OCTONOMY_HARNESS_IMAGE` / `OCTONOMY_HARNESS_POSTGRES_IMAGE` that is not a digest is refused unless
-`OCTONOMY_HARNESS_ALLOW_UNPINNED=1` is set. Moving the Octonomy pin means re-capturing the fixtures in
-the same PR (`make fixtures`); the unit suite fails until you do. Every other knob is an `OCTONOMY_HARNESS_*` variable read
+`OCTONOMY_HARNESS_ALLOW_UNPINNED=1` is set. Moving the Octonomy pin means re-capturing the fixtures
+(`make fixtures`) and re-vendoring both specs ([Keeping the contract current](#keeping-the-contract-current))
+in the same PR; the unit suite fails until you do. Every other knob is an `OCTONOMY_HARNESS_*` variable read
 at the top of the script; `OCTONOMY_HARNESS_PORT` (default `8000`) is the one you are most likely to
 need.
 
@@ -181,7 +182,7 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
 | ----- | ---------- |
 | `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. Bump it in a PR of its own; Dependabot opens those. |
 | `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8`, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
-| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/` and the harness script into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
+| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness script, and the vendored specs with `docs/versioning.md` (which tests read) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
 | `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, each with the same outcome (passed, skipped or failed), compared through each run's JUnit log. It reports every failing check, not just the first. |
 
 `phpVersion: 70400` applies to the downgraded tree only. On `main` it would flag every 8.x construct
@@ -219,6 +220,22 @@ php examples/quickstart.php
 
 ## Keeping the contract current
 
-`docs/openapi.yaml` is vendored from the Octonomy server. When targeting a new server contract, refresh
-it (regenerate on the server with `make openapi`, copy the file here), reconcile any model changes, and
-note the server version in [versioning.md](versioning.md).
+`docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) are vendored from the Octonomy server at the
+release the harness pins, the same one the fixtures are captured from. Each is the server's file byte
+for byte below a comment header that names the tag, the commit, and the file's sha256, and lists the
+known divergences from what the server sends. Moving the harness pin therefore means re-vendoring both
+specs in the same PR. To refresh them:
+
+1. Copy each file from the tag, not from a working tree: `git -C <octonomy> show vX.Y.Z:docs/openapi.yaml`
+   and `...:docs/openapi-v2.yaml`.
+2. Keep each header, updating its tag, commit, and sha256 (`sha256sum` of the server's file).
+3. Re-check every divergence in the note against the server source and every 2xx response in
+   `tests/fixtures/captured`, and add any new one. A divergence the server has fixed comes out of the
+   note.
+4. Name the tag in [versioning.md](versioning.md), and reconcile any model changes.
+
+`VendoredSpecTest` fails if a spec's body no longer hashes to its header, if a spec's tag is not the
+harness pin, if the specs name different commits, if `versioning.md` does not name the tag, if the
+divergence note loses an item, or if shipped PHP (`src/`, `examples/`) names a spec. Those checks read
+only this repository. `Integration\VendoredSpecMatchesServerTest` is the independent one: it compares
+each body with what the pinned server serves at `/api/v1/schema/` and `/api/v2/schema/`.

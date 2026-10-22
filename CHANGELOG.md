@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`
   input DTOs.
-- Runnable `examples/quickstart.php` and a vendored `docs/openapi.yaml` contract reference (server
-  `1.0.0`).
+- Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
+  `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
+  where it diverges from what the server sends (#21).
 
 [Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/main
