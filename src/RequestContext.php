@@ -14,12 +14,11 @@ namespace Octoverse\Octonomy;
  * Once namespaces exist a bare 404 has three causes that look the same from
  * the status alone: a wrong id, the right id in another namespace, or the
  * right id outside what the request could see because include_global was
- * false. The context keeps what the request asked for (the id in its path,
- * its namespace, its application_id and include_global), so a log line
- * written long after the fact still says where the read looked and what it
- * was allowed to see. It cannot say which cause applied: the server
- * deliberately does not reveal whether a row exists in a scope the request
- * could not see.
+ * false. The context records where the read looked (the id in its path, its
+ * namespace, its application_id) and whether it asked for include_global, so
+ * a log line written long after the fact still says so. It cannot say which
+ * cause applied: the server deliberately does not reveal whether a row exists
+ * in a scope the request could not see.
  *
  * It holds nothing secret and nothing the caller sent as content: no token,
  * no tenant id, no actor id, no other header and no request body. The

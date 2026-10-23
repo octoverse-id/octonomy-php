@@ -23,9 +23,9 @@ final class RequestContextTest extends SdkTestCase
 {
     /**
      * A namespaced 404 has three causes (wrong id, another namespace,
-     * include_global off) the response does not tell apart. The context keeps
-     * every input that decided what the read could see, though not which cause
-     * applied: the server never says whether the id exists elsewhere.
+     * include_global off) the response does not tell apart. The context records
+     * where the read looked and whether it asked for include_global, though not
+     * which cause applied: the server never says whether the id exists elsewhere.
      */
     public function testANamespacedNotFoundRecordsWhatDecidedWhatTheReadCouldSee(): void
     {
