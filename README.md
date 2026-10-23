@@ -124,9 +124,10 @@ try {
 ```
 
 Every `ApiException` and `TransportException` also carries `$context`, a `RequestContext` naming the
-request that failed: its api_version, method, path, query and namespace. Log it beside the message: it
-is what tells a namespaced 404 apart from a wrong id. It never holds the token, the tenant or actor id,
-any other header, or the request body.
+request that failed: its api_version, method, path, query and namespace. Log it beside the message: a
+namespaced 404 then records where the read looked and whether it asked for `include_global`, which a
+status alone cannot (the server never reveals whether the id exists in another scope). It never holds
+the token, the tenant or actor id, any other header, or the request body.
 
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`

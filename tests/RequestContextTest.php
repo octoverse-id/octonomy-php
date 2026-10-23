@@ -22,8 +22,10 @@ use Psr\Http\Client\NetworkExceptionInterface;
 final class RequestContextTest extends SdkTestCase
 {
     /**
-     * The three causes of a namespaced 404 (wrong id, another namespace,
-     * include_global off) differ only in what the context records.
+     * A namespaced 404 has three causes (wrong id, another namespace,
+     * include_global off) the response does not tell apart. The context keeps
+     * every input that decided what the read could see, though not which cause
+     * applied: the server never says whether the id exists elsewhere.
      */
     public function testANamespacedNotFoundRecordsWhatDecidedWhatTheReadCouldSee(): void
     {
