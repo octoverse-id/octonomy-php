@@ -238,9 +238,125 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
-     * A client can throw although a response arrived, as middleware that
-     * throws on a status does. The message names that response rather than
-     * saying there was none.
+     * A handler or middleware can throw anything, not only a Guzzle exception.
+     * It becomes a TransportException like any client failure: quoted
+     * redacted, not chained, and with the SDK's frames scrubbed.
+     */
+    public function testAnyThrowableFromTheClientIsRedacted(): void
+    {
+        $client = $this->clientWhoseHttpClientThrows(
+            self::config(),
+            static fn(RequestInterface $request): \Throwable => new \RuntimeException(sprintf(
+                'middleware refused %s with %s',
+                (string) $request->getBody(),
+                $request->getHeaderLine('Authorization'),
+            )),
+        );
+
+        try {
+            $client->tags()->create(self::body(), self::options());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            $this->assertEverythingWasSent();
+            self::assertNull($e->getPrevious());
+            self::assertStringContainsString('with RuntimeException: "middleware refused [redacted] with Bearer [redacted]"', $e->getMessage());
+            self::assertCarriesNone($e, self::CREATE_FRAME);
+        }
+    }
+
+    /**
+     * A body that cannot be encoded is never sent. The refusal names why in
+     * fixed words, or names the exception an object's jsonSerialize() threw by
+     * its class alone, and chains nothing: a message or a frame can hold the
+     * body.
+     */
+    #[DataProvider('unencodableBodies')]
+    public function testABodyThatCannotBeEncodedIsRefusedWithoutQuotingIt(\Closure $metadata, string $why): void
+    {
+        $client = $this->clientWith([], self::config());
+
+        try {
+            $client->tags()->create(
+                new TagCreate(name: 'Name From The Body', slug: 'slug-from-the-body', type: 'label', metadata: $metadata()),
+                self::options(),
+            );
+            self::fail('expected an \InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringStartsWith(
+                "octonomy: the body of POST /api/v2/tags in namespace merchant:harness-merchant-a cannot be encoded as JSON: {$why}.",
+                $e->getMessage(),
+            );
+            self::assertNull($e->getPrevious());
+            $this->assertNothingSent();
+            self::assertCarriesNone($e, self::CREATE_FRAME);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{\Closure(): array<string, mixed>, string}>
+     */
+    public static function unencodableBodies(): iterable
+    {
+        yield 'a string that is not UTF-8' => [
+            static fn(): array => ['note' => "description-from-the-body\xB1"],
+            'a string in it is not valid UTF-8',
+        ];
+        yield 'an object whose jsonSerialize() throws' => [
+            static fn(): array => ['note' => new class implements \JsonSerializable {
+                public function jsonSerialize(): mixed
+                {
+                    throw new \RuntimeException('cannot encode description-from-the-body');
+                }
+            }],
+            'an object in it threw RuntimeException from jsonSerialize(), whose message is not shown',
+        ];
+        yield 'an object whose jsonSerialize() throws a JsonException of its own' => [
+            static fn(): array => ['note' => new class implements \JsonSerializable {
+                public function jsonSerialize(): mixed
+                {
+                    throw new \JsonException('cannot encode description-from-the-body', 4242);
+                }
+            }],
+            'json_encode() refused it with error 4242',
+        ];
+    }
+
+    /**
+     * On the PHP 7.4 line middleware can change the caller's NamespaceScope
+     * mid-request. The context, and the message, keep the namespace that was
+     * sent. PHP 8.2 refuses the write; either way they match the header.
+     */
+    public function testANamespaceChangedAfterItWasSentIsReportedAsSent(): void
+    {
+        $namespace = new NamespaceScope('merchant', 'sent-id');
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static function (RequestInterface $request) use ($namespace): string {
+                try {
+                    (new \ReflectionProperty(NamespaceScope::class, 'id'))->setValue($namespace, 'changed-after-send');
+                } catch (\Error $e) {
+                    // PHP 8.2: readonly.
+                }
+
+                return 'refused';
+            },
+        );
+
+        try {
+            $client->tags()->get('tag_1', 'harness-app', options: new RequestOptions(namespace: $namespace));
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertSame('sent-id', $this->lastRequest()->getHeaderLine('X-Namespace-ID'));
+            self::assertNotNull($e->context->namespace);
+            self::assertSame('sent-id', $e->context->namespace->id);
+            self::assertStringContainsString('in namespace merchant:sent-id ', $e->getMessage());
+        }
+    }
+
+    /**
+     * A client can throw with a response on its exception, as middleware that
+     * throws on a status does (here the helper makes the response up). The
+     * message names its status rather than saying there was none.
      */
     public function testAClientFailureHoldingAResponseNamesIt(): void
     {
@@ -399,10 +515,10 @@ final class RedactionTest extends SdkTestCase
     {
         $object = new \stdClass();
         $object->{'object-key'} = 'object-value';
-        $redaction = Redaction::of('octo_tokensecret', null, [
+        $redaction = Redaction::of('octo_tokensecret', null, (string) json_encode([
             'name' => 'Featured',
             'metadata' => ['customer-email' => 'someone@example.test', 'nested' => [$object, 42, 'a/b']],
-        ]);
+        ]));
 
         self::assertSame(
             'name: [redacted]; metadata: {"[redacted]":"[redacted]","[redacted]":[{"[redacted]":"[redacted]"},[redacted],"[redacted]"]}',
@@ -417,7 +533,7 @@ final class RedactionTest extends SdkTestCase
      */
     public function testOfTakesEveryJsonFormOfTheBody(): void
     {
-        $redaction = Redaction::of('octo_tokensecret', null, ['metadata' => ['123' => 'x', 'rate' => 1e20, 'zero' => -0.0]]);
+        $redaction = Redaction::of('octo_tokensecret', null, (string) json_encode(['metadata' => ['123' => 'x', 'rate' => 1e20, 'zero' => -0.0]]));
 
         self::assertSame(
             'invalid metadata key [redacted] at [redacted] and [redacted] or [redacted]',
@@ -432,7 +548,7 @@ final class RedactionTest extends SdkTestCase
      */
     public function testTextReplacesShortValuesOnlyWhereTheyStandAlone(): void
     {
-        $redaction = Redaction::of('octo_tokensecret', '1', ['name' => 'Featured']);
+        $redaction = Redaction::of('octo_tokensecret', '1', (string) json_encode(['name' => 'Featured']));
 
         self::assertSame(
             'connect to localhost port 8010 after [redacted] ms; token=[redacted]; [redacted]Tag; [redacted]',

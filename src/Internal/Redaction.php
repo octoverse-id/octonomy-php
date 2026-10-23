@@ -91,12 +91,10 @@ final class Redaction
 
     /**
      * A snapshot of the values on the list that one request carries: its
-     * token, the actor id it sends, and its body. Take it before the request
-     * is sent. The body is encoded then, as Guzzle's json option encodes it
-     * (json_encode()'s default flags), so an object in it that changes once
-     * the request is out (metadata may hold any object) cannot change what is
-     * redacted. A body that does not encode is never sent: Guzzle refuses it
-     * with an error that quotes none of it.
+     * token, the actor id it sends, and its body as the JSON it is sent as.
+     * Take it from exactly what is handed to the HTTP client, before the
+     * client runs: every value is a string from then on, so nothing the
+     * client's middleware changes afterwards changes what is redacted.
      *
      * text() replaces the token, the actor id, the body whole, and every
      * scalar and every object key in the body at any depth, except the keys of
@@ -105,13 +103,11 @@ final class Redaction
      * number as it was sent, as JSON writes it and as PHP prints it; true,
      * false and null as JSON writes them.
      *
-     * @param array<array-key, mixed>|null $body
+     * @param string|null $body the request body as sent, JSON-encoded, or null for none
      */
-    public static function of(string $token, ?string $actorId, ?array $body): self
+    public static function of(string $token, ?string $actorId, ?string $body): self
     {
-        $encoded = $body === null ? false : json_encode($body);
-
-        return new self($token, $actorId, $encoded === false ? null : $encoded);
+        return new self($token, $actorId, $body);
     }
 
     /**

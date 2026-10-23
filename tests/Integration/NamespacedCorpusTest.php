@@ -84,7 +84,7 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         } catch (NotFoundException $e) {
             // What tells this 404 from a wrong id: the namespace it looked in,
             // and no include_global in the query.
-            self::assertSame($inA->namespace, $e->context->namespace);
+            self::assertEquals($inA->namespace, $e->context->namespace);
             self::assertSame(['application_id' => $app], $e->context->query);
             self::assertSame('/api/v2/tags/' . $globalRed->id, $e->context->path);
         }
@@ -142,7 +142,7 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         } catch (ValidationException $e) {
             self::assertSame(400, $e->statusCode);
             self::assertSame(ErrorCode::NAMESPACE_INVALID, $e->errorCode);
-            self::assertSame($reserved->namespace, $e->context->namespace);
+            self::assertEquals($reserved->namespace, $e->context->namespace);
             self::assertSame(ApiVersion::V2, $e->context->apiVersion);
         }
     }

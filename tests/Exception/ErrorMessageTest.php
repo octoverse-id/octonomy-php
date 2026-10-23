@@ -215,7 +215,7 @@ final class ErrorMessageTest extends TestCase
      */
     public function testWhatTheServerEchoesFromTheRequestIsReplaced(): void
     {
-        $redaction = Redaction::of('octo_tokensecret', 'actor-7', ['slug' => 'slug-from-the-body', 'metadata' => ['note' => 'a/b']]);
+        $redaction = Redaction::of('octo_tokensecret', 'actor-7', (string) json_encode(['slug' => 'slug-from-the-body', 'metadata' => ['note' => 'a/b']]));
         $context = new RequestContext(ApiVersion::V2, 'POST', '/api/v2/tags');
 
         $message = ErrorMessage::forResponse(

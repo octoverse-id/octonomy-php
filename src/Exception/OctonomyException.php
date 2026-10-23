@@ -12,9 +12,11 @@ use Octoverse\Octonomy\Internal\Redaction;
  *
  * A mistake in the calling code that the SDK detects before sending anything is
  * not such a failure, and is thrown as PHP's own \LogicException family
- * instead: a NamespaceScope with a blank type or id (\InvalidArgumentException),
- * or a v2-only feature on a v1 client (\LogicException). Fix the call; there is
- * nothing to retry.
+ * instead: a NamespaceScope with a blank type or id, a header value holding a
+ * control character, or a body that cannot be encoded as JSON
+ * (\InvalidArgumentException), or a v2-only feature on a v1 client
+ * (\LogicException). Fix the call; there is nothing to retry. These are
+ * scrubbed of the SDK's frame arguments too.
  *
  * No exception the SDK throws carries the token, the Authorization header, the
  * request body or X-Actor-ID: not in its message, its RequestContext, or the

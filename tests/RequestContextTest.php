@@ -39,7 +39,8 @@ final class RequestContextTest extends SdkTestCase
             self::assertSame('GET', $e->context->method);
             self::assertSame('/api/v2/tags/tag%2F1', $e->context->path);
             self::assertSame(['application_id' => 'commerce', 'include_global' => 'false'], $e->context->query);
-            self::assertSame($namespace, $e->context->namespace);
+            // A copy, so it records what was sent whatever happens to the caller's.
+            self::assertEquals($namespace, $e->context->namespace);
         }
     }
 

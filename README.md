@@ -149,8 +149,9 @@ naming the endpoint and the field: the SDK never fills in a zero value or coerce
 HTTP client throws (a network failure, a timeout, or middleware that throws), or a 2xx body that is not
 JSON from a method that returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
 extends `Octoverse\Octonomy\Exception\OctonomyException`. A mistake in the call itself, caught before
-anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id), throws
-PHP's `LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to retry.
+anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id, a header
+value with a control character in it, a body that cannot be encoded as JSON), throws PHP's
+`LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to retry.
 
 ## Pagination
 

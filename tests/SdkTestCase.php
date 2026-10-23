@@ -74,16 +74,30 @@ abstract class SdkTestCase extends TestCase
      */
     protected function clientThatCannotConnect(array $config = [], ?\Closure $describe = null, ?int $status = null): Client
     {
-        if (array_key_exists('http_client', $config)) {
-            throw new \LogicException('clientThatCannotConnect() owns the HTTP client');
-        }
-        $this->mock = new MockHandler([
-            // Returned, not thrown: MockHandler rejects the request with a
-            // Throwable a queued callable returns, as a real handler does.
+        return $this->clientWhoseHttpClientThrows(
+            $config,
             static fn(RequestInterface $request): TransferException => $status === null
                 ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
                 : new RequestException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
-        ]);
+        );
+    }
+
+    /**
+     * Build a Client whose HTTP client throws what $throw returns for the
+     * request, as a handler or middleware that throws would: any Throwable, not
+     * only one of Guzzle's.
+     *
+     * @param array<string, mixed>                  $config overrides of the default options, as for clientWith()
+     * @param \Closure(RequestInterface): \Throwable $throw
+     */
+    protected function clientWhoseHttpClientThrows(array $config, \Closure $throw): Client
+    {
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('the client owns its HTTP client');
+        }
+        // Returned, not thrown: MockHandler rejects the request with a
+        // Throwable a queued callable returns, as a real handler does.
+        $this->mock = new MockHandler([$throw]);
 
         return new Client(array_merge([
             'base_url' => 'https://octonomy.test',

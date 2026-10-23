@@ -68,7 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which `OctonomyException` removes on construction. Text a message quotes from the HTTP client or the
   server, a malformed field's value included, has the request's token, actor id and body (whole, and
   each value and nested key) replaced with `[redacted]`.
-  `TransportException` no longer chains Guzzle's exception, which holds the request. A token, tenant
+  `TransportException` covers anything the HTTP client throws and no longer chains it, since
+  Guzzle's exception holds the request. The SDK encodes the body itself, once, so what it sends is
+  what it redacts; a body that cannot be encoded throws `InvalidArgumentException` without quoting it. A token, tenant
   id, actor id, user agent or namespace with a control character is refused up front, and again just
   before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.

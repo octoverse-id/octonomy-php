@@ -125,6 +125,41 @@ final class ErrorMessage
     }
 
     /**
+     * The message for a body that cannot be encoded as JSON, so nothing was
+     * sent. It never quotes the body.
+     *
+     * @param string $reason why, in words that hold none of the body
+     * @param string $fix    what to change
+     */
+    public static function unencodable(RequestContext $context, string $reason, string $fix): string
+    {
+        return sprintf(
+            'octonomy: the body of %s cannot be encoded as JSON: %s. Nothing was sent, and the body is not shown.'
+            . ' Fix: %s',
+            self::request($context),
+            $reason,
+            $fix,
+        );
+    }
+
+    /**
+     * What a json_encode() error code means for a request body, in fixed words:
+     * never the exception's own message, which an object's jsonSerialize()
+     * could have written.
+     */
+    public static function jsonError(int $code): string
+    {
+        return match ($code) {
+            JSON_ERROR_DEPTH => 'it is nested deeper than 512 levels',
+            JSON_ERROR_RECURSION => 'it refers to itself',
+            JSON_ERROR_INF_OR_NAN => 'a number in it is INF or NAN',
+            JSON_ERROR_UNSUPPORTED_TYPE => 'it holds a value JSON has no type for, such as a resource',
+            JSON_ERROR_UTF8 => 'a string in it is not valid UTF-8',
+            default => sprintf('json_encode() refused it with error %d', $code),
+        };
+    }
+
+    /**
      * The message for a value an HTTP header cannot carry, such as one with a
      * trailing newline. It describes the value and never quotes it, since it
      * may be the token or the actor id.

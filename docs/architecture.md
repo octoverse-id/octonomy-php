@@ -35,7 +35,8 @@ changing the types and paths.
 2. `Transport` refuses a v2-only feature (a namespace, `include_global`) on a v1 client before
    anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
    construction, attaches headers (the namespace pair only when the request names one), and
-   JSON-encodes the body (`http_errors` is off so the SDK owns status handling).
+   JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts (`http_errors`
+   is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
@@ -43,8 +44,8 @@ changing the types and paths.
    field's path in the body (`data.usage_count`, `data[2].slug`, `pagination.count`). A non-JSON 2xx
    throws `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the
    `{error:{...}}` envelope leniently and returns the most specific subclass, by code first and status
-   second. A Guzzle failure becomes a `TransportException` that quotes Guzzle's error without chaining
-   it, since Guzzle's exception holds the request's headers and body. Each of these exceptions
+   second. Anything the HTTP client throws becomes a `TransportException` that quotes its error,
+   redacted, without chaining it, since Guzzle's exception holds the request's headers and body. Each of these exceptions
    carries the `RequestContext` `Transport` built for the request before sending it, and none
    carries what `Internal\Redaction` lists.
 

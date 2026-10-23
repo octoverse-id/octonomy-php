@@ -6,7 +6,6 @@ namespace Octoverse\Octonomy\Http;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
@@ -124,8 +123,8 @@ final class Transport
         ?RequestOptions $options = null,
     ): mixed {
         $context = $this->context($method, $path, $query, $options);
-        $redaction = $this->redaction($body, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options, $redaction), $redaction);
+        [$response, $redaction] = $this->send($context, $body, $options);
+        $decoded = $this->decode($context, $response, $redaction);
 
         $data = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!self::isResource($data)) {
@@ -165,8 +164,8 @@ final class Transport
         ?RequestOptions $options = null,
     ): ResultList {
         $context = $this->context($method, $path, $query, $options);
-        $redaction = $this->redaction($body, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options, $redaction), $redaction);
+        [$response, $redaction] = $this->send($context, $body, $options);
+        $decoded = $this->decode($context, $response, $redaction);
 
         $rows = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!is_array($rows)) {
@@ -212,34 +211,44 @@ final class Transport
         ?array $body = null,
         ?RequestOptions $options = null,
     ): void {
-        $this->send($this->context($method, $path, $query, $options), $body, $options, $this->redaction($body, $options));
+        $this->send($this->context($method, $path, $query, $options), $body, $options);
     }
 
     /**
      * Describe a request before it is sent, for every exception it may end in.
      * The path is placed under this client's api_version prefix, as sent.
      *
+     * The namespace is a copy, and send() builds the headers from it, so the
+     * context records what was sent even if the caller's NamespaceScope
+     * changes afterwards, as the PHP 7.4 line, which has no readonly, allows.
+     *
      * @param array<string, string> $query
      */
     private function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
     {
+        $namespace = $options?->namespace;
+
         return new RequestContext(
             $this->apiVersion,
             $method,
             '/api/' . $this->apiVersion . '/' . ltrim($path, '/'),
             $query,
-            $options?->namespace,
+            $namespace === null ? null : clone $namespace,
         );
     }
 
     /**
-     * Send the request $context describes and return the 2xx response. Non-2xx
-     * responses and network failures throw, carrying $context, with what they
-     * quote redacted by $redaction, the snapshot taken before sending.
+     * Send the request $context describes and return the 2xx response, with
+     * the redaction every message about it applies: a snapshot of the token,
+     * the actor id and the body exactly as they were handed to the HTTP
+     * client. A non-2xx response, and anything the client throws, become
+     * exceptions carrying $context.
      *
      * @param array<string, mixed>|null $body
+     *
+     * @return array{ResponseInterface, Redaction}
      */
-    private function send(RequestContext $context, ?array $body, ?RequestOptions $options, Redaction $redaction): ResponseInterface
+    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): array
     {
         $namespace = $context->namespace;
         $query = $context->query;
@@ -254,6 +263,10 @@ final class Transport
             $headers['X-Namespace-Type'] = $namespace->type;
             $headers['X-Namespace-ID'] = $namespace->id;
         }
+        $encoded = $body === null ? null : $this->encode($context, $body);
+        if ($encoded !== null) {
+            $headers['Content-Type'] = 'application/json';
+        }
         // Checked again here, not trusted from Config, RequestOptions and
         // NamespaceScope: the PHP 7.4 line loses readonly, so a value can be
         // changed after its constructor checked it. Guzzle refuses a value a
@@ -264,6 +277,10 @@ final class Transport
             }
         }
 
+        // Taken from the very bytes and values handed to the client, before it
+        // runs: its middleware can change an object the caller still holds.
+        $redaction = Redaction::of($this->token, $actor, $encoded);
+
         $requestOptions = [
             'headers' => $headers,
             'http_errors' => false,
@@ -271,16 +288,18 @@ final class Transport
         if ($query !== []) {
             $requestOptions['query'] = $query;
         }
-        if ($body !== null) {
-            $requestOptions['json'] = $body;
+        if ($encoded !== null) {
+            $requestOptions['body'] = $encoded;
         }
 
         try {
             $response = $this->http->request($context->method, $this->baseUrl . $context->path, $requestOptions);
-        } catch (GuzzleException $e) {
-            // Quoted in the message, not chained as getPrevious(): Guzzle's
-            // exception holds the request it failed to send, Authorization
-            // header and body included (Redaction).
+        } catch (\Throwable $e) {
+            // Anything the client, a handler or middleware throws, not only a
+            // GuzzleException: none may leave with this request's frames
+            // unscrubbed. Quoted in the message, not chained as getPrevious():
+            // Guzzle's exception holds the request it failed to send,
+            // Authorization header and body included (Redaction).
             throw new TransportException(
                 ErrorMessage::forClientFailure(
                     $context,
@@ -304,7 +323,38 @@ final class Transport
             );
         }
 
-        return $response;
+        return [$response, $redaction];
+    }
+
+    /**
+     * The body as JSON, encoded once: these bytes are what is sent and what is
+     * redacted, so an object in the body cannot encode one way for each. The
+     * same bytes as Guzzle's json option: json_encode()'s default flags, the
+     * throw flag aside.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws \InvalidArgumentException when it does not encode; nothing is sent
+     */
+    private function encode(RequestContext $context, array $body): string
+    {
+        try {
+            return json_encode($body, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            // Described from json_encode()'s error code, or named by class when
+            // an object's jsonSerialize() threw; never quoted and never chained,
+            // since a message or a frame can hold the body.
+            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unencodable(
+                $context,
+                $e instanceof \JsonException
+                    ? ErrorMessage::jsonError($e->getCode())
+                    : sprintf('an object in it threw %s from jsonSerialize(), whose message is not shown', $e::class),
+                $e instanceof \JsonException
+                    ? 'put only what JSON can encode in it: UTF-8 strings, finite numbers, booleans, null, and arrays'
+                    . ' or objects of those.'
+                    : 'fix the jsonSerialize() that throws.',
+            )));
+        }
     }
 
     /**
@@ -410,19 +460,6 @@ final class Transport
         $actor = $options->actorId ?? $this->actorId;
 
         return $actor === '' ? null : $actor;
-    }
-
-    /**
-     * A snapshot of the values a request carries that no message may quote,
-     * from the token, actor and body it is about to send. Taken before sending,
-     * since the HTTP client's middleware runs before any failure is known and
-     * can change an object in the body (Redaction::of()).
-     *
-     * @param array<string, mixed>|null $body
-     */
-    private function redaction(?array $body, ?RequestOptions $options): Redaction
-    {
-        return Redaction::of($this->token, $this->actor($options), $body);
     }
 
     /**

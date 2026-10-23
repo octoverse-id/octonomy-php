@@ -134,7 +134,9 @@ final class TransportTest extends SdkTestCase
             self::assertSame($request->getMethod(), $e->context->method);
             self::assertSame($request->getUri()->getPath(), $e->context->path);
             self::assertSame($this->lastQuery(), $e->context->query);
-            self::assertSame($namespace, $e->context->namespace);
+            // A copy, so it records what was sent whatever happens to the caller's.
+            self::assertEquals($namespace, $e->context->namespace);
+            self::assertNotNull($e->context->namespace);
             self::assertSame($request->getHeaderLine('X-Namespace-ID'), $e->context->namespace->id);
             self::assertSame(ApiVersion::V2, $e->context->apiVersion);
         }
