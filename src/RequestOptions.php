@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Internal\ErrorMessage;
+use Octoverse\Octonomy\Internal\Redaction;
+
 /**
  * RequestOptions customizes a single request. $actorId overrides
  * Config::$actorId for one call (sent as X-Actor-ID to attribute the mutation in
@@ -16,10 +19,20 @@ namespace Octoverse\Octonomy;
  */
 final class RequestOptions
 {
+    /**
+     * @throws \InvalidArgumentException when $actorId holds a control character, which the X-Actor-ID
+     *                                   header cannot carry
+     */
     public function __construct(
         public readonly ?string $actorId = null,
         public readonly ?NamespaceScope $namespace = null,
-    ) {}
+    ) {
+        // Refused here, never quoted: Guzzle would refuse it on sending with an
+        // error that quotes it, and the actor id is never shown (Redaction).
+        if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
+            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unsendable('actorId', 'X-Actor-ID')));
+        }
+    }
 
     /**
      * Convenience constructor for the common case of attributing a single call

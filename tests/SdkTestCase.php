@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests;
 
 use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\BufferStream;
+use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Utils;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
@@ -17,6 +23,7 @@ use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * SdkTestCase wires a Client to a Guzzle MockHandler so tests can queue responses
@@ -24,6 +31,11 @@ use Psr\Http\Message\RequestInterface;
  */
 abstract class SdkTestCase extends TestCase
 {
+    /** Kinds of stream() body. */
+    protected const STREAM_SEEKABLE = 'seekable';
+    protected const STREAM_NO_SEEK = 'no seek';
+    protected const STREAM_DRAINING = 'draining';
+
     protected MockHandler $mock;
 
     /**
@@ -60,21 +72,95 @@ abstract class SdkTestCase extends TestCase
      * tests of what the SDK reports when there is no response to read. The
      * failure is Guzzle's own ConnectException, queued on the MockHandler, so
      * no socket is opened.
+     *
+     * $describe, when given, writes the error's message from the request, as a
+     * client or middleware that quotes what it sent would. $status, when given,
+     * makes the failure a BadResponseException holding an empty response with
+     * that status, as middleware that throws on a status would.
+     *
+     * @param array<string, mixed>                       $config     overrides of the default options, as for
+     *                                                               clientWith()
+     * @param (\Closure(RequestInterface): string)|null $describe
+     * @param (\Closure(RequestInterface): RequestInterface)|null $middleware changes the request on its way to
+     *                                                                       the handler
      */
-    protected function clientThatCannotConnect(): Client
-    {
-        $this->mock = new MockHandler([
-            // Returned, not thrown: MockHandler rejects the request with a
-            // Throwable a queued callable returns, as a real handler does.
-            static fn(RequestInterface $request): ConnectException => new ConnectException('Connection refused', $request),
-        ]);
+    protected function clientThatCannotConnect(
+        array $config = [],
+        ?\Closure $describe = null,
+        ?int $status = null,
+        ?\Closure $middleware = null,
+    ): Client {
+        return $this->clientWhoseHttpClientThrows(
+            $config,
+            static fn(RequestInterface $request): TransferException => $status === null
+                ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
+                // BadResponseException takes the response in this place on
+                // Guzzle 7 and 8 alike; RequestException no longer does on 8.
+                : new BadResponseException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
+            [],
+            $middleware,
+        );
+    }
 
-        return new Client([
+    /**
+     * A request body stream holding $contents, for middleware in a test to
+     * put on a request: STREAM_SEEKABLE, STREAM_NO_SEEK (cannot seek, like a
+     * socket), or STREAM_DRAINING (cannot seek, and reports a size of 0 once
+     * read, like a buffer).
+     */
+    protected static function stream(string $contents, string $kind = self::STREAM_SEEKABLE): StreamInterface
+    {
+        if ($kind === self::STREAM_DRAINING) {
+            $buffer = new BufferStream();
+            $buffer->write($contents);
+
+            return $buffer;
+        }
+        $stream = Utils::streamFor($contents);
+
+        return $kind === self::STREAM_NO_SEEK ? new NoSeekStream($stream) : $stream;
+    }
+
+    /**
+     * Build a Client whose HTTP client throws what $throw returns for the
+     * request, as a handler or middleware that throws would: any Throwable, not
+     * only one of Guzzle's.
+     *
+     * $clientDefaults are the Guzzle client's own default request options,
+     * such as 'headers' or 'json', as an injected client may carry.
+     *
+     * @param array<string, mixed>                  $config         overrides of the default options, as for
+     *                                                              clientWith()
+     * $middleware, when given, changes each request on its way to the handler,
+     * as Guzzle's Middleware::mapRequest() does.
+     *
+     * @param \Closure(RequestInterface): \Throwable              $throw
+     * @param array<string, mixed>                              $clientDefaults
+     * @param (\Closure(RequestInterface): RequestInterface)|null $middleware
+     */
+    protected function clientWhoseHttpClientThrows(
+        array $config,
+        \Closure $throw,
+        array $clientDefaults = [],
+        ?\Closure $middleware = null,
+    ): Client {
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('the client owns its HTTP client');
+        }
+        // Returned, not thrown: MockHandler rejects the request with a
+        // Throwable a queued callable returns, as a real handler does.
+        $this->mock = new MockHandler([$throw]);
+        $stack = HandlerStack::create($this->mock);
+        if ($middleware !== null) {
+            $stack->push(Middleware::mapRequest($middleware));
+        }
+
+        return new Client(array_merge([
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
-            'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
-        ]);
+            'http_client' => new GuzzleClient(['handler' => $stack] + $clientDefaults),
+        ], $config));
     }
 
     /**

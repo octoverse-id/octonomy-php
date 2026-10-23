@@ -50,6 +50,36 @@ final class NamespaceTest extends SdkTestCase
         yield 'a blank type' => [' ', 'm-42', $noType];
     }
 
+    /**
+     * A header cannot carry a control character, and Guzzle's refusal would be
+     * thrown from frames that hold the token and the body (Redaction).
+     */
+    #[DataProvider('unsendablePairs')]
+    public function testANamespaceAHeaderCannotCarryIsRefused(string $type, string $id, string $expected): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($expected);
+
+        new NamespaceScope($type, $id);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function unsendablePairs(): iterable
+    {
+        yield 'a type with a newline' => [
+            "merchant\n",
+            'm-42',
+            'octonomy: the namespace type holds a line break or another control character, which the X-Namespace-Type header cannot carry;',
+        ];
+        yield 'an id with a carriage return' => [
+            'merchant',
+            "m-42\r",
+            'octonomy: the namespace id holds a line break or another control character, which the X-Namespace-ID header cannot carry;',
+        ];
+    }
+
     public function testANamespaceKeepsItsValuesAsGiven(): void
     {
         // Opaque and caller-canonical: the server does not case-fold them.
@@ -127,7 +157,12 @@ final class NamespaceTest extends SdkTestCase
             $call($client, new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')));
             self::fail("expected {$operation} to be refused");
         } catch (\LogicException $e) {
-            self::assertSame('octonomy: a namespace requires api_version v2; this client is v1', $e->getMessage());
+            self::assertSame(
+                'octonomy: a namespace requires api_version v2; this client is v1, and /api/v1 has no namespaces.'
+                . " Fix: build the Client with 'api_version' => 'v2' (Octonomy server 2.0.0 or newer), or leave the"
+                . ' namespace out of RequestOptions to use the global partition.',
+                $e->getMessage(),
+            );
         }
         $this->assertNothingSent();
     }
@@ -166,7 +201,12 @@ final class NamespaceTest extends SdkTestCase
                 $list($client, $includeGlobal);
                 self::fail("expected {$operation} to be refused");
             } catch (\LogicException $e) {
-                self::assertSame('octonomy: include_global requires api_version v2; this client is v1', $e->getMessage());
+                self::assertSame(
+                    'octonomy: include_global requires api_version v2; this client is v1, and /api/v1 would ignore it.'
+                    . " Fix: build the Client with 'api_version' => 'v2' (Octonomy server 2.0.0 or newer), or leave"
+                    . ' include_global null.',
+                    $e->getMessage(),
+                );
             }
             $this->assertNothingSent();
         }

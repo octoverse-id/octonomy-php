@@ -218,7 +218,8 @@ final class CapturedCorpusTest extends SdkTestCase
             } catch (ApiException $e) {
                 self::assertSame($captured->status, $e->statusCode);
                 self::assertSame($body['error']['code'], $e->errorCode);
-                self::assertSame($body['error']['message'], $e->getMessage());
+                self::assertSame($body['error']['message'], $e->serverMessage);
+                self::assertStringContainsString("Server said: \"{$body['error']['message']}\"", $e->getMessage());
                 self::assertSame($body['error']['request_id'], $e->requestId);
             }
 

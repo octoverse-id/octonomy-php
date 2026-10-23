@@ -38,9 +38,14 @@ final class ApiVersion
     public static function check(string $apiVersion): string
     {
         if ($apiVersion !== self::V1 && $apiVersion !== self::V2) {
-            throw new ConfigurationException(
-                sprintf('octonomy: api_version must be "%s" or "%s", got "%s"', self::V1, self::V2, $apiVersion),
-            );
+            throw new ConfigurationException(sprintf(
+                'octonomy: api_version must be "%s" or "%s", got "%s". Fix: use "v2" (ApiVersion::V2, the default,'
+                . ' for Octonomy server 2.0.0 or newer) or "v1" (ApiVersion::V1, for an older server); both are'
+                . ' lowercase.',
+                self::V1,
+                self::V2,
+                $apiVersion,
+            ));
         }
 
         return $apiVersion;

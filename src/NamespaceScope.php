@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Internal\ErrorMessage;
+use Octoverse\Octonomy\Internal\Redaction;
+
 /**
  * NamespaceScope places one request in a merchant or sub-tenant namespace, sent
  * as the X-Namespace-Type / X-Namespace-ID header pair. Pass it per request
@@ -16,7 +19,8 @@ namespace Octoverse\Octonomy;
  * carries one, before sending it.
  *
  * The type and id travel as one atomic pair: neither may be blank, since half a
- * pair names no namespace. Both are opaque, caller-canonical strings that the
+ * pair names no namespace, and neither may hold a control character, which a
+ * header cannot carry. Both are opaque, caller-canonical strings that the
  * server does not case-fold, so "Merchant" and "merchant" are different types.
  *
  * Named NamespaceScope rather than Namespace because `namespace` is a reserved
@@ -32,7 +36,7 @@ namespace Octoverse\Octonomy;
 final class NamespaceScope
 {
     /**
-     * @throws \InvalidArgumentException when the type or the id is blank
+     * @throws \InvalidArgumentException when the type or the id is blank or holds a control character
      */
     public function __construct(
         public readonly string $type,
@@ -47,6 +51,13 @@ final class NamespaceScope
             throw new \InvalidArgumentException(
                 sprintf('octonomy: namespace type "%s" has no id; a namespace is a type and an id together', $type),
             );
+        }
+        // Refused here rather than by Guzzle, whose error is thrown from frames
+        // that hold the Authorization header and the body (Redaction).
+        foreach (['type' => [$type, 'X-Namespace-Type'], 'id' => [$id, 'X-Namespace-ID']] as $part => [$value, $header]) {
+            if (!Redaction::isHeaderSafe($value)) {
+                throw new \InvalidArgumentException(ErrorMessage::unsendable("the namespace {$part}", $header));
+            }
         }
     }
 }

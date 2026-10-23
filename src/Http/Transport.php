@@ -6,19 +6,24 @@ namespace Octoverse\Octonomy\Http;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Psr7\Request as Psr7Request;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Json;
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
+use Psr\Http\Client\NetworkExceptionInterface;
+use Psr\Http\Client\RequestExceptionInterface;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Transport is the single HTTP entry point for the SDK. It builds requests under
@@ -26,7 +31,8 @@ use Octoverse\Octonomy\ResultList;
  * auth/tenant headers and any per-request namespace pair, sends them through a
  * Guzzle client, and converts non-2xx responses into typed exceptions. A v2-only
  * feature on a v1 client is refused before anything is sent. Every exception it
- * throws for a request carries that request's RequestContext.
+ * throws for a request carries that request's RequestContext, and none carries
+ * the token, a header or the body (Redaction).
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -43,6 +49,12 @@ final class Transport
     private readonly ClientInterface $http;
     private readonly string $apiVersion;
     private readonly string $baseUrl;
+
+    /** The scheme, host and port of the base URL, as a message names the server. */
+    private readonly string $origin;
+
+    /** Kept apart from the header only so a message can redact it (Redaction::of()). */
+    private readonly string $token;
     private readonly ?string $actorId;
 
     /** @var array<string, string> */
@@ -61,8 +73,10 @@ final class Transport
         // readonly in the downgrade, so a Config can be changed after its
         // constructor checked it.
         $this->apiVersion = ApiVersion::check($config->apiVersion);
+        $this->token = $config->token;
         $this->actorId = $config->actorId;
         $this->baseUrl = rtrim($config->baseUrl, '/');
+        $this->origin = self::origin($config->baseUrl);
         $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
         $this->defaultHeaders = [
             'Authorization' => 'Bearer ' . $config->token,
@@ -111,14 +125,15 @@ final class Transport
         ?RequestOptions $options = null,
     ): mixed {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options));
+        [$response, $redaction] = $this->send($context, $body, $options);
+        $decoded = $this->decode($context, $response, $redaction);
 
         $data = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!self::isResource($data)) {
             throw new MalformedResponseException('expected a non-empty JSON object under "data"', null, $context);
         }
 
-        return $this->hydrate($context, 'data', $hydrate, Json::members($data));
+        return $this->hydrate($context, 'data', $hydrate, Json::members($data), $redaction);
     }
 
     /**
@@ -151,7 +166,8 @@ final class Transport
         ?RequestOptions $options = null,
     ): ResultList {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options));
+        [$response, $redaction] = $this->send($context, $body, $options);
+        $decoded = $this->decode($context, $response, $redaction);
 
         $rows = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!is_array($rows)) {
@@ -169,12 +185,12 @@ final class Transport
 
         $data = [];
         foreach ($rows as $i => $row) {
-            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row));
+            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row), $redaction);
         }
 
         return new ResultList(
             $data,
-            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination)),
+            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination), $redaction),
         );
     }
 
@@ -204,70 +220,160 @@ final class Transport
      * Describe a request before it is sent, for every exception it may end in.
      * The path is placed under this client's api_version prefix, as sent.
      *
+     * The namespace is a copy, and send() builds the headers from it, so the
+     * context records what was sent even if the caller's NamespaceScope
+     * changes afterwards, as the PHP 7.4 line, which has no readonly, allows.
+     *
      * @param array<string, string> $query
      */
     private function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
     {
+        $namespace = $options?->namespace;
+
         return new RequestContext(
             $this->apiVersion,
             $method,
             '/api/' . $this->apiVersion . '/' . ltrim($path, '/'),
             $query,
-            $options?->namespace,
+            $namespace === null ? null : clone $namespace,
         );
     }
 
     /**
-     * Send the request $context describes and return the raw body of a 2xx
-     * response. Non-2xx responses and network failures throw, carrying
-     * $context.
+     * Send the request $context describes and return the 2xx response, with
+     * the redaction every message about it applies: a snapshot of the token,
+     * the actor id and the body exactly as they were handed to the HTTP
+     * client. A non-2xx response, and anything the client throws, become
+     * exceptions carrying $context.
      *
      * @param array<string, mixed>|null $body
+     *
+     * @return array{ResponseInterface, Redaction}
      */
-    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): string
+    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): array
     {
         $namespace = $context->namespace;
         $query = $context->query;
         $this->refuseV2OnlyFeatures($namespace, $query);
 
         $headers = $this->defaultHeaders;
-        $actor = $this->actorId;
-        if ($options !== null && $options->actorId !== null) {
-            $actor = $options->actorId;
-        }
-        if ($actor !== null && $actor !== '') {
+        $actor = $this->actor($options);
+        if ($actor !== null) {
             $headers['X-Actor-ID'] = $actor;
         }
         if ($namespace !== null) {
             $headers['X-Namespace-Type'] = $namespace->type;
             $headers['X-Namespace-ID'] = $namespace->id;
         }
+        $encoded = $body === null ? null : $this->encode($context, $body);
+        if ($encoded !== null) {
+            $headers['Content-Type'] = 'application/json';
+        }
+        // Checked again here, not trusted from Config, RequestOptions and
+        // NamespaceScope: the PHP 7.4 line loses readonly, so a value can be
+        // changed after its constructor checked it. Guzzle refuses a value a
+        // header cannot carry from frames that hold every header and the body.
+        foreach ($headers as $name => $value) {
+            if (!Redaction::isHeaderSafe($value)) {
+                throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unsendable("the {$name} value", $name)));
+            }
+        }
 
-        $requestOptions = [
-            'headers' => $headers,
-            'http_errors' => false,
-        ];
-        if ($query !== []) {
-            $requestOptions['query'] = $query;
-        }
-        if ($body !== null) {
-            $requestOptions['json'] = $body;
-        }
+        // Taken from the very bytes and values handed to the client, before it
+        // runs: its middleware can change an object the caller still holds.
+        $redaction = Redaction::of($this->token, $actor, $encoded);
 
         try {
-            $response = $this->http->request($context->method, $this->baseUrl . $context->path, $requestOptions);
-        } catch (GuzzleException $e) {
-            throw new TransportException('octonomy: request failed: ' . $e->getMessage(), $context, $e);
+            // Built inside the try, so a URL Guzzle cannot parse is reported,
+            // redacted, like any client failure rather than escaping raw.
+            $request = new Psr7Request($context->method, $this->uri($context), $headers, $encoded);
+            // The request is the SDK's alone, so $context and $redaction
+            // describe what goes out. Guzzle merges the injected client's own
+            // defaults under these options and then drops a null one, so a
+            // null headers, body or json cancels that default, the query, the
+            // request's own, replaces a default one, and auth false disables a
+            // default one, leaving the SDK's Authorization header. Guzzle's
+            // declared option types allow no such cancelling of form_params
+            // or multipart, so a client passed to the SDK must not set them
+            // (README). Its transport options and its middleware still apply.
+            $response = $this->http->send($request, [
+                'http_errors' => false,
+                'headers' => null,
+                'query' => $context->query,
+                'body' => null,
+                'json' => null,
+                'auth' => false,
+            ]);
+        } catch (\Throwable $e) {
+            // Anything the client, a handler or middleware throws, not only a
+            // GuzzleException: none may leave with this request's frames
+            // unscrubbed. Quoted in the message, not chained as getPrevious():
+            // Guzzle's exception holds the request it failed to send,
+            // Authorization header and body included (Redaction). That request,
+            // as middleware left it, is redacted too.
+            $sent = $e instanceof RequestExceptionInterface || $e instanceof NetworkExceptionInterface ? $e->getRequest() : null;
+            throw new TransportException(
+                ErrorMessage::forClientFailure(
+                    $context,
+                    $this->origin,
+                    $e,
+                    self::statusOf($e),
+                    $sent === null ? $redaction : $redaction->andSent($sent),
+                ),
+                $context,
+            );
         }
 
         $status = $response->getStatusCode();
-        $raw = (string) $response->getBody();
-
         if ($status < 200 || $status >= 300) {
-            throw ApiException::fromResponse($status, Json::tryDecode($raw), $context);
+            throw ApiException::fromResponse(
+                $status,
+                Json::tryDecode((string) $response->getBody()),
+                $context,
+                $response->getHeaderLine('Content-Type'),
+                $redaction,
+            );
         }
 
-        return $raw;
+        return [$response, $redaction];
+    }
+
+    /**
+     * The body as JSON, encoded once: these bytes are what is sent and what is
+     * redacted, so an object in the body cannot encode one way for each. The
+     * same bytes as Guzzle's json option: json_encode()'s default flags, the
+     * throw flag aside.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws \InvalidArgumentException when it does not encode; nothing is sent
+     */
+    private function encode(RequestContext $context, array $body): string
+    {
+        try {
+            return json_encode($body, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            // json_encode() refused the body only when the call above threw:
+            // a JsonException can also come from an object's jsonSerialize(),
+            // or from a json_encode() that one calls, whose frame is then in
+            // another file. Described from the error code, or named by class;
+            // never quoted and never chained, since a message or a frame can
+            // hold the body.
+            $thrower = $e->getTrace()[0] ?? [];
+            $refused = $e instanceof \JsonException
+                && ($thrower['function'] ?? null) === 'json_encode'
+                && ($thrower['file'] ?? null) === __FILE__;
+            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unencodable(
+                $context,
+                $refused
+                    ? ErrorMessage::jsonError($e->getCode())
+                    : sprintf('an object in it threw %s from jsonSerialize(), whose message is not shown', $e::class),
+                $refused
+                    ? 'put only what JSON can encode in it: UTF-8 strings, finite numbers, booleans, null, and arrays'
+                    . ' or objects of those.'
+                    : 'fix the jsonSerialize() that throws.',
+            )));
+        }
     }
 
     /**
@@ -275,14 +381,28 @@ final class Transport
      * TransportException for the request it answered: a proxy or gateway that
      * sent HTML with a 2xx gave no usable response.
      *
-     * @throws TransportException when $raw is not valid JSON
+     * @throws TransportException when the body is not valid JSON
      */
-    private function decode(RequestContext $context, string $raw): mixed
+    private function decode(RequestContext $context, ResponseInterface $response, Redaction $redaction): mixed
     {
+        $raw = (string) $response->getBody();
         try {
             return Json::decode($raw);
         } catch (\JsonException $e) {
-            throw new TransportException('Failed to decode Octonomy response: ' . $e->getMessage(), $context, $e);
+            // Its message is PHP's own and is quoted; the exception is not
+            // chained, since json_decode()'s frame in its trace holds the raw
+            // body, which can echo the request.
+            throw new TransportException(
+                ErrorMessage::forUndecodable(
+                    $context,
+                    $response->getStatusCode(),
+                    $response->getHeaderLine('Content-Type'),
+                    strlen($raw),
+                    $e->getMessage(),
+                    $redaction,
+                ),
+                $context,
+            );
         }
     }
 
@@ -306,17 +426,30 @@ final class Transport
         if ($this->apiVersion === ApiVersion::V2) {
             return;
         }
+        // Scrubbed like an OctonomyException, since the frames below this one
+        // hold the request body and the RequestOptions.
         if ($namespace !== null) {
-            throw new \LogicException(sprintf('octonomy: a namespace requires api_version v2; this client is %s', $this->apiVersion));
+            throw Redaction::scrub(new \LogicException(sprintf(
+                'octonomy: a namespace requires api_version v2; this client is %s, and /api/v1 has no namespaces.'
+                . ' Fix: build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or leave'
+                . ' the namespace out of RequestOptions to use the global partition.',
+                $this->apiVersion,
+            )));
         }
         if (array_key_exists('include_global', $query)) {
-            throw new \LogicException(sprintf('octonomy: include_global requires api_version v2; this client is %s', $this->apiVersion));
+            throw Redaction::scrub(new \LogicException(sprintf(
+                'octonomy: include_global requires api_version v2; this client is %s, and /api/v1 would ignore it.'
+                . ' Fix: build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or leave'
+                . ' include_global null.',
+                $this->apiVersion,
+            )));
         }
     }
 
     /**
      * Run a hydrator over one object of the body, and place any field it rejects
-     * at this request and at $at, the object's path in the body.
+     * at this request and at $at, the object's path in the body, with any value
+     * the report quotes redacted by the request's $redaction.
      *
      * @template T
      *
@@ -325,13 +458,80 @@ final class Transport
      *
      * @return T
      */
-    private function hydrate(RequestContext $context, string $at, \Closure $hydrate, array $object): mixed
-    {
+    private function hydrate(
+        RequestContext $context,
+        string $at,
+        \Closure $hydrate,
+        array $object,
+        Redaction $redaction,
+    ): mixed {
         try {
             return $hydrate($object, $this->apiVersion);
         } catch (MalformedResponseException $e) {
-            throw $e->locate($context, $at);
+            throw $e->locate($context, $at, $redaction);
         }
+    }
+
+    /**
+     * The status of the response a client's exception holds, or null when it
+     * holds none. Guzzle 7 puts getResponse() on RequestException, where it
+     * may return null, and Guzzle 8 only on ResponseException; any client may
+     * offer one. Best effort, since it runs while another failure is being
+     * reported: a getResponse() that cannot be called, or that throws, counts
+     * as no response rather than replacing that failure with its own.
+     */
+    private static function statusOf(object $e): ?int
+    {
+        $getResponse = [$e, 'getResponse'];
+        if (!is_callable($getResponse)) {
+            return null;
+        }
+        try {
+            $response = $getResponse();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $response instanceof ResponseInterface ? $response->getStatusCode() : null;
+    }
+
+    /**
+     * The URL $context describes: the base URL, the path, and the query as
+     * sent, encoded as Guzzle's query option encodes one.
+     */
+    private function uri(RequestContext $context): string
+    {
+        $uri = $this->baseUrl . $context->path;
+
+        return $context->query === [] ? $uri : $uri . '?' . http_build_query($context->query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * The X-Actor-ID a request sends: RequestOptions::$actorId when set, else
+     * Config::$actorId, and none when the one that applies is empty.
+     */
+    private function actor(?RequestOptions $options): ?string
+    {
+        $actor = $options->actorId ?? $this->actorId;
+
+        return $actor === '' ? null : $actor;
+    }
+
+    /**
+     * The scheme, host and port of $baseUrl, such as "https://octonomy.example.com:8443".
+     * Any user name or password in it is left out, so a message can name the
+     * server it could not reach.
+     */
+    private static function origin(string $baseUrl): string
+    {
+        $parts = parse_url($baseUrl);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+            // Config refuses such a URL. Only the PHP 7.4 line, where Config is
+            // mutable, can get here; name the setting rather than echo it.
+            return 'base_url';
+        }
+
+        return $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
     /**

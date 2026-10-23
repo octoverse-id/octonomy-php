@@ -64,7 +64,11 @@ $client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOpt
 ```
 
 You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
-`http_client` option.
+`http_client` option. Its transport options and middleware apply to every SDK request; its own default
+headers, query and body do not, since the SDK builds each request itself. Add a header with middleware
+(`Middleware::mapRequest()`) instead. Its default `auth` is disabled for SDK requests too. Do not give it
+a default `form_params` or `multipart`: Guzzle would put either in place of the SDK's body, and its
+option types offer no way for a request to cancel one.
 
 ## API version and namespaces
 
@@ -104,7 +108,7 @@ A v1 client refuses a namespace or `includeGlobal` with a `LogicException` befor
 ## Errors
 
 Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exception\ApiException`, which
-exposes `$statusCode`, `$errorCode`, `$details`, and `$requestId`:
+exposes `$statusCode`, `$errorCode`, `$details`, `$requestId`, and `$serverMessage`:
 
 ```php
 use Octoverse\Octonomy\Exception\FeatureDisabledException;
@@ -129,13 +133,30 @@ namespaced 404 then records where the read looked and whether it asked for `incl
 status alone cannot (the server never reveals whether the id exists in another scope). It never holds
 the token, the tenant or actor id, any other header, or the request body.
 
+Every message says what happened and with which request, why when the SDK actually knows, and how to fix
+it, and quotes the server's own message (kept as sent in `$serverMessage`):
+
+```text
+octonomy: namespaced writes are disabled on this Octonomy deployment (namespaced_writes_disabled, HTTP 403).
+Request: POST /api/v2/tags in namespace merchant:globex. OCTONOMY_NAMESPACE_WRITE_ENABLED is off on the
+server, as it is by default. Fix: set OCTONOMY_NAMESPACE_WRITE_ENABLED=true on the server, or omit the
+namespace to write globally. Server said: "Namespaced writes are not enabled." Request ID: req_...
+```
+
+No exception the SDK throws carries the token, the `Authorization` header, the request body, or
+`X-Actor-ID`: not in its message (text quoted from the HTTP client or the server has them replaced
+with `[redacted]`), its context, or the arguments of the SDK's frames in its trace.
+
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`
-naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A network failure, or a 2xx body that is not JSON from a method that
-returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
+naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A failure the
+HTTP client throws (a network failure, a timeout, or middleware that throws), or a 2xx body that is not
+JSON from a method that returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
 extends `Octoverse\Octonomy\Exception\OctonomyException`. A mistake in the call itself, caught before
-anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id), throws
-PHP's `LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to retry.
+anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id, a
+per-request header value with a control character in it, a body that cannot be encoded as JSON),
+throws PHP's `LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to
+retry. A configured value a header cannot carry throws `ConfigurationException`.
 
 ## Pagination
 

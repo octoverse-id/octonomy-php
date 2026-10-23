@@ -7,10 +7,16 @@ namespace Octoverse\Octonomy\Exception;
 use Octoverse\Octonomy\RequestContext;
 
 /**
- * TransportException wraps a network-level failure (connection error, timeout,
- * or an undecodable response body) — i.e. the SDK never received a usable HTTP
- * response from Octonomy. Inspect getPrevious() for the underlying cause, and
- * $context for the request that failed.
+ * TransportException means the SDK got no response it could use: the HTTP
+ * client threw (a connection error, a timeout, or middleware that throws,
+ * whose exception may hold a response), or a 2xx body was not JSON. $context
+ * describes the request that failed.
+ *
+ * When the HTTP client threw, its error is quoted in the message (with any
+ * value the request carried replaced) and not chained: the client's exception
+ * holds the request, Authorization header and body included. When a 2xx body
+ * was not JSON, the decoder's error is quoted and not chained either: its
+ * json_decode() frame holds the raw body. getPrevious() is always null.
  */
 final class TransportException extends OctonomyException
 {

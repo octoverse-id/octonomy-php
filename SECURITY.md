@@ -5,6 +5,15 @@
 No version of this SDK has been released yet, so there is no supported release. Security fixes land on
 `main`. The support policy for the first release lines is published here before they ship.
 
+## Credentials in exceptions
+
+No exception the SDK throws carries the token, the `Authorization` header, the request body, or
+`X-Actor-ID`: not in its message, its `RequestContext`, an exception it chains, or the arguments of the
+SDK's own frames in its trace, which are removed when the exception is built. This holds on the PHP 7.4
+line too, since it does not rely on attributes. Frames of your own code keep their arguments; set
+`zend.exception_ignore_args=1` in production, or mark your own parameters `#[\SensitiveParameter]`, if
+your code passes the token around. See [docs/api.md](docs/api.md#redaction).
+
 ## Reporting a vulnerability
 
 Please **do not** open a public issue, pull request, or discussion for security vulnerabilities.

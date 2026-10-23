@@ -239,7 +239,7 @@ final class Json
             throw self::wrongType($key, 'an RFC 3339 timestamp', $v);
         }
         if (preg_match(self::TIMESTAMP, $v, $m) !== 1 || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
-            throw new MalformedResponseException(sprintf('must be an RFC 3339 timestamp, got "%s"', $v), $key);
+            throw new MalformedResponseException('must be an RFC 3339 timestamp', $key, null, null, null, $v);
         }
 
         return new \DateTimeImmutable($v);

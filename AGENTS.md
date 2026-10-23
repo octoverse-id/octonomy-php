@@ -44,6 +44,10 @@ stays a faithful, ergonomic client.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.
+- Exception messages follow the formula in `Internal\ErrorMessage`: what happened, why only when the
+  SDK actually knows (and saying so when it does not), the fix, and the values. No message, context or
+  chained exception may carry anything on `Internal\Redaction`'s list; a PHP-native exception thrown
+  from a frame that holds a request goes through `Redaction::scrub()`, as every `OctonomyException` does.
 - Response models are immutable `readonly` DTOs hydrated via `::fromArray($data, $apiVersion)`.
   Hydration is strict and the constructor signature is the field registry: every declared field must
   be present as a key (nullability governs the value only), a wrong JSON type raises, and nothing is

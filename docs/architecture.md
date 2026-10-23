@@ -21,6 +21,8 @@ changing the types and paths.
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
 | `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
 | `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion; `@internal`. |
+| `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
+| `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), and `scrub()`, which removes the SDK frames' arguments from a trace; `@internal`. |
 
 ## Request lifecycle
 
@@ -33,7 +35,9 @@ changing the types and paths.
 2. `Transport` refuses a v2-only feature (a namespace, `include_global`) on a v1 client before
    anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
    construction, attaches headers (the namespace pair only when the request names one), and
-   JSON-encodes the body (`http_errors` is off so the SDK owns status handling).
+   JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts. It builds the
+   PSR-7 request and hands it to the client's `send()` with the client's own default headers, query,
+   body, `json` and `auth` cancelled (`http_errors` is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
@@ -41,8 +45,10 @@ changing the types and paths.
    field's path in the body (`data.usage_count`, `data[2].slug`, `pagination.count`). A non-JSON 2xx
    throws `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the
    `{error:{...}}` envelope leniently and returns the most specific subclass, by code first and status
-   second. Guzzle network failures are wrapped in `TransportException`. Each of these exceptions
-   carries the `RequestContext` `Transport` built for the request before sending it.
+   second. Anything the HTTP client throws becomes a `TransportException` that quotes its error,
+   redacted, without chaining it, since Guzzle's exception holds the request's headers and body. Each of these exceptions
+   carries the `RequestContext` `Transport` built for the request before sending it, and none
+   carries what `Internal\Redaction` lists.
 
 ```
 Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/{v1|v2}

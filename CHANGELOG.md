@@ -56,6 +56,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ApiException` and `TransportException` as `$context`, and on a `MalformedResponseException` raised
   during a request (#16). `ApiException`'s and `TransportException`'s constructors take it as a
   required argument, and `MalformedResponseException`'s takes it in place of the endpoint string.
+- Error messages written to one formula (#17): what happened, why when the SDK actually knows, the
+  fix, and the values involved (the request, its namespace, the code, status, server message and
+  request id). A deployment flag names the server setting to change; a 404 names the resource kind and
+  id without suggesting where else it might be; a transport failure, an error without the envelope and
+  an unknown code say that the SDK cannot tell why. `ApiException::$serverMessage` keeps the server's
+  own message, unedited, which `getMessage()` now quotes rather than returns. A refused
+  `Config::fromArray()` names the option keys it did not read.
+- Redaction (#17): no exception carries the token, the `Authorization` header, the request body or
+  `X-Actor-ID` in its message, its `RequestContext`, or the arguments of the SDK's frames in its trace,
+  which `OctonomyException` removes on construction. Text a message quotes from the HTTP client or the
+  server, a malformed field's value included, has the request's token, actor id and body (whole, and
+  each value and nested key) replaced with `[redacted]`.
+  `TransportException` covers anything the HTTP client throws and no longer chains it, since
+  Guzzle's exception holds the request. The SDK encodes the body itself, once, and builds each request
+  itself, sending it with an injected client's own default headers, query, body, `json` and `auth`
+  cancelled (its transport options and middleware still apply; a client must not set a default
+  `form_params` or `multipart`), so what it sends is what it describes and redacts; a body that cannot be encoded throws `InvalidArgumentException` without quoting it. A non-JSON 2xx no longer chains
+  the `JsonException`. A token, tenant
+  id, actor id, user agent or namespace with a control character is refused up front, and again just
+  before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`
