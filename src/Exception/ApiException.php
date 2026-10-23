@@ -5,25 +5,31 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Exception;
 
 use Octoverse\Octonomy\ErrorCode;
+use Octoverse\Octonomy\RequestContext;
 
 /**
  * ApiException represents a non-2xx response from Octonomy. It carries the HTTP
  * status alongside the server's error envelope ({"error": {...}}) so callers can
- * inspect the machine code, details, and request id.
+ * inspect the machine code, details, and request id, and the RequestContext of
+ * the request that failed.
  *
  * Prefer catching the specific subclasses (NotFoundException, ConflictException,
- * ValidationException, AuthenticationException, ForbiddenException) where you
- * need to branch; catch ApiException for the general case.
+ * ValidationException, AuthenticationException, ForbiddenException,
+ * FeatureDisabledException, UnsupportedApiVersionException,
+ * AmbiguousResolutionException) where you need to branch; catch ApiException
+ * for the general case.
  */
 class ApiException extends OctonomyException
 {
     /**
+     * @param RequestContext       $context the request that received this response
      * @param array<string, mixed> $details
      */
     public function __construct(
         string $message,
         public readonly int $statusCode,
         public readonly string $errorCode,
+        public readonly RequestContext $context,
         public readonly array $details = [],
         public readonly ?string $requestId = null,
     ) {
@@ -37,7 +43,7 @@ class ApiException extends OctonomyException
      *
      * @param array<string, mixed> $body
      */
-    public static function fromResponse(int $status, array $body): self
+    public static function fromResponse(int $status, array $body, RequestContext $context): self
     {
         // Read leniently, unlike a 2xx body: whatever a gateway or proxy sent in
         // place of the envelope, the status alone still picks the exception.
@@ -50,20 +56,40 @@ class ApiException extends OctonomyException
 
         $class = self::classFor($code, $status);
 
-        return new $class($message, $status, $code, $details, $requestId);
+        return new $class($message, $status, $code, $context, $details, $requestId);
     }
 
     /**
+     * The exception class for an error response: by its code when the code is
+     * one ErrorCode declares, and by the HTTP status otherwise.
+     *
+     * The code decides first because statuses are shared: a 403 is either a
+     * token without the grant (forbidden) or a deployment flag
+     * (namespaced_writes_disabled), and a 400 is any of seven codes.
+     * Only the five statuses below have a fallback class. Any other status
+     * without a known code, a 503 included, stays a bare ApiException: a 503
+     * without the envelope is a proxy or load balancer, and reading it as
+     * namespace_api_disabled would name a cause the server never stated.
+     *
      * @return class-string<self>
+     *
+     * @internal public so the mapping can be tested without a response body
      */
-    private static function classFor(string $code, int $status): string
+    public static function classFor(string $code, int $status): string
     {
         return match ($code) {
             ErrorCode::NOT_FOUND => NotFoundException::class,
-            ErrorCode::CONFLICT => ConflictException::class,
-            ErrorCode::VALIDATION, ErrorCode::TENANT_MISMATCH, ErrorCode::APPLICATION_MISMATCH, ErrorCode::INACTIVE_TAG => ValidationException::class,
+            ErrorCode::CONFLICT, ErrorCode::SCOPE_IMMUTABLE => ConflictException::class,
+            ErrorCode::VALIDATION,
+            ErrorCode::TENANT_MISMATCH,
+            ErrorCode::APPLICATION_MISMATCH,
+            ErrorCode::INACTIVE_TAG,
+            ErrorCode::NAMESPACE_INVALID => ValidationException::class,
             ErrorCode::AUTH_REQUIRED => AuthenticationException::class,
             ErrorCode::FORBIDDEN => ForbiddenException::class,
+            ErrorCode::NAMESPACED_WRITES_DISABLED, ErrorCode::NAMESPACE_API_DISABLED => FeatureDisabledException::class,
+            ErrorCode::NAMESPACE_NOT_SUPPORTED => UnsupportedApiVersionException::class,
+            ErrorCode::AMBIGUOUS_RESOLUTION => AmbiguousResolutionException::class,
             default => match ($status) {
                 404 => NotFoundException::class,
                 409 => ConflictException::class,

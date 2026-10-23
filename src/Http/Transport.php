@@ -16,6 +16,7 @@ use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\Json;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\Pagination;
+use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
 
@@ -24,7 +25,8 @@ use Octoverse\Octonomy\ResultList;
  * the /api/{version} prefix of the configured api_version, attaches the
  * auth/tenant headers and any per-request namespace pair, sends them through a
  * Guzzle client, and converts non-2xx responses into typed exceptions. A v2-only
- * feature on a v1 client is refused before anything is sent.
+ * feature on a v1 client is refused before anything is sent. Every exception it
+ * throws for a request carries that request's RequestContext.
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -40,7 +42,7 @@ final class Transport
 {
     private readonly ClientInterface $http;
     private readonly string $apiVersion;
-    private readonly string $baseUri;
+    private readonly string $baseUrl;
     private readonly ?string $actorId;
 
     /** @var array<string, string> */
@@ -60,7 +62,7 @@ final class Transport
         // constructor checked it.
         $this->apiVersion = ApiVersion::check($config->apiVersion);
         $this->actorId = $config->actorId;
-        $this->baseUri = rtrim($config->baseUrl, '/') . '/api/' . $this->apiVersion . '/';
+        $this->baseUrl = rtrim($config->baseUrl, '/');
         $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
         $this->defaultHeaders = [
             'Authorization' => 'Bearer ' . $config->token,
@@ -108,14 +110,15 @@ final class Transport
         ?array $body = null,
         ?RequestOptions $options = null,
     ): mixed {
-        $decoded = Json::decode($this->send($method, $path, $query, $body, $options));
+        $context = $this->context($method, $path, $query, $options);
+        $decoded = $this->decode($context, $this->send($context, $body, $options));
 
         $data = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!self::isResource($data)) {
-            throw $this->malformed($method, $path, 'expected a non-empty JSON object under "data"');
+            throw new MalformedResponseException('expected a non-empty JSON object under "data"', null, $context);
         }
 
-        return $this->hydrate($method, $path, 'data', $hydrate, Json::members($data));
+        return $this->hydrate($context, 'data', $hydrate, Json::members($data));
     }
 
     /**
@@ -147,30 +150,31 @@ final class Transport
         ?array $body = null,
         ?RequestOptions $options = null,
     ): ResultList {
-        $decoded = Json::decode($this->send($method, $path, $query, $body, $options));
+        $context = $this->context($method, $path, $query, $options);
+        $decoded = $this->decode($context, $this->send($context, $body, $options));
 
         $rows = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!is_array($rows)) {
-            throw $this->malformed($method, $path, 'expected a JSON array under "data"');
+            throw new MalformedResponseException('expected a JSON array under "data"', null, $context);
         }
         foreach ($rows as $row) {
             if (!self::isResource($row)) {
-                throw $this->malformed($method, $path, 'expected every "data" item to be a non-empty JSON object');
+                throw new MalformedResponseException('expected every "data" item to be a non-empty JSON object', null, $context);
             }
         }
         $pagination = $decoded->pagination ?? null;
         if (!$pagination instanceof \stdClass) {
-            throw $this->malformed($method, $path, 'expected a JSON object under "pagination"');
+            throw new MalformedResponseException('expected a JSON object under "pagination"', null, $context);
         }
 
         $data = [];
         foreach ($rows as $i => $row) {
-            $data[] = $this->hydrate($method, $path, "data[{$i}]", $hydrate, Json::members($row));
+            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row));
         }
 
         return new ResultList(
             $data,
-            $this->hydrate($method, $path, 'pagination', Pagination::fromArray(...), Json::members($pagination)),
+            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination)),
         );
     }
 
@@ -193,24 +197,37 @@ final class Transport
         ?array $body = null,
         ?RequestOptions $options = null,
     ): void {
-        $this->send($method, $path, $query, $body, $options);
+        $this->send($this->context($method, $path, $query, $options), $body, $options);
     }
 
     /**
-     * Send a request and return the raw body of a 2xx response. Non-2xx
-     * responses and network failures throw.
+     * Describe a request before it is sent, for every exception it may end in.
+     * The path is placed under this client's api_version prefix, as sent.
      *
      * @param array<string, string> $query
+     */
+    private function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
+    {
+        return new RequestContext(
+            $this->apiVersion,
+            $method,
+            '/api/' . $this->apiVersion . '/' . ltrim($path, '/'),
+            $query,
+            $options?->namespace,
+        );
+    }
+
+    /**
+     * Send the request $context describes and return the raw body of a 2xx
+     * response. Non-2xx responses and network failures throw, carrying
+     * $context.
+     *
      * @param array<string, mixed>|null $body
      */
-    private function send(
-        string $method,
-        string $path,
-        array $query,
-        ?array $body,
-        ?RequestOptions $options,
-    ): string {
-        $namespace = $options?->namespace;
+    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): string
+    {
+        $namespace = $context->namespace;
+        $query = $context->query;
         $this->refuseV2OnlyFeatures($namespace, $query);
 
         $headers = $this->defaultHeaders;
@@ -237,22 +254,36 @@ final class Transport
             $requestOptions['json'] = $body;
         }
 
-        $url = $this->baseUri . ltrim($path, '/');
-
         try {
-            $response = $this->http->request($method, $url, $requestOptions);
+            $response = $this->http->request($context->method, $this->baseUrl . $context->path, $requestOptions);
         } catch (GuzzleException $e) {
-            throw new TransportException('octonomy: request failed: ' . $e->getMessage(), 0, $e);
+            throw new TransportException('octonomy: request failed: ' . $e->getMessage(), $context, $e);
         }
 
         $status = $response->getStatusCode();
         $raw = (string) $response->getBody();
 
         if ($status < 200 || $status >= 300) {
-            throw ApiException::fromResponse($status, Json::tryDecode($raw));
+            throw ApiException::fromResponse($status, Json::tryDecode($raw), $context);
         }
 
         return $raw;
+    }
+
+    /**
+     * Decode a 2xx body (Json::decode()), reporting one that is not JSON as a
+     * TransportException for the request it answered: a proxy or gateway that
+     * sent HTML with a 2xx gave no usable response.
+     *
+     * @throws TransportException when $raw is not valid JSON
+     */
+    private function decode(RequestContext $context, string $raw): mixed
+    {
+        try {
+            return Json::decode($raw);
+        } catch (\JsonException $e) {
+            throw new TransportException('Failed to decode Octonomy response: ' . $e->getMessage(), $context, $e);
+        }
     }
 
     /**
@@ -294,12 +325,12 @@ final class Transport
      *
      * @return T
      */
-    private function hydrate(string $method, string $path, string $at, \Closure $hydrate, array $object): mixed
+    private function hydrate(RequestContext $context, string $at, \Closure $hydrate, array $object): mixed
     {
         try {
             return $hydrate($object, $this->apiVersion);
         } catch (MalformedResponseException $e) {
-            throw $e->locate($this->endpoint($method, $path), $this->apiVersion, $at);
+            throw $e->locate($context, $at);
         }
     }
 
@@ -314,18 +345,5 @@ final class Transport
     private static function isResource(mixed $value): bool
     {
         return $value instanceof \stdClass && get_object_vars($value) !== [];
-    }
-
-    private function malformed(string $method, string $path, string $expected): MalformedResponseException
-    {
-        return new MalformedResponseException($expected, null, $this->endpoint($method, $path), $this->apiVersion);
-    }
-
-    /**
-     * The request as a message names it, such as "GET /api/v1/tags/{id}".
-     */
-    private function endpoint(string $method, string $path): string
-    {
-        return sprintf('%s /api/%s/%s', $method, $this->apiVersion, ltrim($path, '/'));
     }
 }

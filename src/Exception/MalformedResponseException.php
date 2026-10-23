@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Exception;
 
+use Octoverse\Octonomy\RequestContext;
+
 /**
  * MalformedResponseException means Octonomy answered with a 2xx whose JSON body
  * breaks the contract the endpoint guarantees. Either the envelope is missing
@@ -15,28 +17,32 @@ namespace Octoverse\Octonomy\Exception;
  *
  * The message names the endpoint, the api_version and what is wrong. When a
  * field is at fault, $field holds its path in the body, such as
- * "data.usage_count" or "data[2].created_at".
+ * "data.usage_count" or "data[2].created_at". When the body came from a
+ * request, $context describes that request; it is null only for a model
+ * hydrated outside one.
  */
 final class MalformedResponseException extends OctonomyException
 {
     /**
-     * @param string      $problem    what is wrong; follows the field path in the message when $field is set
-     *                                ('is missing'), and stands alone otherwise
-     * @param string|null $field      the path of the field at fault, or null when the envelope is
-     * @param string|null $endpoint   the request that received the body, such as 'GET /api/v1/tags/{id}';
-     *                                null when a model is hydrated outside a request
-     * @param string|null $apiVersion the api_version the body was read as, when known
+     * @param string              $problem    what is wrong; follows the field path in the message when $field
+     *                                        is set ('is missing'), and stands alone otherwise
+     * @param string|null         $field      the path of the field at fault, or null when the envelope is
+     * @param RequestContext|null $context    the request that received the body; null when a model is
+     *                                        hydrated outside a request
+     * @param string|null         $apiVersion the api_version the body was read as, when there is no $context
+     *                                        to say so
      */
     public function __construct(
         private readonly string $problem,
         public readonly ?string $field = null,
-        ?string $endpoint = null,
+        public readonly ?RequestContext $context = null,
         ?string $apiVersion = null,
         ?\Throwable $previous = null,
     ) {
+        $apiVersion = $context === null ? $apiVersion : $context->apiVersion;
         parent::__construct(sprintf(
             'octonomy: malformed response%s%s: %s',
-            $endpoint === null ? '' : " from {$endpoint}",
+            $context === null ? '' : " from {$context->endpoint()}",
             $apiVersion === null ? '' : " (api_version {$apiVersion})",
             $field === null ? $problem : "field \"{$field}\" {$problem}",
         ), 0, $previous);
@@ -57,17 +63,17 @@ final class MalformedResponseException extends OctonomyException
      * The same fault, placed in the response it came from. A model reports a
      * field by its key alone; Transport, which knows the request and where in
      * the body the model's object sat ($at, such as "data" or "data[2]"),
-     * calls this to name all three.
+     * calls this to name both.
      *
      * @internal
      */
-    public function locate(string $endpoint, string $apiVersion, string $at): self
+    public function locate(RequestContext $context, string $at): self
     {
         return new self(
             $this->problem,
             $this->field === null ? $at : "{$at}.{$this->field}",
-            $endpoint,
-            $apiVersion,
+            $context,
+            null,
             $this,
         );
     }

@@ -107,6 +107,7 @@ Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exceptio
 exposes `$statusCode`, `$errorCode`, `$details`, and `$requestId`:
 
 ```php
+use Octoverse\Octonomy\Exception\FeatureDisabledException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\ValidationException;
 
@@ -116,8 +117,17 @@ try {
     // 404
 } catch (ValidationException $e) {
     var_dump($e->details);
+} catch (FeatureDisabledException $e) {
+    // The deployment has namespaced writes (403) or the namespaced v2 API (503) switched off:
+    // a server flag, not a missing grant, which is a ForbiddenException.
 }
 ```
+
+Every `ApiException` and `TransportException` also carries `$context`, a `RequestContext` naming the
+request that failed: its api_version, method, path, query and namespace. Log it beside the message: a
+namespaced 404 then records where the read looked and whether it asked for `include_global`, which a
+status alone cannot (the server never reveals whether the id exists in another scope). It never holds
+the token, the tenant or actor id, any other header, or the request body.
 
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`

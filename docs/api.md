@@ -95,15 +95,42 @@ paging, and, on v2, `include_global`. Boolean params are serialized as `"true"`/
 
 | Code | HTTP | Exception |
 | ---- | ---- | --------- |
-| `validation_error`, `tenant_mismatch`, `application_mismatch`, `inactive_tag` | 400 | `ValidationException` |
-| `authentication_required` | 401 | `AuthenticationException` |
+| `validation_error`, `tenant_mismatch`, `application_mismatch`, `inactive_tag`, `namespace_invalid` | 400 | `ValidationException` |
+| `namespace_not_supported` | 400 | `UnsupportedApiVersionException` |
+| `ambiguous_resolution` | 400 | `AmbiguousResolutionException` |
+| `authentication_required` | 401 (403 from the server, which sends no challenge) | `AuthenticationException` |
 | `forbidden` | 403 | `ForbiddenException` |
+| `namespaced_writes_disabled` | 403 | `FeatureDisabledException` |
 | `not_found` | 404 | `NotFoundException` |
-| `conflict` | 409 | `ConflictException` |
-| (other / no envelope) | any | `ApiException` |
+| `conflict`, `scope_immutable` | 409 | `ConflictException` |
+| `namespace_api_disabled` | 503 | `FeatureDisabledException` |
+| another code, or no envelope | 400 / 401 / 403 / 404 / 409 | `Validation` / `Authentication` / `Forbidden` / `NotFound` / `Conflict` `Exception` |
+| another code, or no envelope | any other, 503 included | `ApiException` |
 
-Every exception exposes `$statusCode`, `$errorCode`, `$details`, and `$requestId`. The string codes are
-available as constants on `Octoverse\Octonomy\ErrorCode`.
+The code decides before the status: a 403 is `ForbiddenException` for a token without the grant and
+`FeatureDisabledException` for a deployment flag, so a caller tells them apart by type alone. A 503
+without the envelope comes from a proxy or load balancer rather than the server's flag, and stays a
+bare `ApiException`.
+
+Every exception exposes `$statusCode`, `$errorCode`, `$details`, `$requestId`, and `$context`. The string
+codes, every one `octonomy/core/errors.py` declares, are constants on `Octoverse\Octonomy\ErrorCode`.
+
+### RequestContext
+
+`ApiException`, `TransportException`, and a `MalformedResponseException` raised during a request carry
+`$context`, a `RequestContext` describing that request, since the SDK never logs and the exception is the
+only record of the call:
+
+| Field | Example |
+| ----- | ------- |
+| `apiVersion` | `v2` |
+| `method` | `GET` |
+| `path` | `/api/v2/tags/7d1c...` (as sent, ids URL-encoded) |
+| `query` | `['application_id' => 'commerce', 'include_global' => 'false']` |
+| `namespace` | `NamespaceScope('merchant', 'm-42')`, or `null` for the global partition |
+
+`endpoint()` returns `"GET /api/v2/tags/7d1c..."`. The context holds no token, tenant id, actor id, other
+header, or request body.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

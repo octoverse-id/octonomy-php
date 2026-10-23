@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests\Integration;
 
 use Octoverse\Octonomy\ApiVersion;
+use Octoverse\Octonomy\ErrorCode;
 use Octoverse\Octonomy\Exception\ForbiddenException;
 use Octoverse\Octonomy\Exception\NotFoundException;
+use Octoverse\Octonomy\Exception\ValidationException;
 use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\Vocabulary;
 use Octoverse\Octonomy\Model\VocabularyListParams;
@@ -79,7 +81,12 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         try {
             $client->tags()->get($globalRed->id, $app, options: $inA);
             self::fail('expected a namespaced read without include_global to miss the global row');
-        } catch (NotFoundException) {
+        } catch (NotFoundException $e) {
+            // What tells this 404 from a wrong id: the namespace it looked in,
+            // and no include_global in the query.
+            self::assertSame($inA->namespace, $e->context->namespace);
+            self::assertSame(['application_id' => $app], $e->context->query);
+            self::assertSame('/api/v2/tags/' . $globalRed->id, $e->context->path);
         }
 
         $this->expectException(ForbiddenException::class);
@@ -116,6 +123,28 @@ final class NamespacedCorpusTest extends IntegrationTestCase
 
         $this->expectException(ForbiddenException::class);
         $client->tags()->list($params, self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_B_ID')));
+    }
+
+    /**
+     * "global" is the server's name for the partition without a namespace, so
+     * it is reserved as a namespace type. The SDK leaves that rule to the
+     * server, which answers 400 namespace_invalid: bad input, so a
+     * ValidationException.
+     */
+    public function testAReservedNamespaceTypeIsRefusedAsNamespaceInvalid(): void
+    {
+        $reserved = new RequestOptions(namespace: new NamespaceScope('global', 'harness-merchant-a'));
+        $params = new TagListParams(applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'));
+
+        try {
+            $this->harnessClient(ApiVersion::V2)->tags()->list($params, $reserved);
+            self::fail('expected a ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame(400, $e->statusCode);
+            self::assertSame(ErrorCode::NAMESPACE_INVALID, $e->errorCode);
+            self::assertSame($reserved->namespace, $e->context->namespace);
+            self::assertSame(ApiVersion::V2, $e->context->apiVersion);
+        }
     }
 
     private static function in(string $merchant): RequestOptions

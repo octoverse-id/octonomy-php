@@ -9,6 +9,7 @@ use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\Vocabulary;
+use Octoverse\Octonomy\RequestContext;
 
 /**
  * SeededCorpusTest reads the corpus that scripts/octonomy-harness.sh seeds,
@@ -112,6 +113,10 @@ final class SeededCorpusTest extends IntegrationTestCase
             self::assertSame(404, $e->statusCode);
             self::assertSame('not_found', $e->errorCode);
             self::assertNotNull($e->requestId);
+            self::assertEquals(
+                new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags/00000000-0000-4000-8000-000000000000'),
+                $e->context,
+            );
         }
     }
 

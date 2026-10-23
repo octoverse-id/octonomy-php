@@ -6,7 +6,6 @@ namespace Octoverse\Octonomy\Internal;
 
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
-use Octoverse\Octonomy\Exception\TransportException;
 
 /**
  * Json decodes response bodies and reads fields out of them strictly.
@@ -41,18 +40,18 @@ final class Json
      * looks like a list, so envelope checks must run on this form. Returns null
      * for an empty body.
      *
-     * @throws TransportException when the payload is not valid JSON
+     * The caller turns a failure into a TransportException, since only it knows
+     * the request the body answered.
+     *
+     * @throws \JsonException when the payload is not valid JSON
      */
     public static function decode(string $raw): mixed
     {
         if ($raw === '') {
             return null;
         }
-        try {
-            return json_decode($raw, false, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            throw new TransportException('Failed to decode Octonomy response: ' . $e->getMessage(), 0, $e);
-        }
+
+        return json_decode($raw, false, 512, JSON_THROW_ON_ERROR);
     }
 
     /**
