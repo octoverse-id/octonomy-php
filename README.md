@@ -145,8 +145,9 @@ with `[redacted]`), its context, or the arguments of the SDK's frames in its tra
 
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`
-naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A network failure, or a 2xx body that is not JSON from a method that
-returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
+naming the endpoint and the field: the SDK never fills in a zero value or coerces one. A failure the
+HTTP client throws (a network failure, a timeout, or middleware that throws), or a 2xx body that is not
+JSON from a method that returns data, throws `TransportException` (`delete()` ignores any body). Every one of these failures
 extends `Octoverse\Octonomy\Exception\OctonomyException`. A mistake in the call itself, caught before
 anything is sent (a v2-only feature on a v1 client, a `NamespaceScope` with a blank type or id), throws
 PHP's `LogicException` or `InvalidArgumentException` instead: fix the call, there is nothing to retry.

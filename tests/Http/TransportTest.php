@@ -177,7 +177,10 @@ final class TransportTest extends SdkTestCase
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
             self::assertSame(
-                'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): field "data.usage_count" must be an integer, got a string',
+                'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): field "data.usage_count" must'
+                . ' be an integer, got a string. The SDK cannot tell which side is out of step. Fix: check that base_url'
+                . " is the Octonomy API's address and that this SDK release supports the server's version; if both"
+                . " hold, report the response to the SDK's maintainers as a contract mismatch.",
                 $e->getMessage(),
             );
             self::assertSame('data.usage_count', $e->field);
@@ -266,6 +269,47 @@ final class TransportTest extends SdkTestCase
         } catch (TransportException $e) {
             self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags', ['limit' => '1']), $e->context);
         }
+    }
+
+    /**
+     * Every malformed-response message ends with the same admission and fix,
+     * whatever broke: the envelope, a field's type, or a timestamp.
+     */
+    #[DataProvider('malformedBodies')]
+    public function testAMalformedResponseSaysItCannotTellWhyAndGivesTheFix(SyntheticNegative $body): void
+    {
+        $transport = $this->transportWith([$body], ApiVersion::V1);
+
+        try {
+            $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+            self::fail('expected a MalformedResponseException');
+        } catch (MalformedResponseException $e) {
+            self::assertStringStartsWith('octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): ', $e->getMessage());
+            self::assertStringEndsWith(
+                '. The SDK cannot tell which side is out of step. Fix: check that base_url is the Octonomy API\'s address'
+                . " and that this SDK release supports the server's version; if both hold, report the response to the"
+                . " SDK's maintainers as a contract mismatch.",
+                $e->getMessage(),
+            );
+        }
+    }
+
+    /**
+     * @return iterable<string, array{SyntheticNegative}>
+     */
+    public static function malformedBodies(): iterable
+    {
+        yield 'no envelope' => [self::syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '[]')];
+        yield 'a field of the wrong type' => [self::syntheticNegativeFrom(
+            'v1/tags/get',
+            SyntheticNegative::WRONG_TYPE,
+            static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+        )];
+        yield 'a timestamp that does not parse' => [self::syntheticNegativeFrom(
+            'v1/tags/get',
+            SyntheticNegative::WRONG_TYPE,
+            static fn(array $body): array => array_replace_recursive($body, ['data' => ['created_at' => 'yesterday']]),
+        )];
     }
 
     public function testManyCarriesTheContextOnAMissingEnvelope(): void

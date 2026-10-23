@@ -171,18 +171,78 @@ final class RedactionTest extends SdkTestCase
             $client->tags()->update('tag_1', new TagUpdate(name: 'Name From The Body'), 'harness-app', self::options());
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
-            self::assertStringEndsWith('field "data.created_at" must be an RFC 3339 timestamp, got "[redacted]"', $e->getMessage());
+            self::assertStringContainsString('field "data.created_at" must be an RFC 3339 timestamp, got "[redacted]". ', $e->getMessage());
             self::assertInstanceOf(MalformedResponseException::class, $e->getPrevious());
             self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Resource\\TagService::update');
         }
     }
 
     /**
-     * A client can throw after a response arrived, as middleware that throws on
-     * a status does. The server got the request, so the message does not say
-     * there was no response.
+     * Middleware runs after the body is encoded and before any failure is
+     * known, and an object in metadata is shared with the caller. The
+     * redaction is a snapshot of what was sent, so changing the object then
+     * does not let the sent value through.
      */
-    public function testAClientFailureAfterAResponseSaysTheServerAnswered(): void
+    public function testABodyChangedAfterItWasSentIsRedactedAsSent(): void
+    {
+        $nested = new \stdClass();
+        $nested->field = 'alpha-private-value';
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static function (RequestInterface $request) use ($nested): string {
+                $sent = (string) $request->getBody();
+                $nested->field = 'changed-after-send';
+
+                return 'value=' . (string) json_decode($sent)->metadata->nested->field;
+            },
+        );
+
+        try {
+            $client->tags()->create(new TagCreate(name: 'n', slug: 's', type: 'label', metadata: ['nested' => $nested]));
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringContainsString('"value=[redacted]"', $e->getMessage());
+            self::assertStringNotContainsString('alpha-private-value', $e->getMessage());
+        }
+    }
+
+    /**
+     * The same for the actor id on the PHP 7.4 line, which has no readonly:
+     * middleware that changes it mid-request does not change what is
+     * redacted. PHP 8.2 refuses the write; either way the actor id that was
+     * sent stays out of the message.
+     */
+    public function testAnActorIdChangedAfterItWasSentIsRedactedAsSent(): void
+    {
+        $options = self::options();
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static function (RequestInterface $request) use ($options): string {
+                try {
+                    (new \ReflectionProperty(RequestOptions::class, 'actorId'))->setValue($options, 'changed-actor');
+                } catch (\Error $e) {
+                    // PHP 8.2: readonly.
+                }
+
+                return 'actor=' . $request->getHeaderLine('X-Actor-ID');
+            },
+        );
+
+        try {
+            $client->tags()->create(self::body(), $options);
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringContainsString('"actor=[redacted]"', $e->getMessage());
+            self::assertStringNotContainsString('actor-from-the-call', $e->getMessage());
+        }
+    }
+
+    /**
+     * A client can throw although a response arrived, as middleware that
+     * throws on a status does. The message names that response rather than
+     * saying there was none.
+     */
+    public function testAClientFailureHoldingAResponseNamesIt(): void
     {
         $client = $this->clientThatCannotConnect(self::config(), null, 503);
 
@@ -195,7 +255,7 @@ final class RedactionTest extends SdkTestCase
                 . ' https://octonomy.test after an HTTP 503 response, with ',
                 $e->getMessage(),
             );
-            self::assertStringContainsString('cannot tell from this why the request failed, or whether the server applied it.', $e->getMessage());
+            self::assertStringContainsString('cannot tell from this why the request failed, or whether the server received and applied it.', $e->getMessage());
             self::assertCarriesNone($e, self::CREATE_FRAME);
         }
     }
@@ -347,6 +407,21 @@ final class RedactionTest extends SdkTestCase
         self::assertSame(
             'name: [redacted]; metadata: {"[redacted]":"[redacted]","[redacted]":[{"[redacted]":"[redacted]"},[redacted],"[redacted]"]}',
             $redaction->text('name: Featured; metadata: {"customer-email":"someone@example.test","nested":[{"object-key":"object-value"},42,"a\\/b"]}'),
+        );
+    }
+
+    /**
+     * Every value as it was sent: an object key that is a number, a float JSON
+     * writes with an exponent (and PHP prints in capitals), and negative zero,
+     * which goes out as -0.
+     */
+    public function testOfTakesEveryJsonFormOfTheBody(): void
+    {
+        $redaction = Redaction::of('octo_tokensecret', null, ['metadata' => ['123' => 'x', 'rate' => 1e20, 'zero' => -0.0]]);
+
+        self::assertSame(
+            'invalid metadata key [redacted] at [redacted] and [redacted] or [redacted]',
+            $redaction->text('invalid metadata key 123 at 1.0e+20 and -0 or 1.0E+20'),
         );
     }
 

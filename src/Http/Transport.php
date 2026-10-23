@@ -124,14 +124,15 @@ final class Transport
         ?RequestOptions $options = null,
     ): mixed {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options), $body, $options);
+        $redaction = $this->redaction($body, $options);
+        $decoded = $this->decode($context, $this->send($context, $body, $options, $redaction), $redaction);
 
         $data = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!self::isResource($data)) {
             throw new MalformedResponseException('expected a non-empty JSON object under "data"', null, $context);
         }
 
-        return $this->hydrate($context, 'data', $hydrate, Json::members($data), $body, $options);
+        return $this->hydrate($context, 'data', $hydrate, Json::members($data), $redaction);
     }
 
     /**
@@ -164,7 +165,8 @@ final class Transport
         ?RequestOptions $options = null,
     ): ResultList {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options), $body, $options);
+        $redaction = $this->redaction($body, $options);
+        $decoded = $this->decode($context, $this->send($context, $body, $options, $redaction), $redaction);
 
         $rows = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!is_array($rows)) {
@@ -182,12 +184,12 @@ final class Transport
 
         $data = [];
         foreach ($rows as $i => $row) {
-            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row), $body, $options);
+            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row), $redaction);
         }
 
         return new ResultList(
             $data,
-            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination), $body, $options),
+            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination), $redaction),
         );
     }
 
@@ -210,7 +212,7 @@ final class Transport
         ?array $body = null,
         ?RequestOptions $options = null,
     ): void {
-        $this->send($this->context($method, $path, $query, $options), $body, $options);
+        $this->send($this->context($method, $path, $query, $options), $body, $options, $this->redaction($body, $options));
     }
 
     /**
@@ -232,11 +234,12 @@ final class Transport
 
     /**
      * Send the request $context describes and return the 2xx response. Non-2xx
-     * responses and network failures throw, carrying $context.
+     * responses and network failures throw, carrying $context, with what they
+     * quote redacted by $redaction, the snapshot taken before sending.
      *
      * @param array<string, mixed>|null $body
      */
-    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): ResponseInterface
+    private function send(RequestContext $context, ?array $body, ?RequestOptions $options, Redaction $redaction): ResponseInterface
     {
         $namespace = $context->namespace;
         $query = $context->query;
@@ -284,7 +287,7 @@ final class Transport
                     $this->origin,
                     $e,
                     $e instanceof RequestException ? $e->getResponse()?->getStatusCode() : null,
-                    $this->redaction($body, $options),
+                    $redaction,
                 ),
                 $context,
             );
@@ -297,7 +300,7 @@ final class Transport
                 Json::tryDecode((string) $response->getBody()),
                 $context,
                 $response->getHeaderLine('Content-Type'),
-                $this->redaction($body, $options),
+                $redaction,
             );
         }
 
@@ -309,11 +312,9 @@ final class Transport
      * TransportException for the request it answered: a proxy or gateway that
      * sent HTML with a 2xx gave no usable response.
      *
-     * @param array<string, mixed>|null $body the request's body, to redact from the message
-     *
      * @throws TransportException when the body is not valid JSON
      */
-    private function decode(RequestContext $context, ResponseInterface $response, ?array $body, ?RequestOptions $options): mixed
+    private function decode(RequestContext $context, ResponseInterface $response, Redaction $redaction): mixed
     {
         $raw = (string) $response->getBody();
         try {
@@ -326,7 +327,7 @@ final class Transport
                     $response->getHeaderLine('Content-Type'),
                     strlen($raw),
                     $e->getMessage(),
-                    $this->redaction($body, $options),
+                    $redaction,
                 ),
                 $context,
                 $e,
@@ -377,13 +378,12 @@ final class Transport
     /**
      * Run a hydrator over one object of the body, and place any field it rejects
      * at this request and at $at, the object's path in the body, with any value
-     * the report quotes redacted against the request's $body and $options.
+     * the report quotes redacted by the request's $redaction.
      *
      * @template T
      *
      * @param \Closure(array<string, mixed>, string): T $hydrate
      * @param array<string, mixed> $object
-     * @param array<string, mixed>|null $body
      *
      * @return T
      */
@@ -392,13 +392,12 @@ final class Transport
         string $at,
         \Closure $hydrate,
         array $object,
-        ?array $body,
-        ?RequestOptions $options,
+        Redaction $redaction,
     ): mixed {
         try {
             return $hydrate($object, $this->apiVersion);
         } catch (MalformedResponseException $e) {
-            throw $e->locate($context, $at, $this->redaction($body, $options));
+            throw $e->locate($context, $at, $redaction);
         }
     }
 
@@ -414,8 +413,10 @@ final class Transport
     }
 
     /**
-     * The values a request carries that no message may quote: built only when
-     * the request fails, from the same token, actor and body it sent.
+     * A snapshot of the values a request carries that no message may quote,
+     * from the token, actor and body it is about to send. Taken before sending,
+     * since the HTTP client's middleware runs before any failure is known and
+     * can change an object in the body (Redaction::of()).
      *
      * @param array<string, mixed>|null $body
      */

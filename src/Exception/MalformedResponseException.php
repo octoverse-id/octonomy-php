@@ -16,7 +16,8 @@ use Octoverse\Octonomy\RequestContext;
  * JSON type. The SDK raises it instead of hydrating a zero value or coercing
  * one, so contract drift fails loudly at the call site.
  *
- * The message names the endpoint, the api_version and what is wrong. When a
+ * The message names the endpoint, the api_version and what is wrong, says the
+ * SDK cannot tell which side is out of step, and gives the fix. When a
  * field is at fault, $field holds its path in the body, such as
  * "data.usage_count" or "data[2].created_at". When the body came from a
  * request, $context describes that request; it is null only for a model
@@ -24,6 +25,16 @@ use Octoverse\Octonomy\RequestContext;
  */
 final class MalformedResponseException extends OctonomyException
 {
+    /**
+     * What follows the fault in every message. A body that breaks the contract
+     * can come from a server release this SDK does not support, from something
+     * in front of the API, or from an SDK defect, and the body alone does not
+     * say which.
+     */
+    private const FIX = ' The SDK cannot tell which side is out of step. Fix: check that base_url is the Octonomy'
+        . ' API\'s address and that this SDK release supports the server\'s version; if both hold, report the'
+        . ' response to the SDK\'s maintainers as a contract mismatch.';
+
     /**
      * @param string              $problem    what is wrong; follows the field path in the message when $field
      *                                        is set ('is missing'), and stands alone otherwise
@@ -46,10 +57,11 @@ final class MalformedResponseException extends OctonomyException
         $version = $context === null ? $apiVersion : $context->apiVersion;
         $problem .= $got === null ? '' : ", got \"{$got}\"";
         parent::__construct(sprintf(
-            'octonomy: malformed response%s%s: %s',
+            'octonomy: malformed response%s%s: %s.%s',
             $context === null ? '' : " from {$context->endpoint()}",
             $version === null ? '' : " (api_version {$version})",
             $field === null ? $problem : "field \"{$field}\" {$problem}",
+            self::FIX,
         ), 0, $previous);
     }
 

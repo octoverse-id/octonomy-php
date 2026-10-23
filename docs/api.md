@@ -155,6 +155,9 @@ said: "Resource not found." Detail: "Tag was not found." Request ID: req_...
   cannot tell from it why the request failed, or, for a write, whether the server applied it; when the
   client's exception holds a response, it names that status. A non-2xx without the error envelope, and
   a code this SDK release does not know, say the same.
+- **Malformed responses too.** A `MalformedResponseException` names the endpoint, the api_version and
+  the fault, says the SDK cannot tell which side is out of step, and asks you to check `base_url` and
+  version support before reporting a contract mismatch.
 - **No `doc_url`.** The fix is in the message.
 
 ### Redaction
@@ -190,7 +193,7 @@ Two failures are not HTTP errors and do not extend `ApiException`:
 | --------- | --------- |
 | 2xx whose body lacks its envelope: a non-empty `data` object, or a `data` array of non-empty objects + a `pagination` object | `MalformedResponseException` |
 | 2xx whose resource breaks the field set for the api_version: a declared key absent (nullable fields included), a value of the wrong JSON type, an unparseable timestamp, or the namespace pair missing on v2 / present on v1 | `MalformedResponseException`, with `$field` set to the field's path in the body (e.g. `data.usage_count`) |
-| Network failure, timeout, or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException`, quoting the HTTP client's error rather than chaining it |
+| The HTTP client threw (network failure, timeout, or middleware that throws, possibly holding a response), or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException`, quoting the HTTP client's error rather than chaining it |
 
 ## Not yet implemented
 

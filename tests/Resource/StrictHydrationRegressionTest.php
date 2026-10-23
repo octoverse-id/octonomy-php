@@ -60,7 +60,10 @@ final class StrictHydrationRegressionTest extends SdkTestCase
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
             self::assertSame(
-                "octonomy: malformed response from GET {$path} (api_version v1): field \"data.description\" is missing",
+                "octonomy: malformed response from GET {$path} (api_version v1): field \"data.description\" is missing."
+                . ' The SDK cannot tell which side is out of step. Fix: check that base_url is the Octonomy API\'s address'
+                . " and that this SDK release supports the server's version; if both hold, report the response to the"
+                . " SDK's maintainers as a contract mismatch.",
                 $e->getMessage(),
             );
             self::assertSame('data.description', $e->field);

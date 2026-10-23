@@ -77,47 +77,41 @@ final class Redaction
      */
     private const DISTINCT = 8;
 
-    /**
-     * @param list<string> $values the values to replace, longest first
-     */
-    private function __construct(private readonly array $values) {}
+    /** @var list<string>|null the values to replace, longest first, read from the snapshot on first use */
+    private ?array $values = null;
 
     /**
-     * The values on the list that one request carries: its token, the actor id
-     * it sends, the body whole as it is sent, and every scalar in the body at
-     * any depth (true, false and null included), and every key below the top
-     * level. A metadata key is the caller's content; a top-level key is a field
-     * name of the API, which the SDK's own words also use, so it stays. Each is
-     * also taken as JSON escapes it, since an echo of the body is JSON.
+     * @param string|null $body the request body as it was sent, JSON-encoded, or null for none
+     */
+    private function __construct(
+        private readonly ?string $token,
+        private readonly ?string $actorId,
+        private readonly ?string $body,
+    ) {}
+
+    /**
+     * A snapshot of the values on the list that one request carries: its
+     * token, the actor id it sends, and its body. Take it before the request
+     * is sent. The body is encoded then, as Guzzle's json option encodes it
+     * (json_encode()'s default flags), so an object in it that changes once
+     * the request is out (metadata may hold any object) cannot change what is
+     * redacted. A body that does not encode is never sent: Guzzle refuses it
+     * with an error that quotes none of it.
      *
-     * The body is read as it goes on the wire: the JSON Guzzle sends (with
-     * json_encode()'s default flags, as Guzzle uses), decoded, so an object
-     * inside it is walked as the object it encodes to.
+     * text() replaces the token, the actor id, the body whole, and every
+     * scalar and every object key in the body at any depth, except the keys of
+     * the body itself: those are the API's field names, which the SDK's own
+     * words also use. A string is taken as given and as JSON escapes it; a
+     * number as it was sent, as JSON writes it and as PHP prints it; true,
+     * false and null as JSON writes them.
      *
      * @param array<array-key, mixed>|null $body
      */
     public static function of(string $token, ?string $actorId, ?array $body): self
     {
-        $values = [$token];
-        if ($actorId !== null) {
-            $values[] = $actorId;
-        }
-        if ($body !== null) {
-            // A body that does not encode is never sent (Guzzle refuses it), so
-            // walking it as given is enough.
-            $encoded = json_encode($body);
-            if ($encoded !== false) {
-                $values[] = $encoded;
-            }
-            $sent = $encoded === false ? $body : json_decode($encoded, true);
-            if (is_array($sent)) {
-                self::collect($sent, true, $values);
-            }
-        }
-        $values = array_values(array_unique(array_filter($values, static fn(string $value): bool => $value !== '')));
-        usort($values, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+        $encoded = $body === null ? false : json_encode($body);
 
-        return new self($values);
+        return new self($token, $actorId, $encoded === false ? null : $encoded);
     }
 
     /**
@@ -126,7 +120,7 @@ final class Redaction
      */
     public static function none(): self
     {
-        return new self([]);
+        return new self(null, null, null);
     }
 
     /**
@@ -134,13 +128,85 @@ final class Redaction
      */
     public function text(string $text): string
     {
-        foreach ($this->values as $value) {
+        foreach ($this->values() as $value) {
             $text = strlen($value) >= self::DISTINCT
                 ? str_replace($value, self::MARK, $text)
                 : (string) preg_replace('/(?<![A-Za-z0-9])' . preg_quote($value, '/') . '(?![A-Za-z0-9])/', self::MARK, $text);
         }
 
         return $text;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function values(): array
+    {
+        if ($this->values === null) {
+            $values = [(string) $this->token, (string) $this->actorId];
+            if ($this->body !== null) {
+                $values[] = $this->body;
+                // Objects kept as objects: an associative array would turn a
+                // key such as "123" into an index, and a list's indexes are
+                // not in the JSON at all.
+                self::collect(json_decode($this->body), true, $values);
+                // Each number also as it was sent, which decoding cannot give
+                // back: -0.0 goes out as "-0" and comes back as 0. Strings are
+                // matched only to be skipped.
+                preg_match_all('/"(?:[^"\\\\]|\\\\.)*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?/', $this->body, $tokens);
+                foreach ($tokens[0] as $token) {
+                    if ($token[0] !== '"') {
+                        $values[] = $token;
+                    }
+                }
+            }
+            $values = array_values(array_unique(array_filter($values, static fn(string $value): bool => $value !== '')));
+            usort($values, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+            $this->values = $values;
+        }
+
+        return $this->values;
+    }
+
+    /**
+     * Add every scalar in $node, a value json_decode() returned, and every key
+     * of the objects in it except $node's own when it is the body itself
+     * ($top), to $values.
+     *
+     * @param list<string> $values
+     */
+    private static function collect(mixed $node, bool $top, array &$values): void
+    {
+        if ($node instanceof \stdClass) {
+            foreach (get_object_vars($node) as $key => $value) {
+                if (!$top) {
+                    self::add((string) $key, $values);
+                }
+                self::collect($value, false, $values);
+            }
+        } elseif (is_array($node)) {
+            foreach ($node as $value) {
+                self::collect($value, false, $values);
+            }
+        } elseif (is_string($node)) {
+            self::add($node, $values);
+        } else {
+            $values[] = (string) json_encode($node);
+            if (is_int($node) || is_float($node)) {
+                $values[] = (string) $node;
+            }
+        }
+    }
+
+    /**
+     * Add $text to $values as given and as JSON escapes it inside a string.
+     *
+     * @param list<string> $values
+     */
+    private static function add(string $text, array &$values): void
+    {
+        $values[] = $text;
+        $values[] = substr((string) json_encode($text), 1, -1);
     }
 
     /**
@@ -178,34 +244,6 @@ final class Redaction
     public static function isHeaderSafe(string $value): bool
     {
         return preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 0;
-    }
-
-    /**
-     * Add every scalar in $node, as JSON writes it, and its string keys unless
-     * $top, to $values, as given and as JSON escapes it.
-     *
-     * @param array<array-key, mixed> $node
-     * @param list<string>            $values
-     */
-    private static function collect(array $node, bool $top, array &$values): void
-    {
-        foreach ($node as $key => $value) {
-            $found = [];
-            if (!$top && is_string($key)) {
-                $found[] = $key;
-            }
-            if (is_array($value)) {
-                self::collect($value, false, $values);
-            } elseif (is_string($value) || is_int($value) || is_float($value)) {
-                $found[] = (string) $value;
-            } elseif (is_bool($value) || $value === null) {
-                $found[] = (string) json_encode($value);
-            }
-            foreach ($found as $text) {
-                $values[] = $text;
-                $values[] = substr((string) json_encode($text), 1, -1);
-            }
-        }
     }
 
     /**

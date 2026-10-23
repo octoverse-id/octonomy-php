@@ -92,8 +92,8 @@ final class ErrorMessage
      * response it could use. The client's error is quoted, redacted, and never
      * interpreted: from it alone the SDK cannot tell why the request failed,
      * nor, for a write, whether the server applied it. When the client's
-     * exception holds a response ($status), the server did receive the
-     * request, and the message says so.
+     * exception holds a response ($status), the message names its status, and
+     * claims nothing about where it came from: middleware can make one up.
      *
      * @param string    $origin    the scheme, host and port of base_url, without any credentials in it
      * @param int|null  $status    the status of the response the client's exception holds, if any
@@ -118,11 +118,7 @@ final class ErrorMessage
             $status === null ? '' : sprintf(' after an HTTP %d response', $status),
             $clientError::class,
             $redaction->text($clientError->getMessage()),
-            match (true) {
-                !$write => '',
-                $status === null => ', or whether the server received and applied it',
-                default => ', or whether the server applied it',
-            },
+            $write ? ', or whether the server received and applied it' : '',
             $origin,
             $write ? '; before sending the write again, check whether it took effect' : '',
         );
