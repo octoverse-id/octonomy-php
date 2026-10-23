@@ -23,8 +23,9 @@ final class ErrorCode
     /** A change to a row's application or namespace after creation (409). */
     public const SCOPE_IMMUTABLE = 'scope_immutable';
 
-    // Namespace codes. Each is reachable only through the namespace axis, which
-    // exists on api_version v2 alone.
+    // Namespace codes. The namespace axis exists on api_version v2 alone, so
+    // namespace_not_supported is v1's answer to namespace headers, and the
+    // others arise on v2.
 
     /** Namespace headers sent to /api/v1 (400). */
     public const NAMESPACE_NOT_SUPPORTED = 'namespace_not_supported';

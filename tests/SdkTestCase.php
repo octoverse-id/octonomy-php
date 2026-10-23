@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests;
 
 use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
@@ -51,6 +52,29 @@ abstract class SdkTestCase extends TestCase
         self::refuseCrossVersionReplay($client->apiVersion(), $responses);
 
         return $client;
+    }
+
+    /**
+     * Build a Client whose first request gets no response at all: the
+     * connection is refused, as a host with nothing listening refuses it. For
+     * tests of what the SDK reports when there is no response to read. The
+     * failure is Guzzle's own ConnectException, queued on the MockHandler, so
+     * no socket is opened.
+     */
+    protected function clientThatCannotConnect(): Client
+    {
+        $this->mock = new MockHandler([
+            // Returned, not thrown: MockHandler rejects the request with a
+            // Throwable a queued callable returns, as a real handler does.
+            static fn(RequestInterface $request): ConnectException => new ConnectException('Connection refused', $request),
+        ]);
+
+        return new Client([
+            'base_url' => 'https://octonomy.test',
+            'token' => 'test-token',
+            'tenant_id' => 'tenant-1',
+            'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
+        ]);
     }
 
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests;
 
 use Octoverse\Octonomy\ApiVersion;
-use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Exception\ConflictException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\TransportException;
@@ -107,13 +106,11 @@ final class RequestContextTest extends SdkTestCase
     }
 
     /**
-     * No response at all: a real connection refused, not a mocked one, since
-     * the SDK must report a failure it never got a response for.
+     * No response at all, so the context is the only description of the call.
      */
     public function testANetworkFailureCarriesTheContext(): void
     {
-        // Port 1 on loopback has no listener, so the connection is refused at once.
-        $client = new Client(['base_url' => 'http://127.0.0.1:1', 'token' => 't', 'tenant_id' => 'tenant-1', 'timeout' => 5]);
+        $client = $this->clientThatCannotConnect();
 
         try {
             $client->tags()->get('tag_1', 'commerce');
@@ -121,6 +118,8 @@ final class RequestContextTest extends SdkTestCase
         } catch (TransportException $e) {
             self::assertEquals(new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1', ['application_id' => 'commerce']), $e->context);
             self::assertInstanceOf(NetworkExceptionInterface::class, $e->getPrevious());
+            // Refused while sending, not before: the guard let the request through.
+            self::assertSame($e->context->path, $this->lastRequest()->getUri()->getPath());
         }
     }
 }
