@@ -148,8 +148,9 @@ said: "Resource not found." Detail: "Tag was not found." Request ID: req_...
 
 - **Why, only when known.** A deployment flag (`namespaced_writes_disabled`, `namespace_api_disabled`)
   names the server setting, because the server sends that code for that flag alone. A 404 names the
-  resource kind and the id and nothing more: the server deliberately does not reveal whether the row
-  exists outside what the request could see, so the message does not suggest it.
+  resource kind and the id, says the SDK cannot tell why, and asks you to check the request it shows:
+  the server deliberately does not reveal whether the row exists outside what the request could see,
+  so the message does not suggest it.
 - **Unknown causes said so.** A `TransportException` quotes the HTTP client's error and says the SDK
   cannot tell from it why the request failed, or, for a write, whether the server applied it. A non-2xx
   without the error envelope, and a code this SDK release does not know, say the same.
@@ -160,7 +161,12 @@ said: "Resource not found." Detail: "Tag was not found." Request ID: req_...
 No exception the SDK throws carries the token, the `Authorization` header, the request body, or
 `X-Actor-ID` (`Internal\Redaction`):
 
-- No message is built from them, and `RequestContext` has no field for them.
+- The SDK's own words never include them, and `RequestContext` has no field for them. Text a message
+  quotes from elsewhere (the HTTP client's error; the server's message, detail, details' names, request
+  id and Content-Type) has every value the request carried replaced with `[redacted]` first, since a
+  middleware or a server can echo the request. A value of eight characters or more is replaced wherever
+  it appears, a shorter one only where it stands alone. `$serverMessage` and `$details` stay as the
+  server sent them: they are its data, not a message, and can echo what the request sent.
 - The arguments of the SDK's own frames are removed from the trace of every `OctonomyException` and of
   the `LogicException` a v1 client throws, so an error tracker that records frame arguments does not
   capture the body from `TagService::create()` or the token from `Config::__construct()`. Frames outside
@@ -168,9 +174,10 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
 - A `TransportException` for a failed request quotes Guzzle's error but does not chain it as
   `getPrevious()`, because Guzzle's exception holds the request, `Authorization` header and body
   included. A non-JSON 2xx chains the `JsonException`, scrubbed the same way.
-- A token or actor id holding a control character, such as a trailing newline, is refused when the
-  `Config` or `RequestOptions` is built, without quoting it: Guzzle would refuse it later with an error
-  that quotes the whole header.
+- A header value holding a control character, such as a trailing newline, is refused when the
+  `Config`, `RequestOptions` or `NamespaceScope` is built, without quoting a token or actor id: Guzzle
+  would refuse it later with an error that quotes the whole header, thrown from frames that hold the
+  `Authorization` header and the body.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

@@ -61,13 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request id). A deployment flag names the server setting to change; a 404 names the resource kind and
   id without suggesting where else it might be; a transport failure, an error without the envelope and
   an unknown code say that the SDK cannot tell why. `ApiException::$serverMessage` keeps the server's
-  own message, which `getMessage()` now quotes rather than returns. A refused `Config::fromArray()`
-  names the option keys it did not read.
+  own message, unedited, which `getMessage()` now quotes rather than returns. A refused
+  `Config::fromArray()` names the option keys it did not read.
 - Redaction (#17): no exception carries the token, the `Authorization` header, the request body or
   `X-Actor-ID` in its message, its `RequestContext`, or the arguments of the SDK's frames in its trace,
-  which `OctonomyException` removes on construction. `TransportException` no longer chains Guzzle's
-  exception, which holds the request. A token or actor id with a control character is refused up
-  front without being quoted.
+  which `OctonomyException` removes on construction. Text a message quotes from the HTTP client or the
+  server has the request's token, actor id and body values replaced with `[redacted]`.
+  `TransportException` no longer chains Guzzle's exception, which holds the request. A token, tenant
+  id, actor id, user agent or namespace with a control character is refused up front, without quoting
+  a token or actor id.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`

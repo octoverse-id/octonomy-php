@@ -7,6 +7,7 @@ namespace Octoverse\Octonomy\Tests\Exception;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\ErrorCode;
 use Octoverse\Octonomy\Internal\ErrorMessage;
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
@@ -25,6 +26,10 @@ use PHPUnit\Framework\TestCase;
  */
 final class ErrorMessageTest extends TestCase
 {
+    private const NOT_FOUND_TAIL = ' The server does not say why, so the SDK cannot either.'
+        . ' Fix: check that the request above, its id included, is the one you meant to send.'
+        . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.';
+
     /**
      * The default state of a stock server: a namespaced write is refused, and
      * the SDK can say exactly why and what to change.
@@ -39,48 +44,47 @@ final class ErrorMessageTest extends TestCase
             . ' OCTONOMY_NAMESPACE_WRITE_ENABLED is off on the server, as it is by default.'
             . ' Fix: set OCTONOMY_NAMESPACE_WRITE_ENABLED=true on the server, or omit the namespace to write globally.'
             . ' Server said: "Namespaced writes are not enabled." Request ID: req_1.',
-            ErrorMessage::forResponse(403, ErrorCode::NAMESPACED_WRITES_DISABLED, 'Namespaced writes are not enabled.', [], 'req_1', $context),
+            ErrorMessage::forResponse(403, ErrorCode::NAMESPACED_WRITES_DISABLED, 'Namespaced writes are not enabled.', [], 'req_1', $context, Redaction::none()),
         );
     }
 
     /**
-     * Every code the SDK knows gets a fix, except not_found: the SDK cannot
-     * tell why a read found nothing, and does not guess.
+     * Every code the SDK knows gets a fix.
      */
     #[DataProvider('codes')]
-    public function testEveryKnownCodeGetsAFixOrNone(string $code, int $status, bool $fix): void
+    public function testEveryKnownCodeGetsAFix(string $code, int $status): void
     {
         $context = new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1');
 
-        $message = ErrorMessage::forResponse($status, $code, 'The server message.', [], null, $context);
+        $message = ErrorMessage::forResponse($status, $code, 'The server message.', [], null, $context, Redaction::none());
 
         self::assertStringStartsWith('octonomy: ', $message);
         self::assertStringContainsString("({$code}, HTTP {$status}).", $message);
         self::assertStringContainsString('Request: GET /api/v2/tags/tag_1.', $message);
         self::assertStringContainsString('Server said: "The server message."', $message);
-        self::assertSame($fix, str_contains($message, ' Fix: '));
+        self::assertMatchesRegularExpression('/ Fix: [^ ]/', $message);
         self::assertStringNotContainsString('does not know the code', $message);
     }
 
     /**
-     * @return iterable<string, array{string, int, bool}>
+     * @return iterable<string, array{string, int}>
      */
     public static function codes(): iterable
     {
-        yield 'validation_error' => [ErrorCode::VALIDATION, 400, true];
-        yield 'tenant_mismatch' => [ErrorCode::TENANT_MISMATCH, 400, true];
-        yield 'application_mismatch' => [ErrorCode::APPLICATION_MISMATCH, 400, true];
-        yield 'inactive_tag' => [ErrorCode::INACTIVE_TAG, 400, true];
-        yield 'namespace_invalid' => [ErrorCode::NAMESPACE_INVALID, 400, true];
-        yield 'namespace_not_supported' => [ErrorCode::NAMESPACE_NOT_SUPPORTED, 400, true];
-        yield 'ambiguous_resolution' => [ErrorCode::AMBIGUOUS_RESOLUTION, 400, true];
-        yield 'authentication_required' => [ErrorCode::AUTH_REQUIRED, 403, true];
-        yield 'forbidden' => [ErrorCode::FORBIDDEN, 403, true];
-        yield 'namespaced_writes_disabled' => [ErrorCode::NAMESPACED_WRITES_DISABLED, 403, true];
-        yield 'not_found' => [ErrorCode::NOT_FOUND, 404, false];
-        yield 'conflict' => [ErrorCode::CONFLICT, 409, true];
-        yield 'scope_immutable' => [ErrorCode::SCOPE_IMMUTABLE, 409, true];
-        yield 'namespace_api_disabled' => [ErrorCode::NAMESPACE_API_DISABLED, 503, true];
+        yield 'validation_error' => [ErrorCode::VALIDATION, 400];
+        yield 'tenant_mismatch' => [ErrorCode::TENANT_MISMATCH, 400];
+        yield 'application_mismatch' => [ErrorCode::APPLICATION_MISMATCH, 400];
+        yield 'inactive_tag' => [ErrorCode::INACTIVE_TAG, 400];
+        yield 'namespace_invalid' => [ErrorCode::NAMESPACE_INVALID, 400];
+        yield 'namespace_not_supported' => [ErrorCode::NAMESPACE_NOT_SUPPORTED, 400];
+        yield 'ambiguous_resolution' => [ErrorCode::AMBIGUOUS_RESOLUTION, 400];
+        yield 'authentication_required' => [ErrorCode::AUTH_REQUIRED, 403];
+        yield 'forbidden' => [ErrorCode::FORBIDDEN, 403];
+        yield 'namespaced_writes_disabled' => [ErrorCode::NAMESPACED_WRITES_DISABLED, 403];
+        yield 'not_found' => [ErrorCode::NOT_FOUND, 404];
+        yield 'conflict' => [ErrorCode::CONFLICT, 409];
+        yield 'scope_immutable' => [ErrorCode::SCOPE_IMMUTABLE, 409];
+        yield 'namespace_api_disabled' => [ErrorCode::NAMESPACE_API_DISABLED, 503];
     }
 
     public function testTheCodesAboveAreEveryDeclaredCode(): void
@@ -92,15 +96,18 @@ final class ErrorMessageTest extends TestCase
 
     /**
      * A 404 names the kind and the id, and the scope the request was sent in,
-     * and nothing about where else the row might be.
+     * and says the SDK cannot tell why, but nothing about where else the row
+     * might be.
      */
     #[DataProvider('notFound')]
     public function testANotFoundNamesTheKindAndTheIdAndNothingMore(RequestContext $context, string $expected): void
     {
-        self::assertSame(
-            $expected,
-            ErrorMessage::forResponse(404, ErrorCode::NOT_FOUND, 'Resource not found.', ['detail' => 'Tag was not found.'], 'req_1', $context),
-        );
+        $message = ErrorMessage::forResponse(404, ErrorCode::NOT_FOUND, 'Resource not found.', ['detail' => 'Tag was not found.'], 'req_1', $context, Redaction::none());
+
+        self::assertSame($expected, $message);
+        foreach (['elsewhere', 'another', 'other ', 'exist', 'global partition'] as $speculation) {
+            self::assertStringNotContainsString($speculation, $message);
+        }
     }
 
     /**
@@ -112,17 +119,17 @@ final class ErrorMessageTest extends TestCase
             new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag%2F1', ['application_id' => 'commerce', 'include_global' => 'false'], new NamespaceScope('merchant', 'm-42')),
             'octonomy: tag "tag/1" was not found (not_found, HTTP 404).'
             . ' Request: GET /api/v2/tags/tag%2F1?application_id=commerce&include_global=false in namespace merchant:m-42.'
-            . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.',
+            . self::NOT_FOUND_TAIL,
         ];
         yield 'a v1 vocabulary delete' => [
             new RequestContext(ApiVersion::V1, 'DELETE', '/api/v1/vocabularies/voc_1'),
             'octonomy: vocabulary "voc_1" was not found (not_found, HTTP 404). Request: DELETE /api/v1/vocabularies/voc_1.'
-            . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.',
+            . self::NOT_FOUND_TAIL,
         ];
         yield 'a path that is not one resource' => [
             new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags'),
             'octonomy: the resource was not found (not_found, HTTP 404). Request: GET /api/v2/tags.'
-            . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.',
+            . self::NOT_FOUND_TAIL,
         ];
     }
 
@@ -139,7 +146,7 @@ final class ErrorMessageTest extends TestCase
             . ' ({"error": {...}}; Content-Type text/html), so the SDK cannot tell why. Fix: check that base_url is the'
             . " Octonomy API's address, then the logs of the server and of anything in front of it, such as a proxy or"
             . ' a load balancer.',
-            ErrorMessage::forResponse(502, null, null, [], null, $context, 'text/html'),
+            ErrorMessage::forResponse(502, null, null, [], null, $context, Redaction::none(), 'text/html'),
         );
     }
 
@@ -149,9 +156,10 @@ final class ErrorMessageTest extends TestCase
 
         self::assertSame(
             'octonomy: the request failed (a_newer_code, HTTP 422). Request: POST /api/v2/tags.'
-            . ' This SDK release does not know the code a_newer_code, so it cannot say why.'
-            . ' Server said: "Something newer." Request ID: req_1.',
-            ErrorMessage::forResponse(422, 'a_newer_code', 'Something newer.', [], 'req_1', $context),
+            . ' This SDK release does not know the code, so it cannot say why.'
+            . " Fix: look the request up in the server's logs by its request ID, and check that this SDK release"
+            . " supports the server's version. Server said: \"Something newer.\" Request ID: req_1.",
+            ErrorMessage::forResponse(422, 'a_newer_code', 'Something newer.', [], 'req_1', $context, Redaction::none()),
         );
     }
 
@@ -162,7 +170,7 @@ final class ErrorMessageTest extends TestCase
     {
         $context = new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags', [], new NamespaceScope('global', 'x'));
 
-        $message = ErrorMessage::forResponse(400, ErrorCode::NAMESPACE_INVALID, 'Namespace headers are invalid.', [], null, $context);
+        $message = ErrorMessage::forResponse(400, ErrorCode::NAMESPACE_INVALID, 'Namespace headers are invalid.', [], null, $context, Redaction::none());
 
         self::assertStringContainsString('The namespace type "global" is reserved', $message);
         self::assertStringContainsString('Fix: omit the namespace to use the global partition.', $message);
@@ -180,10 +188,41 @@ final class ErrorMessageTest extends TestCase
         self::assertIsArray($details);
         $context = new RequestContext(ApiVersion::V2, 'POST', '/api/v2/tags');
 
-        $message = ErrorMessage::forResponse(400, ErrorCode::VALIDATION, 'Request validation failed.', $details, null, $context);
+        $message = ErrorMessage::forResponse(400, ErrorCode::VALIDATION, 'Request validation failed.', $details, null, $context, Redaction::none());
 
         self::assertStringContainsString('Details on: name, slug.', $message);
         self::assertStringNotContainsString('This field may not be blank.', $message);
         self::assertStringNotContainsString('Use lowercase letters', $message);
+    }
+
+    /**
+     * A server may echo what the request sent. Whatever it quotes from the
+     * request (the token, the actor id, a value from the body) is replaced in
+     * the message, wherever it appears in what the server sent: the message,
+     * the detail, the details' names, the request id or the code.
+     */
+    public function testWhatTheServerEchoesFromTheRequestIsReplaced(): void
+    {
+        $redaction = Redaction::of('octo_tokensecret', 'actor-7', ['slug' => 'slug-from-the-body', 'metadata' => ['note' => 'a/b']]);
+        $context = new RequestContext(ApiVersion::V2, 'POST', '/api/v2/tags');
+
+        $message = ErrorMessage::forResponse(
+            400,
+            ErrorCode::VALIDATION,
+            'Invalid value slug-from-the-body from actor-7 with Bearer octo_tokensecret.',
+            ['detail' => 'Rejected {"note":"a\\/b"}', 'slug-from-the-body' => ['echoed as a name']],
+            'req_actor-7',
+            $context,
+            $redaction,
+        );
+
+        foreach (['slug-from-the-body', 'actor-7', 'octo_tokensecret', 'a\\/b'] as $echoed) {
+            self::assertStringNotContainsString($echoed, $message);
+        }
+        self::assertStringContainsString(
+            'Server said: "Invalid value [redacted] from [redacted] with Bearer [redacted]." Detail: "Rejected {"note":"[redacted]"}"'
+            . ' Details on: [redacted]. Request ID: req_[redacted].',
+            $message,
+        );
     }
 }

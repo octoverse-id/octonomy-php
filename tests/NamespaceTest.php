@@ -50,6 +50,36 @@ final class NamespaceTest extends SdkTestCase
         yield 'a blank type' => [' ', 'm-42', $noType];
     }
 
+    /**
+     * A header cannot carry a control character, and Guzzle's refusal would be
+     * thrown from frames that hold the token and the body (Redaction).
+     */
+    #[DataProvider('unsendablePairs')]
+    public function testANamespaceAHeaderCannotCarryIsRefused(string $type, string $id, string $expected): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($expected);
+
+        new NamespaceScope($type, $id);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function unsendablePairs(): iterable
+    {
+        yield 'a type with a newline' => [
+            "merchant\n",
+            'm-42',
+            'octonomy: the namespace type holds a line break or another control character, which the X-Namespace-Type header cannot carry. Fix: remove the control characters.',
+        ];
+        yield 'an id with a carriage return' => [
+            'merchant',
+            "m-42\r",
+            'octonomy: the namespace id holds a line break or another control character, which the X-Namespace-ID header cannot carry. Fix: remove the control characters.',
+        ];
+    }
+
     public function testANamespaceKeepsItsValuesAsGiven(): void
     {
         // Opaque and caller-canonical: the server does not case-fold them.

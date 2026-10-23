@@ -140,7 +140,8 @@ namespace to write globally. Server said: "Namespaced writes are not enabled." R
 ```
 
 No exception the SDK throws carries the token, the `Authorization` header, the request body, or
-`X-Actor-ID`: not in its message, its context, or the arguments of the SDK's frames in its trace.
+`X-Actor-ID`: not in its message (text quoted from the HTTP client or the server has them replaced
+with `[redacted]`), its context, or the arguments of the SDK's frames in its trace.
 
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`

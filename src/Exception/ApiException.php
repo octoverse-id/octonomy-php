@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy\Exception;
 
 use Octoverse\Octonomy\ErrorCode;
 use Octoverse\Octonomy\Internal\ErrorMessage;
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\RequestContext;
 
 /**
@@ -16,7 +17,10 @@ use Octoverse\Octonomy\RequestContext;
  *
  * The message is the SDK's, not the server's: it says what failed and with
  * which request, why where the error code tells the SDK, and how to fix it,
- * and it quotes the server's own message, which $serverMessage holds as sent.
+ * and it quotes the server's own message with any value the request carried
+ * (the token, the actor id, the body) replaced. $serverMessage and $details
+ * hold what the server sent, unedited: they are the server's data, not a
+ * message, and can echo what the request sent.
  *
  * Prefer catching the specific subclasses (NotFoundException, ConflictException,
  * ValidationException, AuthenticationException, ForbiddenException,
@@ -29,8 +33,8 @@ class ApiException extends OctonomyException
     /**
      * @param RequestContext       $context       the request that received this response
      * @param array<string, mixed> $details
-     * @param string|null          $serverMessage the error envelope's message as the server sent it, or null
-     *                                            when the response carried none
+     * @param string|null          $serverMessage the error envelope's message as the server sent it, unedited,
+     *                                            or null when the response carried none
      */
     public function __construct(
         string $message,
@@ -51,9 +55,16 @@ class ApiException extends OctonomyException
      *
      * @param array<string, mixed> $body
      * @param string               $contentType the response's Content-Type header, '' when it had none
+     * @param Redaction|null       $redaction   @internal the values the request carried, which the message
+     *                                          must not quote from the response; null for none
      */
-    public static function fromResponse(int $status, array $body, RequestContext $context, string $contentType = ''): self
-    {
+    public static function fromResponse(
+        int $status,
+        array $body,
+        RequestContext $context,
+        string $contentType = '',
+        ?Redaction $redaction = null,
+    ): self {
         // Read leniently, unlike a 2xx body: whatever a gateway or proxy sent in
         // place of the envelope, the status alone still picks the exception.
         $error = self::member($body, 'error');
@@ -67,7 +78,16 @@ class ApiException extends OctonomyException
         $class = self::classFor($code, $status);
         // The message reads the server's code, never the one derived from the
         // status: a bare 404 from a proxy must not be described as a missing row.
-        $message = ErrorMessage::forResponse($status, $serverCode, $serverMessage, $details, $requestId, $context, $contentType);
+        $message = ErrorMessage::forResponse(
+            $status,
+            $serverCode,
+            $serverMessage,
+            $details,
+            $requestId,
+            $context,
+            $redaction ?? Redaction::none(),
+            $contentType,
+        );
 
         return new $class($message, $status, $code, $context, $details, $requestId, $serverMessage);
     }

@@ -6,7 +6,8 @@ namespace Octoverse\Octonomy\Internal;
 
 /**
  * Redaction is the SDK's list of what no exception it throws may carry, and the
- * one place that list is enforced on stack frames.
+ * one place that list is enforced: on the text a message quotes, and on stack
+ * frames.
  *
  * Never in a message, a RequestContext, a stack frame, or an exception chained
  * as getPrevious():
@@ -16,10 +17,19 @@ namespace Octoverse\Octonomy\Internal;
  * - the request body;
  * - X-Actor-ID (Config::$actorId, RequestOptions::$actorId).
  *
- * Messages and RequestContext keep them out by construction: no message is
- * built from any of them, and RequestContext has no field that could hold one.
- * A token or actor id that an HTTP header cannot carry is refused before Guzzle
- * sees it, because Guzzle's own error quotes the whole header value.
+ * RequestContext has no field that could hold one, and the SDK's own words in
+ * a message never interpolate one. A message also quotes text the SDK did not
+ * write: the HTTP client's error, and the server's message, detail, details'
+ * names, request id and Content-Type. An injected client or middleware, or a
+ * server that echoes its input, can put any of the four in that text, so it
+ * passes through text() first, which replaces the values the request carried
+ * (of()). The server's own data stays as sent in ApiException::$serverMessage
+ * and $details, which are not messages.
+ *
+ * Every header value the SDK sends is checked before Guzzle sees it
+ * (isHeaderSafe()): Guzzle refuses a bad one with an error that quotes it, and
+ * throws that error from frames whose arguments hold every header, the
+ * Authorization one included, and the body.
  *
  * Stack frames are where they leak by default. PHP records every argument of
  * every frame in an exception's trace, so the frame of TagService::create()
@@ -52,10 +62,74 @@ final class Redaction
      */
     public const ALL = [self::TOKEN, self::AUTHORIZATION, self::BODY, self::ACTOR];
 
+    /** What text() puts in place of a value. */
+    public const MARK = '[redacted]';
+
     /** The namespace a frame's class is in when the frame is the SDK's own. */
     private const SDK_NAMESPACE = 'Octoverse\\Octonomy\\';
 
-    private function __construct() {}
+    /**
+     * The length from which text() replaces a value wherever it appears. A
+     * shorter one is replaced only where it stands alone, so an actor id of
+     * "1" does not eat the digits of a port number in a client's error.
+     */
+    private const DISTINCT = 8;
+
+    /**
+     * @param list<string> $values the values to replace, longest first
+     */
+    private function __construct(private readonly array $values) {}
+
+    /**
+     * The values on the list that one request carries: its token, the actor id
+     * it sends, and every string or number in its body, each also as JSON
+     * escapes it, since an echo of the body is JSON.
+     *
+     * @param array<array-key, mixed>|null $body
+     */
+    public static function of(string $token, ?string $actorId, ?array $body): self
+    {
+        $values = [$token];
+        if ($actorId !== null) {
+            $values[] = $actorId;
+        }
+        if ($body !== null) {
+            array_walk_recursive($body, static function (mixed $leaf) use (&$values): void {
+                if (is_string($leaf) || is_int($leaf) || is_float($leaf)) {
+                    $text = (string) $leaf;
+                    $values[] = $text;
+                    $values[] = substr((string) json_encode($text), 1, -1);
+                }
+            });
+        }
+        $values = array_values(array_unique(array_filter($values, static fn(string $value): bool => $value !== '')));
+        usort($values, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        return new self($values);
+    }
+
+    /**
+     * A redaction with nothing to replace, for text no request's values could
+     * have reached.
+     */
+    public static function none(): self
+    {
+        return new self([]);
+    }
+
+    /**
+     * $text with every value this redaction holds replaced by MARK.
+     */
+    public function text(string $text): string
+    {
+        foreach ($this->values as $value) {
+            $text = strlen($value) >= self::DISTINCT
+                ? str_replace($value, self::MARK, $text)
+                : (string) preg_replace('/(?<![A-Za-z0-9])' . preg_quote($value, '/') . '(?![A-Za-z0-9])/', self::MARK, $text);
+        }
+
+        return $text;
+    }
 
     /**
      * Remove the arguments of every SDK frame from $e's trace, and from the
@@ -86,7 +160,8 @@ final class Redaction
     /**
      * Whether $value can be sent as an HTTP header value: no control character
      * other than a tab. Guzzle refuses any other value with an error that
-     * quotes it in full, so a credential must be checked before it gets there.
+     * quotes it in full, thrown from frames that hold the Authorization header
+     * and the body, so every header value is checked before it gets there.
      */
     public static function isHeaderSafe(string $value): bool
     {

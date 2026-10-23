@@ -17,9 +17,10 @@ use Octoverse\Octonomy\Internal\Redaction;
  * Client reads it once, when it is constructed, and never changes it; there is
  * no per-request override.
  *
- * No ConfigurationException quotes the token or the actor id, and a token or
- * actor id that an HTTP header cannot carry is refused here: Guzzle would
- * otherwise refuse it on the first request with an error that quotes it.
+ * No ConfigurationException quotes the token or the actor id. A token, tenant
+ * id, actor id or user agent that an HTTP header cannot carry is refused here:
+ * Guzzle would otherwise refuse it on the first request, with an error that
+ * quotes it and a trace whose frames hold the token and the body.
  */
 final class Config
 {
@@ -29,9 +30,9 @@ final class Config
     /**
      * @param string $apiVersion an ApiVersion constant
      *
-     * @throws ConfigurationException when a required value is blank, the base URL is not absolute, the
-     *                                token or actor id holds a control character, or the api_version is
-     *                                not one of the ApiVersion constants
+     * @throws ConfigurationException when a required value is blank, the base URL is not absolute, a
+     *                                value sent as a header holds a control character, or the
+     *                                api_version is not one of the ApiVersion constants
      */
     public function __construct(
         public readonly string $baseUrl,
@@ -67,8 +68,14 @@ final class Config
                 . ' the --tenant the token was issued for.',
             );
         }
+        if (!Redaction::isHeaderSafe($tenantId)) {
+            throw new ConfigurationException(self::unsendable('tenant_id', 'X-Tenant-ID'));
+        }
         if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
             throw new ConfigurationException(self::unsendable('actor_id', 'X-Actor-ID'));
+        }
+        if ($userAgent !== null && !Redaction::isHeaderSafe($userAgent)) {
+            throw new ConfigurationException(self::unsendable('user_agent', 'User-Agent'));
         }
 
         $parsed = parse_url($baseUrl);
@@ -197,8 +204,8 @@ final class Config
     }
 
     /**
-     * The message for a token or actor id an HTTP header cannot carry. It
-     * describes the value and never quotes it.
+     * The message for a value an HTTP header cannot carry. It describes the
+     * value and never quotes it, since it may be the token.
      */
     private static function unsendable(string $key, string $header): string
     {

@@ -50,6 +50,9 @@ final class Transport
 
     /** The scheme, host and port of the base URL, as a message names the server. */
     private readonly string $origin;
+
+    /** Kept apart from the header only so a message can redact it (Redaction::of()). */
+    private readonly string $token;
     private readonly ?string $actorId;
 
     /** @var array<string, string> */
@@ -68,6 +71,7 @@ final class Transport
         // readonly in the downgrade, so a Config can be changed after its
         // constructor checked it.
         $this->apiVersion = ApiVersion::check($config->apiVersion);
+        $this->token = $config->token;
         $this->actorId = $config->actorId;
         $this->baseUrl = rtrim($config->baseUrl, '/');
         $this->origin = self::origin($config->baseUrl);
@@ -119,7 +123,7 @@ final class Transport
         ?RequestOptions $options = null,
     ): mixed {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options));
+        $decoded = $this->decode($context, $this->send($context, $body, $options), $body, $options);
 
         $data = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!self::isResource($data)) {
@@ -159,7 +163,7 @@ final class Transport
         ?RequestOptions $options = null,
     ): ResultList {
         $context = $this->context($method, $path, $query, $options);
-        $decoded = $this->decode($context, $this->send($context, $body, $options));
+        $decoded = $this->decode($context, $this->send($context, $body, $options), $body, $options);
 
         $rows = $decoded instanceof \stdClass ? ($decoded->data ?? null) : null;
         if (!is_array($rows)) {
@@ -238,11 +242,8 @@ final class Transport
         $this->refuseV2OnlyFeatures($namespace, $query);
 
         $headers = $this->defaultHeaders;
-        $actor = $this->actorId;
-        if ($options !== null && $options->actorId !== null) {
-            $actor = $options->actorId;
-        }
-        if ($actor !== null && $actor !== '') {
+        $actor = $this->actor($options);
+        if ($actor !== null) {
             $headers['X-Actor-ID'] = $actor;
         }
         if ($namespace !== null) {
@@ -267,7 +268,10 @@ final class Transport
             // Quoted in the message, not chained as getPrevious(): Guzzle's
             // exception holds the request it failed to send, Authorization
             // header and body included (Redaction).
-            throw new TransportException(ErrorMessage::forNoResponse($context, $this->origin, $e), $context);
+            throw new TransportException(
+                ErrorMessage::forNoResponse($context, $this->origin, $e, $this->redaction($body, $options)),
+                $context,
+            );
         }
 
         $status = $response->getStatusCode();
@@ -277,6 +281,7 @@ final class Transport
                 Json::tryDecode((string) $response->getBody()),
                 $context,
                 $response->getHeaderLine('Content-Type'),
+                $this->redaction($body, $options),
             );
         }
 
@@ -288,9 +293,11 @@ final class Transport
      * TransportException for the request it answered: a proxy or gateway that
      * sent HTML with a 2xx gave no usable response.
      *
+     * @param array<string, mixed>|null $body the request's body, to redact from the message
+     *
      * @throws TransportException when the body is not valid JSON
      */
-    private function decode(RequestContext $context, ResponseInterface $response): mixed
+    private function decode(RequestContext $context, ResponseInterface $response, ?array $body, ?RequestOptions $options): mixed
     {
         $raw = (string) $response->getBody();
         try {
@@ -303,6 +310,7 @@ final class Transport
                     $response->getHeaderLine('Content-Type'),
                     strlen($raw),
                     $e->getMessage(),
+                    $this->redaction($body, $options),
                 ),
                 $context,
                 $e,
@@ -368,6 +376,28 @@ final class Transport
         } catch (MalformedResponseException $e) {
             throw $e->locate($context, $at);
         }
+    }
+
+    /**
+     * The X-Actor-ID a request sends: RequestOptions::$actorId when set, else
+     * Config::$actorId, and none when the one that applies is empty.
+     */
+    private function actor(?RequestOptions $options): ?string
+    {
+        $actor = $options->actorId ?? $this->actorId;
+
+        return $actor === '' ? null : $actor;
+    }
+
+    /**
+     * The values a request carries that no message may quote: built only when
+     * the request fails, from the same token, actor and body it sent.
+     *
+     * @param array<string, mixed>|null $body
+     */
+    private function redaction(?array $body, ?RequestOptions $options): Redaction
+    {
+        return Redaction::of($this->token, $this->actor($options), $body);
     }
 
     /**

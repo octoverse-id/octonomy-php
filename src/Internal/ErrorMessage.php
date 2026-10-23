@@ -15,9 +15,13 @@ use Octoverse\Octonomy\RequestContext;
  *
  * The values are the request as RequestContext describes it, the status, the
  * error envelope's code, message, detail, request id and the names of its
- * details, and the HTTP client's own error. Nothing on Redaction's list is
- * among them. The details' values are left out too, because a validation
- * reason can quote what the request sent ('"x" is not a valid choice.');
+ * details, and the HTTP client's own error. The SDK's own words never
+ * interpolate anything on Redaction's list. Every piece of text it quotes from
+ * the client or the server passes through Redaction::text() first, which
+ * replaces the values the request carried: a client's middleware or a server
+ * can echo the request. (At server 3.2.1 no envelope message or detail does.)
+ * The details' values are left out entirely, because a validation reason can
+ * quote what the request sent ('"x" is not a valid choice.');
  * ApiException::$details keeps them for the caller.
  *
  * A 404 names the kind and the id of the resource it asked for and nothing
@@ -43,6 +47,8 @@ final class ErrorMessage
      *                                            no envelope
      * @param string|null          $serverMessage the error envelope's message
      * @param array<string, mixed> $details       the error envelope's details
+     * @param Redaction            $redaction     the values the request carried, to replace in what the
+     *                                            server sent
      * @param string               $contentType   the response's Content-Type header, '' when it had none
      */
     public static function forResponse(
@@ -52,6 +58,7 @@ final class ErrorMessage
         array $details,
         ?string $requestId,
         RequestContext $context,
+        Redaction $redaction,
         string $contentType = '',
     ): string {
         if ($code === null) {
@@ -64,18 +71,19 @@ final class ErrorMessage
                 . ' and of anything in front of it, such as a proxy or a load balancer.',
                 self::request($context),
                 $status,
-                self::contentType($contentType),
+                $redaction->text(self::contentType($contentType)),
             );
         }
 
         [$what, $why, $fix] = self::explain($code, $context);
+        $server = self::server($serverMessage, $details, $requestId);
 
         return implode(' ', array_filter([
-            sprintf('octonomy: %s (%s, HTTP %d).', $what, $code, $status),
+            sprintf('octonomy: %s (%s, HTTP %d).', $what, $redaction->text($code), $status),
             sprintf('Request: %s.', self::request($context)),
             $why,
-            $fix === null ? null : 'Fix: ' . $fix,
-            self::server($serverMessage, $details, $requestId),
+            'Fix: ' . $fix,
+            $server === null ? null : $redaction->text($server),
         ]));
     }
 
@@ -85,10 +93,15 @@ final class ErrorMessage
      * alone the SDK cannot tell why the request failed, nor whether the server
      * received it.
      *
-     * @param string $origin the scheme, host and port of base_url, without any credentials in it
+     * @param string    $origin    the scheme, host and port of base_url, without any credentials in it
+     * @param Redaction $redaction the values the request carried, to replace in the client's error
      */
-    public static function forNoResponse(RequestContext $context, string $origin, \Throwable $clientError): string
-    {
+    public static function forNoResponse(
+        RequestContext $context,
+        string $origin,
+        \Throwable $clientError,
+        Redaction $redaction,
+    ): string {
         $write = !in_array($context->method, ['GET', 'HEAD', 'OPTIONS'], true);
 
         return sprintf(
@@ -98,7 +111,7 @@ final class ErrorMessage
             self::request($context),
             $origin,
             $clientError::class,
-            $clientError->getMessage(),
+            $redaction->text($clientError->getMessage()),
             $write ? ', or whether the server received and applied it' : '',
             $origin,
             $write ? '; before sending the write again, check whether it took effect' : '',
@@ -111,9 +124,10 @@ final class ErrorMessage
      * cannot tell what sent it. (An empty body is not this case: Json::decode()
      * reads it as null, and the envelope check reports it.)
      *
-     * @param string $contentType the response's Content-Type header, '' when it had none
-     * @param int    $bytes       the length of the body
-     * @param string $jsonError   json_decode()'s reason
+     * @param string    $contentType the response's Content-Type header, '' when it had none
+     * @param int       $bytes       the length of the body
+     * @param string    $jsonError   json_decode()'s reason
+     * @param Redaction $redaction   the values the request carried, to replace in the Content-Type
      */
     public static function forUndecodable(
         RequestContext $context,
@@ -121,6 +135,7 @@ final class ErrorMessage
         string $contentType,
         int $bytes,
         string $jsonError,
+        Redaction $redaction,
     ): string {
         return sprintf(
             'octonomy: %s answered HTTP %d with a body that is not JSON (%s; %s, %d bytes), where the Octonomy API'
@@ -129,7 +144,7 @@ final class ErrorMessage
             self::request($context),
             $status,
             $jsonError,
-            self::contentType($contentType),
+            $redaction->text(self::contentType($contentType)),
             $bytes,
         );
     }
@@ -153,12 +168,12 @@ final class ErrorMessage
     }
 
     /**
-     * What happened, why (null where the SDK does not know), and the fix (null
-     * where there is none it can give), for an error code. The why of a
-     * deployment flag is knowable because the server sends that code for that
-     * flag and nothing else.
+     * What happened, why (null where the SDK does not know, unless it must say
+     * that it cannot), and the fix, for an error code. The why of a deployment
+     * flag is knowable because the server sends that code for that flag and
+     * nothing else.
      *
-     * @return array{string, string|null, string|null}
+     * @return array{string, string|null, string}
      */
     private static function explain(string $code, RequestContext $context): array
     {
@@ -193,7 +208,13 @@ final class ErrorMessage
                     null,
                     'check the namespace type and id, and that nothing else adds X-Namespace-* headers.',
                 ],
-            ErrorCode::NOT_FOUND => [self::notFound($context), null, null],
+            // Nothing about where else the row might be: a scoped read does not
+            // reveal whether it exists outside what the request could see.
+            ErrorCode::NOT_FOUND => [
+                self::notFound($context),
+                'The server does not say why, so the SDK cannot either.',
+                'check that the request above, its id included, is the one you meant to send.',
+            ],
             ErrorCode::CONFLICT => [
                 'the request conflicts with existing data',
                 null,
@@ -247,8 +268,9 @@ final class ErrorMessage
             ],
             default => [
                 'the request failed',
-                sprintf('This SDK release does not know the code %s, so it cannot say why.', $code),
-                null,
+                'This SDK release does not know the code, so it cannot say why.',
+                'look the request up in the server\'s logs by its request ID, and check that this SDK release'
+                . ' supports the server\'s version.',
             ],
         };
     }

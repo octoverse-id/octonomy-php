@@ -61,9 +61,14 @@ abstract class SdkTestCase extends TestCase
      * failure is Guzzle's own ConnectException, queued on the MockHandler, so
      * no socket is opened.
      *
-     * @param array<string, mixed> $config overrides of the default options, as for clientWith()
+     * $describe, when given, writes the error's message from the request, as a
+     * client or middleware that quotes what it sent would.
+     *
+     * @param array<string, mixed>                       $config   overrides of the default options, as for
+     *                                                             clientWith()
+     * @param (\Closure(RequestInterface): string)|null $describe
      */
-    protected function clientThatCannotConnect(array $config = []): Client
+    protected function clientThatCannotConnect(array $config = [], ?\Closure $describe = null): Client
     {
         if (array_key_exists('http_client', $config)) {
             throw new \LogicException('clientThatCannotConnect() owns the HTTP client');
@@ -71,7 +76,10 @@ abstract class SdkTestCase extends TestCase
         $this->mock = new MockHandler([
             // Returned, not thrown: MockHandler rejects the request with a
             // Throwable a queued callable returns, as a real handler does.
-            static fn(RequestInterface $request): ConnectException => new ConnectException('Connection refused', $request),
+            static fn(RequestInterface $request): ConnectException => new ConnectException(
+                $describe === null ? 'Connection refused' : $describe($request),
+                $request,
+            ),
         ]);
 
         return new Client(array_merge([

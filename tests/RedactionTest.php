@@ -16,6 +16,7 @@ use Octoverse\Octonomy\Model\TagCreate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
+use Psr\Http\Message\RequestInterface;
 
 /**
  * Covers the redaction rules (Internal\Redaction): no exception the SDK throws
@@ -94,6 +95,36 @@ final class RedactionTest extends SdkTestCase
             $this->assertEverythingWasSent();
             self::assertNull($e->getPrevious());
             self::assertCarriesNone($e, self::CREATE_FRAME);
+        }
+    }
+
+    /**
+     * An HTTP client or middleware can quote the request in its error. The
+     * message quotes that error with every value the request carried replaced.
+     */
+    public function testAClientErrorThatQuotesTheRequestIsRedacted(): void
+    {
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static fn(RequestInterface $request): string => sprintf(
+                'refused, Authorization: %s, X-Actor-ID: %s, body: %s',
+                $request->getHeaderLine('Authorization'),
+                $request->getHeaderLine('X-Actor-ID'),
+                (string) $request->getBody(),
+            ),
+        );
+
+        try {
+            $client->tags()->create(self::body(), self::options());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            $this->assertEverythingWasSent();
+            self::assertCarriesNone($e, self::CREATE_FRAME);
+            self::assertStringContainsString(
+                '"refused, Authorization: Bearer [redacted], X-Actor-ID: [redacted], body: {"name":"[redacted]",'
+                . '"slug":"[redacted]","type":"[redacted]","application_id":"[redacted]","description":"[redacted]"}"',
+                $e->getMessage(),
+            );
         }
     }
 
@@ -189,6 +220,22 @@ final class RedactionTest extends SdkTestCase
         self::assertArrayNotHasKey('args', $e->getTrace()[0]);
         self::assertSame('array_map', $e->getTrace()[1]['function']);
         self::assertSame(['an argument'], $e->getTrace()[1]['args'][1] ?? null);
+    }
+
+    /**
+     * A value of eight characters or more is replaced wherever it appears; a
+     * shorter one only where it stands alone, so a short actor id does not eat
+     * the digits of a port number.
+     */
+    public function testTextReplacesShortValuesOnlyWhereTheyStandAlone(): void
+    {
+        $redaction = Redaction::of('octo_tokensecret', '1', ['name' => 'Featured']);
+
+        self::assertSame(
+            'connect to localhost port 8010 after [redacted] ms; token=[redacted]; [redacted]Tag; [redacted]',
+            $redaction->text('connect to localhost port 8010 after 1 ms; token=octo_tokensecret; FeaturedTag; Featured'),
+        );
+        self::assertSame('nothing to hide', Redaction::none()->text('nothing to hide'));
     }
 
     /**

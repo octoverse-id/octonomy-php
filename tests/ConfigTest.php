@@ -94,6 +94,18 @@ final class ConfigTest extends TestCase
             . ' carry; the value is not shown. Fix: remove the control characters, such as a trailing newline left by'
             . ' reading the value from a file.',
         ];
+        yield 'a tenant_id with a trailing newline' => [
+            ['tenant_id' => "acme\n"] + $valid,
+            'octonomy: tenant_id holds a line break or another control character, which the X-Tenant-ID header'
+            . ' cannot carry; the value is not shown. Fix: remove the control characters, such as a trailing newline'
+            . ' left by reading the value from a file.',
+        ];
+        yield 'a user_agent with a null byte' => [
+            ['user_agent' => "my-app/1.0\0"] + $valid,
+            'octonomy: user_agent holds a line break or another control character, which the User-Agent header'
+            . ' cannot carry; the value is not shown. Fix: remove the control characters, such as a trailing newline'
+            . ' left by reading the value from a file.',
+        ];
         yield 'an actor_id with a carriage return' => [
             ['actor_id' => "svc-catalog\r"] + $valid,
             'octonomy: actor_id holds a line break or another control character, which the X-Actor-ID header cannot'
