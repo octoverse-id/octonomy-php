@@ -13,9 +13,11 @@ use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\Model\TagCreate;
+use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Http\Message\RequestInterface;
 
 /**
@@ -121,11 +123,117 @@ final class RedactionTest extends SdkTestCase
             $this->assertEverythingWasSent();
             self::assertCarriesNone($e, self::CREATE_FRAME);
             self::assertStringContainsString(
-                '"refused, Authorization: Bearer [redacted], X-Actor-ID: [redacted], body: {"name":"[redacted]",'
-                . '"slug":"[redacted]","type":"[redacted]","application_id":"[redacted]","description":"[redacted]"}"',
+                '"refused, Authorization: Bearer [redacted], X-Actor-ID: [redacted], body: [redacted]"',
                 $e->getMessage(),
             );
         }
+    }
+
+    /**
+     * A body of nothing but a boolean is still the body: sent whole, it is
+     * replaced whole, and its value alone where it stands alone.
+     */
+    public function testABodyWithNoStringInItIsRedactedToo(): void
+    {
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static fn(RequestInterface $request): string => sprintf(
+                'body=%s, is_active: %s',
+                (string) $request->getBody(),
+                json_decode((string) $request->getBody(), true)['is_active'] === false ? 'false' : 'true',
+            ),
+        );
+
+        try {
+            $client->tags()->update('tag_1', new TagUpdate(isActive: false));
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertSame('{"is_active":false}', (string) $this->lastRequest()->getBody());
+            self::assertStringContainsString('"body=[redacted], is_active: [redacted]"', $e->getMessage());
+            self::assertStringNotContainsString('false', $e->getMessage());
+        }
+    }
+
+    /**
+     * A field the model rejects can hold what the request sent, when a server
+     * echoes it. The report quotes it redacted, and so does every report it
+     * chains.
+     */
+    public function testAMalformedFieldThatEchoesTheRequestIsRedacted(): void
+    {
+        $client = $this->clientWith([self::syntheticNegativeFrom(
+            'v2/tags/update',
+            SyntheticNegative::WRONG_TYPE,
+            static fn(array $body): array => array_replace_recursive($body, ['data' => ['created_at' => 'Name From The Body']]),
+        )], self::config());
+
+        try {
+            $client->tags()->update('tag_1', new TagUpdate(name: 'Name From The Body'), 'harness-app', self::options());
+            self::fail('expected a MalformedResponseException');
+        } catch (MalformedResponseException $e) {
+            self::assertStringEndsWith('field "data.created_at" must be an RFC 3339 timestamp, got "[redacted]"', $e->getMessage());
+            self::assertInstanceOf(MalformedResponseException::class, $e->getPrevious());
+            self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Resource\\TagService::update');
+        }
+    }
+
+    /**
+     * A client can throw after a response arrived, as middleware that throws on
+     * a status does. The server got the request, so the message does not say
+     * there was no response.
+     */
+    public function testAClientFailureAfterAResponseSaysTheServerAnswered(): void
+    {
+        $client = $this->clientThatCannotConnect(self::config(), null, 503);
+
+        try {
+            $client->tags()->create(self::body(), self::options());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringStartsWith(
+                'octonomy: the HTTP client failed on POST /api/v2/tags in namespace merchant:harness-merchant-a to'
+                . ' https://octonomy.test after an HTTP 503 response, with ',
+                $e->getMessage(),
+            );
+            self::assertStringContainsString('cannot tell from this why the request failed, or whether the server applied it.', $e->getMessage());
+            self::assertCarriesNone($e, self::CREATE_FRAME);
+        }
+    }
+
+    /**
+     * The PHP 7.4 line has no readonly, so a value its constructor checked can
+     * be changed afterwards. Transport checks every header value again before
+     * Guzzle sees one. Built here without its constructor, which both lines
+     * allow, so the check runs on both.
+     */
+    #[DataProvider('valuesChangedAfterTheirCheck')]
+    public function testAHeaderValueThatSkippedItsCheckIsRefusedBeforeSending(\Closure $options, string $header): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/get')], self::config());
+
+        try {
+            $client->tags()->get('tag_1', 'harness-app', options: $options());
+            self::fail('expected an \InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringStartsWith("octonomy: the {$header} value holds a line break", $e->getMessage());
+            $this->assertNothingSent();
+            self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Resource\\TagService::get');
+        }
+    }
+
+    /**
+     * @return iterable<string, array{\Closure(): RequestOptions, string}>
+     */
+    public static function valuesChangedAfterTheirCheck(): iterable
+    {
+        yield 'an actor id' => [
+            static fn(): RequestOptions => self::unchecked(RequestOptions::class, ['actorId' => "actor-from-the-call\n", 'namespace' => null]),
+            'X-Actor-ID',
+        ];
+        yield 'a namespace id' => [
+            static fn(): RequestOptions => new RequestOptions(namespace: self::unchecked(NamespaceScope::class, ['type' => 'merchant', 'id' => "m-42\r\n"])),
+            'X-Namespace-ID',
+        ];
     }
 
     /**
@@ -223,6 +331,26 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
+     * The body is redacted as it goes on the wire: every value at any depth,
+     * an object's included, and every key below the top level, where a key is
+     * the caller's content rather than a field name.
+     */
+    public function testOfTakesTheBodyAsItIsSent(): void
+    {
+        $object = new \stdClass();
+        $object->{'object-key'} = 'object-value';
+        $redaction = Redaction::of('octo_tokensecret', null, [
+            'name' => 'Featured',
+            'metadata' => ['customer-email' => 'someone@example.test', 'nested' => [$object, 42, 'a/b']],
+        ]);
+
+        self::assertSame(
+            'name: [redacted]; metadata: {"[redacted]":"[redacted]","[redacted]":[{"[redacted]":"[redacted]"},[redacted],"[redacted]"]}',
+            $redaction->text('name: Featured; metadata: {"customer-email":"someone@example.test","nested":[{"object-key":"object-value"},42,"a\\/b"]}'),
+        );
+    }
+
+    /**
      * A value of eight characters or more is replaced wherever it appears; a
      * shorter one only where it stands alone, so a short actor id does not eat
      * the digits of a port number.
@@ -236,6 +364,31 @@ final class RedactionTest extends SdkTestCase
             $redaction->text('connect to localhost port 8010 after 1 ms; token=octo_tokensecret; FeaturedTag; Featured'),
         );
         self::assertSame('nothing to hide', Redaction::none()->text('nothing to hide'));
+    }
+
+    /**
+     * An instance of $class whose properties are set to $values without its
+     * constructor running, as a write after construction leaves one on the
+     * PHP 7.4 line.
+     *
+     * @template T of object
+     *
+     * @param class-string<T>      $class
+     * @param array<string, mixed> $values
+     *
+     * @return T
+     */
+    private static function unchecked(string $class, array $values): object
+    {
+        $object = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
+        // Bound to the class, which may initialize its own readonly properties.
+        \Closure::bind(static function (object $object, array $values): void {
+            foreach ($values as $name => $value) {
+                $object->{$name} = $value;
+            }
+        }, null, $class)($object, $values);
+
+        return $object;
     }
 
     /**

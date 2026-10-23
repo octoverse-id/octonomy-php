@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Exception;
 
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\RequestContext;
 
 /**
@@ -31,19 +32,23 @@ final class MalformedResponseException extends OctonomyException
      *                                        hydrated outside a request
      * @param string|null         $apiVersion the api_version the body was read as, when there is no $context
      *                                        to say so
+     * @param string|null         $got        the value from the body the message quotes after $problem, if
+     *                                        any; kept apart so it can be redacted once the request is known
      */
     public function __construct(
         private readonly string $problem,
         public readonly ?string $field = null,
         public readonly ?RequestContext $context = null,
-        ?string $apiVersion = null,
+        private readonly ?string $apiVersion = null,
         ?\Throwable $previous = null,
+        private readonly ?string $got = null,
     ) {
-        $apiVersion = $context === null ? $apiVersion : $context->apiVersion;
+        $version = $context === null ? $apiVersion : $context->apiVersion;
+        $problem .= $got === null ? '' : ", got \"{$got}\"";
         parent::__construct(sprintf(
             'octonomy: malformed response%s%s: %s',
             $context === null ? '' : " from {$context->endpoint()}",
-            $apiVersion === null ? '' : " (api_version {$apiVersion})",
+            $version === null ? '' : " (api_version {$version})",
             $field === null ? $problem : "field \"{$field}\" {$problem}",
         ), 0, $previous);
     }
@@ -56,7 +61,7 @@ final class MalformedResponseException extends OctonomyException
      */
     public function readAs(string $apiVersion): self
     {
-        return new self($this->problem, $this->field, null, $apiVersion, $this);
+        return new self($this->problem, $this->field, null, $apiVersion, $this, $this->got);
     }
 
     /**
@@ -65,16 +70,39 @@ final class MalformedResponseException extends OctonomyException
      * the body the model's object sat ($at, such as "data" or "data[2]"),
      * calls this to name both.
      *
+     * A value the message quotes from the body is redacted here, in this
+     * report and in the ones it chains, since a server can echo the request
+     * into a field ($redaction holds what the request carried).
+     *
      * @internal
      */
-    public function locate(RequestContext $context, string $at): self
+    public function locate(RequestContext $context, string $at, ?Redaction $redaction = null): self
     {
+        $redaction ??= Redaction::none();
+
         return new self(
             $this->problem,
             $this->field === null ? $at : "{$at}.{$this->field}",
             $context,
             null,
-            $this,
+            $this->redacted($redaction),
+            $this->got === null ? null : $redaction->text($this->got),
         );
+    }
+
+    /**
+     * This report and the ones it chains with their quoted values redacted, or
+     * this report itself when there is nothing to redact.
+     */
+    private function redacted(Redaction $redaction): self
+    {
+        $previous = $this->getPrevious();
+        $chained = $previous instanceof self ? $previous->redacted($redaction) : $previous;
+        $got = $this->got === null ? null : $redaction->text($this->got);
+        if ($got === $this->got && $chained === $previous) {
+            return $this;
+        }
+
+        return new self($this->problem, $this->field, $this->context, $this->apiVersion, $chained, $got);
     }
 }

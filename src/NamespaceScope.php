@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Redaction;
 
 /**
@@ -55,12 +56,7 @@ final class NamespaceScope
         // that hold the Authorization header and the body (Redaction).
         foreach (['type' => [$type, 'X-Namespace-Type'], 'id' => [$id, 'X-Namespace-ID']] as $part => [$value, $header]) {
             if (!Redaction::isHeaderSafe($value)) {
-                throw new \InvalidArgumentException(sprintf(
-                    'octonomy: the namespace %s holds a line break or another control character, which the %s'
-                    . ' header cannot carry. Fix: remove the control characters.',
-                    $part,
-                    $header,
-                ));
+                throw new \InvalidArgumentException(ErrorMessage::unsendable("the namespace {$part}", $header));
             }
         }
     }

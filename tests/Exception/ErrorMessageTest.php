@@ -129,7 +129,9 @@ final class ErrorMessageTest extends TestCase
         yield 'a path that is not one resource' => [
             new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags'),
             'octonomy: the resource was not found (not_found, HTTP 404). Request: GET /api/v2/tags.'
-            . self::NOT_FOUND_TAIL,
+            . ' The server does not say why, so the SDK cannot either.'
+            . ' Fix: check that the request above is the one you meant to send.'
+            . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.',
         ];
     }
 
@@ -160,6 +162,16 @@ final class ErrorMessageTest extends TestCase
             . " Fix: look the request up in the server's logs by its request ID, and check that this SDK release"
             . " supports the server's version. Server said: \"Something newer.\" Request ID: req_1.",
             ErrorMessage::forResponse(422, 'a_newer_code', 'Something newer.', [], 'req_1', $context, Redaction::none()),
+        );
+    }
+
+    public function testWithoutARequestIdTheFixDoesNotAskForOne(): void
+    {
+        $context = new RequestContext(ApiVersion::V2, 'POST', '/api/v2/tags');
+
+        self::assertStringContainsString(
+            "Fix: look the request up in the server's logs, and check that this SDK release supports the server's version.",
+            ErrorMessage::forResponse(422, 'a_newer_code', 'Something newer.', [], null, $context, Redaction::none()),
         );
     }
 
@@ -220,7 +232,7 @@ final class ErrorMessageTest extends TestCase
             self::assertStringNotContainsString($echoed, $message);
         }
         self::assertStringContainsString(
-            'Server said: "Invalid value [redacted] from [redacted] with Bearer [redacted]." Detail: "Rejected {"note":"[redacted]"}"'
+            'Server said: "Invalid value [redacted] from [redacted] with Bearer [redacted]." Detail: "Rejected {"[redacted]":"[redacted]"}"'
             . ' Details on: [redacted]. Request ID: req_[redacted].',
             $message,
         );

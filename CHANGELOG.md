@@ -66,10 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redaction (#17): no exception carries the token, the `Authorization` header, the request body or
   `X-Actor-ID` in its message, its `RequestContext`, or the arguments of the SDK's frames in its trace,
   which `OctonomyException` removes on construction. Text a message quotes from the HTTP client or the
-  server has the request's token, actor id and body values replaced with `[redacted]`.
+  server, a malformed field's value included, has the request's token, actor id and body (whole, and
+  each value and nested key) replaced with `[redacted]`.
   `TransportException` no longer chains Guzzle's exception, which holds the request. A token, tenant
-  id, actor id, user agent or namespace with a control character is refused up front, without quoting
-  a token or actor id.
+  id, actor id, user agent or namespace with a control character is refused up front, and again just
+  before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`

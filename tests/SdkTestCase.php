@@ -6,6 +6,8 @@ namespace Octoverse\Octonomy\Tests;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
@@ -62,13 +64,15 @@ abstract class SdkTestCase extends TestCase
      * no socket is opened.
      *
      * $describe, when given, writes the error's message from the request, as a
-     * client or middleware that quotes what it sent would.
+     * client or middleware that quotes what it sent would. $status, when given,
+     * makes the failure a RequestException holding an empty response with that
+     * status, as middleware that throws on a status would.
      *
      * @param array<string, mixed>                       $config   overrides of the default options, as for
      *                                                             clientWith()
      * @param (\Closure(RequestInterface): string)|null $describe
      */
-    protected function clientThatCannotConnect(array $config = [], ?\Closure $describe = null): Client
+    protected function clientThatCannotConnect(array $config = [], ?\Closure $describe = null, ?int $status = null): Client
     {
         if (array_key_exists('http_client', $config)) {
             throw new \LogicException('clientThatCannotConnect() owns the HTTP client');
@@ -76,10 +80,9 @@ abstract class SdkTestCase extends TestCase
         $this->mock = new MockHandler([
             // Returned, not thrown: MockHandler rejects the request with a
             // Throwable a queued callable returns, as a real handler does.
-            static fn(RequestInterface $request): ConnectException => new ConnectException(
-                $describe === null ? 'Connection refused' : $describe($request),
-                $request,
-            ),
+            static fn(RequestInterface $request): TransferException => $status === null
+                ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
+                : new RequestException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
         ]);
 
         return new Client(array_merge([

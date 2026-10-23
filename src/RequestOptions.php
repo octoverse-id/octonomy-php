@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Redaction;
 
 /**
@@ -29,10 +30,7 @@ final class RequestOptions
         // Refused here, never quoted: Guzzle would refuse it on sending with an
         // error that quotes it, and the actor id is never shown (Redaction).
         if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
-            throw Redaction::scrub(new \InvalidArgumentException(
-                'octonomy: actorId holds a line break or another control character, which the X-Actor-ID header'
-                . ' cannot carry; the value is not shown. Fix: remove the control characters.',
-            ));
+            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unsendable('actorId', 'X-Actor-ID')));
         }
     }
 

@@ -152,8 +152,9 @@ said: "Resource not found." Detail: "Tag was not found." Request ID: req_...
   the server deliberately does not reveal whether the row exists outside what the request could see,
   so the message does not suggest it.
 - **Unknown causes said so.** A `TransportException` quotes the HTTP client's error and says the SDK
-  cannot tell from it why the request failed, or, for a write, whether the server applied it. A non-2xx
-  without the error envelope, and a code this SDK release does not know, say the same.
+  cannot tell from it why the request failed, or, for a write, whether the server applied it; when the
+  client's exception holds a response, it names that status. A non-2xx without the error envelope, and
+  a code this SDK release does not know, say the same.
 - **No `doc_url`.** The fix is in the message.
 
 ### Redaction
@@ -163,10 +164,14 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
 
 - The SDK's own words never include them, and `RequestContext` has no field for them. Text a message
   quotes from elsewhere (the HTTP client's error; the server's message, detail, details' names, request
-  id and Content-Type) has every value the request carried replaced with `[redacted]` first, since a
-  middleware or a server can echo the request. A value of eight characters or more is replaced wherever
-  it appears, a shorter one only where it stands alone. `$serverMessage` and `$details` stay as the
-  server sent them: they are its data, not a message, and can echo what the request sent.
+  id and Content-Type; a malformed field's value) has what the request carried replaced with
+  `[redacted]` first, since a middleware or a server can echo the request. That is the token, the actor
+  id, the body whole as sent, and every value and nested key in it, `true`, `false` and `null`
+  included. A value of eight characters or more is replaced wherever it appears, a shorter one only
+  where it stands alone, so an actor id of `1` does not eat the digits of a port number. The body's
+  top-level keys are the API's field names, which the SDK's own words use too, and stay.
+  `$serverMessage` and `$details` stay as the server sent them: they are its data, not a message, and
+  can echo what the request sent.
 - The arguments of the SDK's own frames are removed from the trace of every `OctonomyException` and of
   the `LogicException` a v1 client throws, so an error tracker that records frame arguments does not
   capture the body from `TagService::create()` or the token from `Config::__construct()`. Frames outside
@@ -175,9 +180,9 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   `getPrevious()`, because Guzzle's exception holds the request, `Authorization` header and body
   included. A non-JSON 2xx chains the `JsonException`, scrubbed the same way.
 - A header value holding a control character, such as a trailing newline, is refused when the
-  `Config`, `RequestOptions` or `NamespaceScope` is built, without quoting a token or actor id: Guzzle
-  would refuse it later with an error that quotes the whole header, thrown from frames that hold the
-  `Authorization` header and the body.
+  `Config`, `RequestOptions` or `NamespaceScope` is built, and again by `Transport` just before sending
+  (the PHP 7.4 line has no `readonly`), without quoting it: Guzzle would refuse it with an error that
+  quotes the whole header, thrown from frames that hold the `Authorization` header and the body.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

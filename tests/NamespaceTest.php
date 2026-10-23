@@ -71,12 +71,12 @@ final class NamespaceTest extends SdkTestCase
         yield 'a type with a newline' => [
             "merchant\n",
             'm-42',
-            'octonomy: the namespace type holds a line break or another control character, which the X-Namespace-Type header cannot carry. Fix: remove the control characters.',
+            'octonomy: the namespace type holds a line break or another control character, which the X-Namespace-Type header cannot carry;',
         ];
         yield 'an id with a carriage return' => [
             'merchant',
             "m-42\r",
-            'octonomy: the namespace id holds a line break or another control character, which the X-Namespace-ID header cannot carry. Fix: remove the control characters.',
+            'octonomy: the namespace id holds a line break or another control character, which the X-Namespace-ID header cannot carry;',
         ];
     }
 

@@ -19,16 +19,18 @@ namespace Octoverse\Octonomy\Internal;
  *
  * RequestContext has no field that could hold one, and the SDK's own words in
  * a message never interpolate one. A message also quotes text the SDK did not
- * write: the HTTP client's error, and the server's message, detail, details'
- * names, request id and Content-Type. An injected client or middleware, or a
- * server that echoes its input, can put any of the four in that text, so it
- * passes through text() first, which replaces the values the request carried
- * (of()). The server's own data stays as sent in ApiException::$serverMessage
- * and $details, which are not messages.
+ * write: the HTTP client's error, the server's message, detail, details'
+ * names, request id and Content-Type, and the value of a field a model
+ * rejects (MalformedResponseException::locate()). An injected client or
+ * middleware, or a server that echoes its input, can put any of the four in
+ * that text, so it passes through text() first, which replaces the values the
+ * request carried (of()). The server's own data stays as sent in
+ * ApiException::$serverMessage and $details, which are not messages.
  *
  * Every header value the SDK sends is checked before Guzzle sees it
- * (isHeaderSafe()): Guzzle refuses a bad one with an error that quotes it, and
- * throws that error from frames whose arguments hold every header, the
+ * (isHeaderSafe()), when it is built and again in Transport::send(), since the
+ * PHP 7.4 line has no readonly. Guzzle refuses a bad one with an error that
+ * quotes it, thrown from frames whose arguments hold every header, the
  * Authorization one included, and the body.
  *
  * Stack frames are where they leak by default. PHP records every argument of
@@ -82,8 +84,15 @@ final class Redaction
 
     /**
      * The values on the list that one request carries: its token, the actor id
-     * it sends, and every string or number in its body, each also as JSON
-     * escapes it, since an echo of the body is JSON.
+     * it sends, the body whole as it is sent, and every scalar in the body at
+     * any depth (true, false and null included), and every key below the top
+     * level. A metadata key is the caller's content; a top-level key is a field
+     * name of the API, which the SDK's own words also use, so it stays. Each is
+     * also taken as JSON escapes it, since an echo of the body is JSON.
+     *
+     * The body is read as it goes on the wire: the JSON Guzzle sends (with
+     * json_encode()'s default flags, as Guzzle uses), decoded, so an object
+     * inside it is walked as the object it encodes to.
      *
      * @param array<array-key, mixed>|null $body
      */
@@ -94,13 +103,16 @@ final class Redaction
             $values[] = $actorId;
         }
         if ($body !== null) {
-            array_walk_recursive($body, static function (mixed $leaf) use (&$values): void {
-                if (is_string($leaf) || is_int($leaf) || is_float($leaf)) {
-                    $text = (string) $leaf;
-                    $values[] = $text;
-                    $values[] = substr((string) json_encode($text), 1, -1);
-                }
-            });
+            // A body that does not encode is never sent (Guzzle refuses it), so
+            // walking it as given is enough.
+            $encoded = json_encode($body);
+            if ($encoded !== false) {
+                $values[] = $encoded;
+            }
+            $sent = $encoded === false ? $body : json_decode($encoded, true);
+            if (is_array($sent)) {
+                self::collect($sent, true, $values);
+            }
         }
         $values = array_values(array_unique(array_filter($values, static fn(string $value): bool => $value !== '')));
         usort($values, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
@@ -166,6 +178,34 @@ final class Redaction
     public static function isHeaderSafe(string $value): bool
     {
         return preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 0;
+    }
+
+    /**
+     * Add every scalar in $node, as JSON writes it, and its string keys unless
+     * $top, to $values, as given and as JSON escapes it.
+     *
+     * @param array<array-key, mixed> $node
+     * @param list<string>            $values
+     */
+    private static function collect(array $node, bool $top, array &$values): void
+    {
+        foreach ($node as $key => $value) {
+            $found = [];
+            if (!$top && is_string($key)) {
+                $found[] = $key;
+            }
+            if (is_array($value)) {
+                self::collect($value, false, $values);
+            } elseif (is_string($value) || is_int($value) || is_float($value)) {
+                $found[] = (string) $value;
+            } elseif (is_bool($value) || $value === null) {
+                $found[] = (string) json_encode($value);
+            }
+            foreach ($found as $text) {
+                $values[] = $text;
+                $values[] = substr((string) json_encode($text), 1, -1);
+            }
+        }
     }
 
     /**

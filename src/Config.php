@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy;
 
 use GuzzleHttp\ClientInterface;
 use Octoverse\Octonomy\Exception\ConfigurationException;
+use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Redaction;
 
 /**
@@ -18,9 +19,11 @@ use Octoverse\Octonomy\Internal\Redaction;
  * no per-request override.
  *
  * No ConfigurationException quotes the token or the actor id. A token, tenant
- * id, actor id or user agent that an HTTP header cannot carry is refused here:
- * Guzzle would otherwise refuse it on the first request, with an error that
- * quotes it and a trace whose frames hold the token and the body.
+ * id, actor id or user agent that an HTTP header cannot carry is refused here,
+ * and again by Transport before sending, since the PHP 7.4 line, which has no
+ * readonly, lets a checked value be changed afterwards. Guzzle would otherwise
+ * refuse it, with an error that quotes it, thrown from frames that hold the
+ * token and the body.
  */
 final class Config
 {
@@ -59,7 +62,7 @@ final class Config
             );
         }
         if (!Redaction::isHeaderSafe($token)) {
-            throw new ConfigurationException(self::unsendable('token', 'Authorization'));
+            throw new ConfigurationException(ErrorMessage::unsendable('token', 'Authorization'));
         }
         if (trim($tenantId) === '') {
             throw new ConfigurationException(
@@ -69,13 +72,13 @@ final class Config
             );
         }
         if (!Redaction::isHeaderSafe($tenantId)) {
-            throw new ConfigurationException(self::unsendable('tenant_id', 'X-Tenant-ID'));
+            throw new ConfigurationException(ErrorMessage::unsendable('tenant_id', 'X-Tenant-ID'));
         }
         if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
-            throw new ConfigurationException(self::unsendable('actor_id', 'X-Actor-ID'));
+            throw new ConfigurationException(ErrorMessage::unsendable('actor_id', 'X-Actor-ID'));
         }
         if ($userAgent !== null && !Redaction::isHeaderSafe($userAgent)) {
-            throw new ConfigurationException(self::unsendable('user_agent', 'User-Agent'));
+            throw new ConfigurationException(ErrorMessage::unsendable('user_agent', 'User-Agent'));
         }
 
         $parsed = parse_url($baseUrl);
@@ -201,21 +204,6 @@ final class Config
         }
 
         return (float) $value;
-    }
-
-    /**
-     * The message for a value an HTTP header cannot carry. It describes the
-     * value and never quotes it, since it may be the token.
-     */
-    private static function unsendable(string $key, string $header): string
-    {
-        return sprintf(
-            'octonomy: %s holds a line break or another control character, which the %s header cannot carry;'
-            . ' the value is not shown. Fix: remove the control characters, such as a trailing newline left by'
-            . ' reading the value from a file.',
-            $key,
-            $header,
-        );
     }
 
     /**

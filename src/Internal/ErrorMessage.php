@@ -75,7 +75,7 @@ final class ErrorMessage
             );
         }
 
-        [$what, $why, $fix] = self::explain($code, $context);
+        [$what, $why, $fix] = self::explain($code, $context, $requestId !== null);
         $server = self::server($serverMessage, $details, $requestId);
 
         return implode(' ', array_filter([
@@ -88,33 +88,62 @@ final class ErrorMessage
     }
 
     /**
-     * The message for a request that got no response, because the HTTP client
-     * threw. The client's error is quoted as it is, never interpreted: from it
-     * alone the SDK cannot tell why the request failed, nor whether the server
-     * received it.
+     * The message for a request the HTTP client threw on, so the SDK got no
+     * response it could use. The client's error is quoted, redacted, and never
+     * interpreted: from it alone the SDK cannot tell why the request failed,
+     * nor, for a write, whether the server applied it. When the client's
+     * exception holds a response ($status), the server did receive the
+     * request, and the message says so.
      *
      * @param string    $origin    the scheme, host and port of base_url, without any credentials in it
+     * @param int|null  $status    the status of the response the client's exception holds, if any
      * @param Redaction $redaction the values the request carried, to replace in the client's error
      */
-    public static function forNoResponse(
+    public static function forClientFailure(
         RequestContext $context,
         string $origin,
         \Throwable $clientError,
+        ?int $status,
         Redaction $redaction,
     ): string {
         $write = !in_array($context->method, ['GET', 'HEAD', 'OPTIONS'], true);
 
         return sprintf(
-            'octonomy: no response to %s from %s. The HTTP client failed with %s: "%s".'
+            'octonomy: the HTTP client failed on %s to %s%s, with %s: "%s".'
             . ' The SDK cannot tell from this why the request failed%s.'
-            . ' Fix: act on the client\'s error, and check that the server at %s is up and reachable from this host%s.',
+            . ' Fix: act on the client\'s error; if it could not connect, check that the server at %s is up and'
+            . ' reachable from this host%s.',
             self::request($context),
             $origin,
+            $status === null ? '' : sprintf(' after an HTTP %d response', $status),
             $clientError::class,
             $redaction->text($clientError->getMessage()),
-            $write ? ', or whether the server received and applied it' : '',
+            match (true) {
+                !$write => '',
+                $status === null => ', or whether the server received and applied it',
+                default => ', or whether the server applied it',
+            },
             $origin,
             $write ? '; before sending the write again, check whether it took effect' : '',
+        );
+    }
+
+    /**
+     * The message for a value an HTTP header cannot carry, such as one with a
+     * trailing newline. It describes the value and never quotes it, since it
+     * may be the token or the actor id.
+     *
+     * @param string $what   what holds the value, as the caller named it, such as 'token' or 'actorId'
+     * @param string $header the header it is sent as
+     */
+    public static function unsendable(string $what, string $header): string
+    {
+        return sprintf(
+            'octonomy: %s holds a line break or another control character, which the %s header cannot carry;'
+            . ' the value is not shown. Fix: remove the control characters, such as a trailing newline left by'
+            . ' reading the value from a file.',
+            $what,
+            $header,
         );
     }
 
@@ -173,10 +202,14 @@ final class ErrorMessage
      * flag is knowable because the server sends that code for that flag and
      * nothing else.
      *
+     * @param bool $requestId whether the server sent a request id to look the request up by
+     *
      * @return array{string, string|null, string}
      */
-    private static function explain(string $code, RequestContext $context): array
+    private static function explain(string $code, RequestContext $context, bool $requestId): array
     {
+        $item = self::item($context);
+
         return match ($code) {
             ErrorCode::NAMESPACED_WRITES_DISABLED => [
                 'namespaced writes are disabled on this Octonomy deployment',
@@ -211,9 +244,11 @@ final class ErrorMessage
             // Nothing about where else the row might be: a scoped read does not
             // reveal whether it exists outside what the request could see.
             ErrorCode::NOT_FOUND => [
-                self::notFound($context),
+                $item === null ? 'the resource was not found' : sprintf('%s "%s" was not found', $item[0], $item[1]),
                 'The server does not say why, so the SDK cannot either.',
-                'check that the request above, its id included, is the one you meant to send.',
+                $item === null
+                    ? 'check that the request above is the one you meant to send.'
+                    : 'check that the request above, its id included, is the one you meant to send.',
             ],
             ErrorCode::CONFLICT => [
                 'the request conflicts with existing data',
@@ -269,27 +304,29 @@ final class ErrorMessage
             default => [
                 'the request failed',
                 'This SDK release does not know the code, so it cannot say why.',
-                'look the request up in the server\'s logs by its request ID, and check that this SDK release'
-                . ' supports the server\'s version.',
+                sprintf('look the request up in the server\'s logs%s, and check that this SDK release supports the'
+                . ' server\'s version.', $requestId ? ' by its request ID' : ''),
             ],
         };
     }
 
     /**
-     * A 404's headline: the kind and the id when the path is a single
-     * resource's, such as 'tag "7d1c" was not found', and nothing more.
+     * The kind and the id of the single resource the request's path names,
+     * such as ['tag', '7d1c'], or null when the path is not one resource's.
+     *
+     * @return array{string, string}|null
      */
-    private static function notFound(RequestContext $context): string
+    private static function item(RequestContext $context): ?array
     {
         $prefix = '/api/' . $context->apiVersion . '/';
         if (str_starts_with($context->path, $prefix)) {
             $segments = explode('/', substr($context->path, strlen($prefix)));
             if (count($segments) === 2 && isset(self::ITEM_KINDS[$segments[0]]) && $segments[1] !== '') {
-                return sprintf('%s "%s" was not found', self::ITEM_KINDS[$segments[0]], rawurldecode($segments[1]));
+                return [self::ITEM_KINDS[$segments[0]], rawurldecode($segments[1])];
             }
         }
 
-        return 'the resource was not found';
+        return null;
     }
 
     /**

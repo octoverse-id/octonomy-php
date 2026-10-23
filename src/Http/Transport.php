@@ -7,6 +7,7 @@ namespace Octoverse\Octonomy\Http;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Exception\ApiException;
@@ -130,7 +131,7 @@ final class Transport
             throw new MalformedResponseException('expected a non-empty JSON object under "data"', null, $context);
         }
 
-        return $this->hydrate($context, 'data', $hydrate, Json::members($data));
+        return $this->hydrate($context, 'data', $hydrate, Json::members($data), $body, $options);
     }
 
     /**
@@ -181,12 +182,12 @@ final class Transport
 
         $data = [];
         foreach ($rows as $i => $row) {
-            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row));
+            $data[] = $this->hydrate($context, "data[{$i}]", $hydrate, Json::members($row), $body, $options);
         }
 
         return new ResultList(
             $data,
-            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination)),
+            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination), $body, $options),
         );
     }
 
@@ -250,6 +251,15 @@ final class Transport
             $headers['X-Namespace-Type'] = $namespace->type;
             $headers['X-Namespace-ID'] = $namespace->id;
         }
+        // Checked again here, not trusted from Config, RequestOptions and
+        // NamespaceScope: the PHP 7.4 line loses readonly, so a value can be
+        // changed after its constructor checked it. Guzzle refuses a value a
+        // header cannot carry from frames that hold every header and the body.
+        foreach ($headers as $name => $value) {
+            if (!Redaction::isHeaderSafe($value)) {
+                throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unsendable("the {$name} value", $name)));
+            }
+        }
 
         $requestOptions = [
             'headers' => $headers,
@@ -269,7 +279,13 @@ final class Transport
             // exception holds the request it failed to send, Authorization
             // header and body included (Redaction).
             throw new TransportException(
-                ErrorMessage::forNoResponse($context, $this->origin, $e, $this->redaction($body, $options)),
+                ErrorMessage::forClientFailure(
+                    $context,
+                    $this->origin,
+                    $e,
+                    $e instanceof RequestException ? $e->getResponse()?->getStatusCode() : null,
+                    $this->redaction($body, $options),
+                ),
                 $context,
             );
         }
@@ -360,21 +376,29 @@ final class Transport
 
     /**
      * Run a hydrator over one object of the body, and place any field it rejects
-     * at this request and at $at, the object's path in the body.
+     * at this request and at $at, the object's path in the body, with any value
+     * the report quotes redacted against the request's $body and $options.
      *
      * @template T
      *
      * @param \Closure(array<string, mixed>, string): T $hydrate
      * @param array<string, mixed> $object
+     * @param array<string, mixed>|null $body
      *
      * @return T
      */
-    private function hydrate(RequestContext $context, string $at, \Closure $hydrate, array $object): mixed
-    {
+    private function hydrate(
+        RequestContext $context,
+        string $at,
+        \Closure $hydrate,
+        array $object,
+        ?array $body,
+        ?RequestOptions $options,
+    ): mixed {
         try {
             return $hydrate($object, $this->apiVersion);
         } catch (MalformedResponseException $e) {
-            throw $e->locate($context, $at);
+            throw $e->locate($context, $at, $this->redaction($body, $options));
         }
     }
 
