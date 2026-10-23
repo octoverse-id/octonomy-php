@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Tests;
 
 use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -75,8 +75,8 @@ abstract class SdkTestCase extends TestCase
      *
      * $describe, when given, writes the error's message from the request, as a
      * client or middleware that quotes what it sent would. $status, when given,
-     * makes the failure a RequestException holding an empty response with that
-     * status, as middleware that throws on a status would.
+     * makes the failure a BadResponseException holding an empty response with
+     * that status, as middleware that throws on a status would.
      *
      * @param array<string, mixed>                       $config     overrides of the default options, as for
      *                                                               clientWith()
@@ -94,7 +94,9 @@ abstract class SdkTestCase extends TestCase
             $config,
             static fn(RequestInterface $request): TransferException => $status === null
                 ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
-                : new RequestException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
+                // BadResponseException takes the response in this place on
+                // Guzzle 7 and 8 alike; RequestException no longer does on 8.
+                : new BadResponseException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
             [],
             $middleware,
         );

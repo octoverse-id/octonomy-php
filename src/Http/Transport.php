@@ -6,7 +6,6 @@ namespace Octoverse\Octonomy\Http;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Psr7\Request as Psr7Request;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
@@ -289,20 +288,19 @@ final class Transport
             // redacted, like any client failure rather than escaping raw.
             $request = new Psr7Request($context->method, $this->uri($context), $headers, $encoded);
             // The request is the SDK's alone, so $context and $redaction
-            // describe what goes out. A null option cancels the injected
-            // client's own default for it (Guzzle merges defaults under the
-            // options, then drops a null one): its default headers, query,
-            // body and auth would otherwise add to or replace the SDK's. Its
-            // transport options and its middleware still apply.
+            // describe what goes out. Guzzle merges the injected client's own
+            // defaults under these options and then drops a null one, so a
+            // null headers, body or json cancels that default, and the query,
+            // the request's own, replaces a default one. Guzzle's declared
+            // option types allow no such cancelling of auth, form_params or
+            // multipart, so a client passed to the SDK must not set them
+            // (README). Its transport options and its middleware still apply.
             $response = $this->http->send($request, [
                 'http_errors' => false,
                 'headers' => null,
-                'query' => null,
+                'query' => $context->query,
                 'body' => null,
                 'json' => null,
-                'form_params' => null,
-                'multipart' => null,
-                'auth' => null,
             ]);
         } catch (\Throwable $e) {
             // Anything the client, a handler or middleware throws, not only a
@@ -317,7 +315,7 @@ final class Transport
                     $context,
                     $this->origin,
                     $e,
-                    $e instanceof RequestException ? $e->getResponse()?->getStatusCode() : null,
+                    self::statusOf($e),
                     $sent === null ? $redaction : $redaction->andSent($sent),
                 ),
                 $context,
@@ -470,6 +468,22 @@ final class Transport
         } catch (MalformedResponseException $e) {
             throw $e->locate($context, $at, $redaction);
         }
+    }
+
+    /**
+     * The status of the response a client's exception holds, or null when it
+     * holds none. Guzzle 7 puts getResponse() on RequestException, where it
+     * may return null, and Guzzle 8 only on ResponseException; typed object,
+     * so the check holds for both and for any client that offers one.
+     */
+    private static function statusOf(object $e): ?int
+    {
+        if (!method_exists($e, 'getResponse')) {
+            return null;
+        }
+        $response = $e->getResponse();
+
+        return $response instanceof ResponseInterface ? $response->getStatusCode() : null;
     }
 
     /**

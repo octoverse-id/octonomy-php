@@ -446,8 +446,8 @@ final class RedactionTest extends SdkTestCase
 
     /**
      * An injected client's own defaults do not reach an SDK request: not its
-     * body, auth, headers or query, so what is sent is what the context, the
-     * message and the redaction describe.
+     * headers, query or body, so what is sent is what the context, the message
+     * and the redaction describe.
      */
     public function testAClientsOwnDefaultsDoNotReachTheRequest(): void
     {
@@ -461,7 +461,7 @@ final class RedactionTest extends SdkTestCase
             )),
             [
                 'json' => ['note' => 'wire-only-default-body'],
-                'auth' => ['user', 'default-password'],
+                'body' => 'wire-only-default-raw-body',
                 'query' => ['application_id' => 'default-app'],
                 'headers' => [
                     'X-Actor-ID' => 'actor-from-the-client-defaults',

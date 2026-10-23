@@ -37,7 +37,7 @@ changing the types and paths.
    construction, attaches headers (the namespace pair only when the request names one), and
    JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts. It builds the
    PSR-7 request and hands it to the client's `send()` with the client's own default headers, query,
-   body and auth cancelled (`http_errors` is off so the SDK owns status handling).
+   body and `json` cancelled (`http_errors` is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
