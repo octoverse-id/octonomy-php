@@ -127,7 +127,12 @@ final class NamespaceTest extends SdkTestCase
             $call($client, new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')));
             self::fail("expected {$operation} to be refused");
         } catch (\LogicException $e) {
-            self::assertSame('octonomy: a namespace requires api_version v2; this client is v1', $e->getMessage());
+            self::assertSame(
+                'octonomy: a namespace requires api_version v2; this client is v1, and /api/v1 has no namespaces.'
+                . " Fix: build the Client with 'api_version' => 'v2' (Octonomy server 2.0.0 or newer), or leave the"
+                . ' namespace out of RequestOptions to use the global partition.',
+                $e->getMessage(),
+            );
         }
         $this->assertNothingSent();
     }
@@ -166,7 +171,12 @@ final class NamespaceTest extends SdkTestCase
                 $list($client, $includeGlobal);
                 self::fail("expected {$operation} to be refused");
             } catch (\LogicException $e) {
-                self::assertSame('octonomy: include_global requires api_version v2; this client is v1', $e->getMessage());
+                self::assertSame(
+                    'octonomy: include_global requires api_version v2; this client is v1, and /api/v1 would ignore it.'
+                    . " Fix: build the Client with 'api_version' => 'v2' (Octonomy server 2.0.0 or newer), or leave"
+                    . ' include_global null.',
+                    $e->getMessage(),
+                );
             }
             $this->assertNothingSent();
         }

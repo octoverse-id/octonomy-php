@@ -112,8 +112,9 @@ The code decides before the status: a 403 is `ForbiddenException` for a token wi
 without the envelope comes from a proxy or load balancer rather than the server's flag, and stays a
 bare `ApiException`.
 
-Every exception exposes `$statusCode`, `$errorCode`, `$details`, `$requestId`, and `$context`. The string
-codes, every one `octonomy/core/errors.py` declares, are constants on `Octoverse\Octonomy\ErrorCode`.
+Every exception exposes `$statusCode`, `$errorCode`, `$details`, `$requestId`, `$serverMessage` (the
+envelope's message as sent, `null` without one), and `$context`. The string codes, every one
+`octonomy/core/errors.py` declares, are constants on `Octoverse\Octonomy\ErrorCode`.
 
 ### RequestContext
 
@@ -132,13 +133,52 @@ only record of the call:
 `endpoint()` returns `"GET /api/v2/tags/7d1c..."`. The context holds no token, tenant id, actor id, other
 header, or request body.
 
+### Messages
+
+Every message the SDK writes follows one formula: what happened, why when the SDK actually knows, how to
+fix it, and the values involved. For a non-2xx response the values are the request (method, path,
+query, namespace), the code and status, the server's message and its `detail`, the names of the
+`details` (never their values, which can quote the request), and the request id:
+
+```text
+octonomy: tag "7d1c..." was not found (not_found, HTTP 404). Request: GET
+/api/v2/tags/7d1c...?application_id=commerce&include_global=false in namespace merchant:m-42. Server
+said: "Resource not found." Detail: "Tag was not found." Request ID: req_...
+```
+
+- **Why, only when known.** A deployment flag (`namespaced_writes_disabled`, `namespace_api_disabled`)
+  names the server setting, because the server sends that code for that flag alone. A 404 names the
+  resource kind and the id and nothing more: the server deliberately does not reveal whether the row
+  exists outside what the request could see, so the message does not suggest it.
+- **Unknown causes said so.** A `TransportException` quotes the HTTP client's error and says the SDK
+  cannot tell from it why the request failed, or, for a write, whether the server applied it. A non-2xx
+  without the error envelope, and a code this SDK release does not know, say the same.
+- **No `doc_url`.** The fix is in the message.
+
+### Redaction
+
+No exception the SDK throws carries the token, the `Authorization` header, the request body, or
+`X-Actor-ID` (`Internal\Redaction`):
+
+- No message is built from them, and `RequestContext` has no field for them.
+- The arguments of the SDK's own frames are removed from the trace of every `OctonomyException` and of
+  the `LogicException` a v1 client throws, so an error tracker that records frame arguments does not
+  capture the body from `TagService::create()` or the token from `Config::__construct()`. Frames outside
+  the SDK keep theirs.
+- A `TransportException` for a failed request quotes Guzzle's error but does not chain it as
+  `getPrevious()`, because Guzzle's exception holds the request, `Authorization` header and body
+  included. A non-JSON 2xx chains the `JsonException`, scrubbed the same way.
+- A token or actor id holding a control character, such as a trailing newline, is refused when the
+  `Config` or `RequestOptions` is built, without quoting it: Guzzle would refuse it later with an error
+  that quotes the whole header.
+
 Two failures are not HTTP errors and do not extend `ApiException`:
 
 | Condition | Exception |
 | --------- | --------- |
 | 2xx whose body lacks its envelope: a non-empty `data` object, or a `data` array of non-empty objects + a `pagination` object | `MalformedResponseException` |
 | 2xx whose resource breaks the field set for the api_version: a declared key absent (nullable fields included), a value of the wrong JSON type, an unparseable timestamp, or the namespace pair missing on v2 / present on v1 | `MalformedResponseException`, with `$field` set to the field's path in the body (e.g. `data.usage_count`) |
-| Network failure, timeout, or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException` |
+| Network failure, timeout, or a non-JSON 2xx body from a method that returns data (`delete()` ignores any body) | `TransportException`, quoting the HTTP client's error rather than chaining it |
 
 ## Not yet implemented
 

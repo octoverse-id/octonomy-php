@@ -104,7 +104,7 @@ A v1 client refuses a namespace or `includeGlobal` with a `LogicException` befor
 ## Errors
 
 Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exception\ApiException`, which
-exposes `$statusCode`, `$errorCode`, `$details`, and `$requestId`:
+exposes `$statusCode`, `$errorCode`, `$details`, `$requestId`, and `$serverMessage`:
 
 ```php
 use Octoverse\Octonomy\Exception\FeatureDisabledException;
@@ -128,6 +128,19 @@ request that failed: its api_version, method, path, query and namespace. Log it 
 namespaced 404 then records where the read looked and whether it asked for `include_global`, which a
 status alone cannot (the server never reveals whether the id exists in another scope). It never holds
 the token, the tenant or actor id, any other header, or the request body.
+
+Every message says what happened and with which request, why when the SDK actually knows, and how to fix
+it, and quotes the server's own message (kept as sent in `$serverMessage`):
+
+```text
+octonomy: namespaced writes are disabled on this Octonomy deployment (namespaced_writes_disabled, HTTP 403).
+Request: POST /api/v2/tags in namespace merchant:globex. OCTONOMY_NAMESPACE_WRITE_ENABLED is off on the
+server, as it is by default. Fix: set OCTONOMY_NAMESPACE_WRITE_ENABLED=true on the server, or omit the
+namespace to write globally. Server said: "Namespaced writes are not enabled." Request ID: req_...
+```
+
+No exception the SDK throws carries the token, the `Authorization` header, the request body, or
+`X-Actor-ID`: not in its message, its context, or the arguments of the SDK's frames in its trace.
 
 A 2xx whose body is missing the envelope the endpoint guarantees, or whose resource lacks a field,
 carries one of the wrong type, or has an unparseable timestamp, throws `MalformedResponseException`

@@ -12,7 +12,6 @@ use Octoverse\Octonomy\Model\TagCreate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
-use Psr\Http\Client\NetworkExceptionInterface;
 
 /**
  * Covers RequestContext: what it records about a failed request, and what it
@@ -109,6 +108,8 @@ final class RequestContextTest extends SdkTestCase
 
     /**
      * No response at all, so the context is the only description of the call.
+     * Guzzle's exception is quoted in the message rather than chained: it holds
+     * the request it failed to send, Authorization header included.
      */
     public function testANetworkFailureCarriesTheContext(): void
     {
@@ -119,7 +120,8 @@ final class RequestContextTest extends SdkTestCase
             self::fail('expected a TransportException');
         } catch (TransportException $e) {
             self::assertEquals(new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1', ['application_id' => 'commerce']), $e->context);
-            self::assertInstanceOf(NetworkExceptionInterface::class, $e->getPrevious());
+            self::assertNull($e->getPrevious());
+            self::assertStringContainsString('\\ConnectException: "Connection refused".', $e->getMessage());
             // Refused while sending, not before: the guard let the request through.
             self::assertSame($e->context->path, $this->lastRequest()->getUri()->getPath());
         }

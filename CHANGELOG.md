@@ -56,6 +56,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ApiException` and `TransportException` as `$context`, and on a `MalformedResponseException` raised
   during a request (#16). `ApiException`'s and `TransportException`'s constructors take it as a
   required argument, and `MalformedResponseException`'s takes it in place of the endpoint string.
+- Error messages written to one formula (#17): what happened, why when the SDK actually knows, the
+  fix, and the values involved (the request, its namespace, the code, status, server message and
+  request id). A deployment flag names the server setting to change; a 404 names the resource kind and
+  id without suggesting where else it might be; a transport failure, an error without the envelope and
+  an unknown code say that the SDK cannot tell why. `ApiException::$serverMessage` keeps the server's
+  own message, which `getMessage()` now quotes rather than returns. A refused `Config::fromArray()`
+  names the option keys it did not read.
+- Redaction (#17): no exception carries the token, the `Authorization` header, the request body or
+  `X-Actor-ID` in its message, its `RequestContext`, or the arguments of the SDK's frames in its trace,
+  which `OctonomyException` removes on construction. `TransportException` no longer chains Guzzle's
+  exception, which holds the request. A token or actor id with a control character is refused up
+  front without being quoted.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`

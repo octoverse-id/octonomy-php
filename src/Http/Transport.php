@@ -13,12 +13,15 @@ use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Json;
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Transport is the single HTTP entry point for the SDK. It builds requests under
@@ -26,7 +29,8 @@ use Octoverse\Octonomy\ResultList;
  * auth/tenant headers and any per-request namespace pair, sends them through a
  * Guzzle client, and converts non-2xx responses into typed exceptions. A v2-only
  * feature on a v1 client is refused before anything is sent. Every exception it
- * throws for a request carries that request's RequestContext.
+ * throws for a request carries that request's RequestContext, and none carries
+ * the token, a header or the body (Redaction).
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -43,6 +47,9 @@ final class Transport
     private readonly ClientInterface $http;
     private readonly string $apiVersion;
     private readonly string $baseUrl;
+
+    /** The scheme, host and port of the base URL, as a message names the server. */
+    private readonly string $origin;
     private readonly ?string $actorId;
 
     /** @var array<string, string> */
@@ -63,6 +70,7 @@ final class Transport
         $this->apiVersion = ApiVersion::check($config->apiVersion);
         $this->actorId = $config->actorId;
         $this->baseUrl = rtrim($config->baseUrl, '/');
+        $this->origin = self::origin($config->baseUrl);
         $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
         $this->defaultHeaders = [
             'Authorization' => 'Bearer ' . $config->token,
@@ -218,13 +226,12 @@ final class Transport
     }
 
     /**
-     * Send the request $context describes and return the raw body of a 2xx
-     * response. Non-2xx responses and network failures throw, carrying
-     * $context.
+     * Send the request $context describes and return the 2xx response. Non-2xx
+     * responses and network failures throw, carrying $context.
      *
      * @param array<string, mixed>|null $body
      */
-    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): string
+    private function send(RequestContext $context, ?array $body, ?RequestOptions $options): ResponseInterface
     {
         $namespace = $context->namespace;
         $query = $context->query;
@@ -257,17 +264,23 @@ final class Transport
         try {
             $response = $this->http->request($context->method, $this->baseUrl . $context->path, $requestOptions);
         } catch (GuzzleException $e) {
-            throw new TransportException('octonomy: request failed: ' . $e->getMessage(), $context, $e);
+            // Quoted in the message, not chained as getPrevious(): Guzzle's
+            // exception holds the request it failed to send, Authorization
+            // header and body included (Redaction).
+            throw new TransportException(ErrorMessage::forNoResponse($context, $this->origin, $e), $context);
         }
 
         $status = $response->getStatusCode();
-        $raw = (string) $response->getBody();
-
         if ($status < 200 || $status >= 300) {
-            throw ApiException::fromResponse($status, Json::tryDecode($raw), $context);
+            throw ApiException::fromResponse(
+                $status,
+                Json::tryDecode((string) $response->getBody()),
+                $context,
+                $response->getHeaderLine('Content-Type'),
+            );
         }
 
-        return $raw;
+        return $response;
     }
 
     /**
@@ -275,14 +288,25 @@ final class Transport
      * TransportException for the request it answered: a proxy or gateway that
      * sent HTML with a 2xx gave no usable response.
      *
-     * @throws TransportException when $raw is not valid JSON
+     * @throws TransportException when the body is not valid JSON
      */
-    private function decode(RequestContext $context, string $raw): mixed
+    private function decode(RequestContext $context, ResponseInterface $response): mixed
     {
+        $raw = (string) $response->getBody();
         try {
             return Json::decode($raw);
         } catch (\JsonException $e) {
-            throw new TransportException('Failed to decode Octonomy response: ' . $e->getMessage(), $context, $e);
+            throw new TransportException(
+                ErrorMessage::forUndecodable(
+                    $context,
+                    $response->getStatusCode(),
+                    $response->getHeaderLine('Content-Type'),
+                    strlen($raw),
+                    $e->getMessage(),
+                ),
+                $context,
+                $e,
+            );
         }
     }
 
@@ -306,11 +330,23 @@ final class Transport
         if ($this->apiVersion === ApiVersion::V2) {
             return;
         }
+        // Scrubbed like an OctonomyException, since the frames below this one
+        // hold the request body and the RequestOptions.
         if ($namespace !== null) {
-            throw new \LogicException(sprintf('octonomy: a namespace requires api_version v2; this client is %s', $this->apiVersion));
+            throw Redaction::scrub(new \LogicException(sprintf(
+                'octonomy: a namespace requires api_version v2; this client is %s, and /api/v1 has no namespaces.'
+                . ' Fix: build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or leave'
+                . ' the namespace out of RequestOptions to use the global partition.',
+                $this->apiVersion,
+            )));
         }
         if (array_key_exists('include_global', $query)) {
-            throw new \LogicException(sprintf('octonomy: include_global requires api_version v2; this client is %s', $this->apiVersion));
+            throw Redaction::scrub(new \LogicException(sprintf(
+                'octonomy: include_global requires api_version v2; this client is %s, and /api/v1 would ignore it.'
+                . ' Fix: build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or leave'
+                . ' include_global null.',
+                $this->apiVersion,
+            )));
         }
     }
 
@@ -332,6 +368,23 @@ final class Transport
         } catch (MalformedResponseException $e) {
             throw $e->locate($context, $at);
         }
+    }
+
+    /**
+     * The scheme, host and port of $baseUrl, such as "https://octonomy.example.com:8443".
+     * Any user name or password in it is left out, so a message can name the
+     * server it could not reach.
+     */
+    private static function origin(string $baseUrl): string
+    {
+        $parts = parse_url($baseUrl);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+            // Config refuses such a URL. Only the PHP 7.4 line, where Config is
+            // mutable, can get here; name the setting rather than echo it.
+            return 'base_url';
+        }
+
+        return $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
     /**

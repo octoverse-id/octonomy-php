@@ -113,7 +113,14 @@ final class ClientTest extends SdkTestCase
             self::assertSame($error['request_id'], $e->requestId);
             self::assertNotNull($e->requestId);
             self::assertSame($error['details'], $e->details);
-            self::assertSame($error['message'], $e->getMessage());
+            // The message is the SDK's: it names the code and the request, and
+            // quotes the server's message, which $serverMessage keeps as sent.
+            self::assertSame($error['message'], $e->serverMessage);
+            self::assertStringStartsWith('octonomy: ', $e->getMessage());
+            self::assertStringContainsString("({$code}, HTTP {$captured->status}).", $e->getMessage());
+            self::assertStringContainsString("Request: GET /api/{$captured->apiVersion()}/tags/tag_1.", $e->getMessage());
+            self::assertStringContainsString("Server said: \"{$error['message']}\"", $e->getMessage());
+            self::assertStringContainsString("Request ID: {$error['request_id']}.", $e->getMessage());
             self::assertEquals(new RequestContext($captured->apiVersion(), 'GET', "/api/{$captured->apiVersion()}/tags/tag_1"), $e->context);
         }
     }

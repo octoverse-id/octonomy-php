@@ -60,21 +60,26 @@ abstract class SdkTestCase extends TestCase
      * tests of what the SDK reports when there is no response to read. The
      * failure is Guzzle's own ConnectException, queued on the MockHandler, so
      * no socket is opened.
+     *
+     * @param array<string, mixed> $config overrides of the default options, as for clientWith()
      */
-    protected function clientThatCannotConnect(): Client
+    protected function clientThatCannotConnect(array $config = []): Client
     {
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('clientThatCannotConnect() owns the HTTP client');
+        }
         $this->mock = new MockHandler([
             // Returned, not thrown: MockHandler rejects the request with a
             // Throwable a queued callable returns, as a real handler does.
             static fn(RequestInterface $request): ConnectException => new ConnectException('Connection refused', $request),
         ]);
 
-        return new Client([
+        return new Client(array_merge([
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
             'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
-        ]);
+        ], $config));
     }
 
     /**
