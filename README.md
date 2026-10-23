@@ -66,9 +66,9 @@ $client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOpt
 You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
 `http_client` option. Its transport options and middleware apply to every SDK request; its own default
 headers, query and body do not, since the SDK builds each request itself. Add a header with middleware
-(`Middleware::mapRequest()`) instead. Do not give it a default `auth`, `form_params` or `multipart`:
-Guzzle would put them in place of the SDK's `Authorization` header or body, and its option types offer
-no way for a request to cancel them.
+(`Middleware::mapRequest()`) instead. Its default `auth` is disabled for SDK requests too. Do not give it
+a default `form_params` or `multipart`: Guzzle would put either in place of the SDK's body, and its
+option types offer no way for a request to cancel one.
 
 ## API version and namespaces
 

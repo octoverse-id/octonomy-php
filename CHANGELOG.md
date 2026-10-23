@@ -70,8 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each value and nested key) replaced with `[redacted]`.
   `TransportException` covers anything the HTTP client throws and no longer chains it, since
   Guzzle's exception holds the request. The SDK encodes the body itself, once, and builds each request
-  itself, sending it with an injected client's own default headers, query, body and `json` cancelled
-  (its transport options and middleware still apply; a client must not set a default `auth`,
+  itself, sending it with an injected client's own default headers, query, body, `json` and `auth`
+  cancelled (its transport options and middleware still apply; a client must not set a default
   `form_params` or `multipart`), so what it sends is what it describes and redacts; a body that cannot be encoded throws `InvalidArgumentException` without quoting it. A non-JSON 2xx no longer chains
   the `JsonException`. A token, tenant
   id, actor id, user agent or namespace with a control character is refused up front, and again just

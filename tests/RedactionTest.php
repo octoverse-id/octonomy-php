@@ -446,8 +446,8 @@ final class RedactionTest extends SdkTestCase
 
     /**
      * An injected client's own defaults do not reach an SDK request: not its
-     * headers, query or body, so what is sent is what the context, the message
-     * and the redaction describe.
+     * headers, query, body or auth, so what is sent is what the context, the
+     * message and the redaction describe.
      */
     public function testAClientsOwnDefaultsDoNotReachTheRequest(): void
     {
@@ -462,6 +462,7 @@ final class RedactionTest extends SdkTestCase
             [
                 'json' => ['note' => 'wire-only-default-body'],
                 'body' => 'wire-only-default-raw-body',
+                'auth' => ['user', 'default-password'],
                 'query' => ['application_id' => 'default-app'],
                 'headers' => [
                     'X-Actor-ID' => 'actor-from-the-client-defaults',
@@ -487,6 +488,42 @@ final class RedactionTest extends SdkTestCase
             self::assertStringStartsWith('octonomy: the HTTP client failed on POST /api/v2/tags to ', $e->getMessage());
             self::assertStringContainsString('"refused [redacted] with Bearer [redacted] as "', $e->getMessage());
         }
+    }
+
+    /**
+     * A client's exception may offer a getResponse() that cannot be called
+     * from here or that throws. Reading its status is best effort: the failure
+     * is still reported as a TransportException, with no status.
+     */
+    #[DataProvider('exceptionsWithAnUnusableGetResponse')]
+    public function testAnExceptionWhoseGetResponseFailsIsStillReported(\Closure $throw): void
+    {
+        $client = $this->clientWhoseHttpClientThrows(self::config(), $throw);
+
+        try {
+            $client->tags()->get('tag_1');
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringStartsWith('octonomy: the HTTP client failed on GET /api/v2/tags/tag_1 to https://octonomy.test, with ', $e->getMessage());
+            self::assertStringNotContainsString('after an HTTP', $e->getMessage());
+        }
+    }
+
+    /**
+     * @return iterable<string, array{\Closure(RequestInterface): \Throwable}>
+     */
+    public static function exceptionsWithAnUnusableGetResponse(): iterable
+    {
+        // Declared, but not callable from outside the class.
+        yield 'a protected getResponse()' => [static fn(RequestInterface $request): \Throwable => new class ('refused') extends \RuntimeException {
+            protected function getResponse(): void {}
+        }];
+        yield 'a getResponse() that throws' => [static fn(RequestInterface $request): \Throwable => new class ('refused') extends \RuntimeException {
+            public function getResponse(): void
+            {
+                throw new \LogicException('no response here');
+            }
+        }];
     }
 
     /**

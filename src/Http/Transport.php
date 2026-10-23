@@ -290,10 +290,11 @@ final class Transport
             // The request is the SDK's alone, so $context and $redaction
             // describe what goes out. Guzzle merges the injected client's own
             // defaults under these options and then drops a null one, so a
-            // null headers, body or json cancels that default, and the query,
-            // the request's own, replaces a default one. Guzzle's declared
-            // option types allow no such cancelling of auth, form_params or
-            // multipart, so a client passed to the SDK must not set them
+            // null headers, body or json cancels that default, the query, the
+            // request's own, replaces a default one, and auth false disables a
+            // default one, leaving the SDK's Authorization header. Guzzle's
+            // declared option types allow no such cancelling of form_params
+            // or multipart, so a client passed to the SDK must not set them
             // (README). Its transport options and its middleware still apply.
             $response = $this->http->send($request, [
                 'http_errors' => false,
@@ -301,6 +302,7 @@ final class Transport
                 'query' => $context->query,
                 'body' => null,
                 'json' => null,
+                'auth' => false,
             ]);
         } catch (\Throwable $e) {
             // Anything the client, a handler or middleware throws, not only a
@@ -473,15 +475,22 @@ final class Transport
     /**
      * The status of the response a client's exception holds, or null when it
      * holds none. Guzzle 7 puts getResponse() on RequestException, where it
-     * may return null, and Guzzle 8 only on ResponseException; typed object,
-     * so the check holds for both and for any client that offers one.
+     * may return null, and Guzzle 8 only on ResponseException; any client may
+     * offer one. Best effort, since it runs while another failure is being
+     * reported: a getResponse() that cannot be called, or that throws, counts
+     * as no response rather than replacing that failure with its own.
      */
     private static function statusOf(object $e): ?int
     {
-        if (!method_exists($e, 'getResponse')) {
+        $getResponse = [$e, 'getResponse'];
+        if (!is_callable($getResponse)) {
             return null;
         }
-        $response = $e->getResponse();
+        try {
+            $response = $getResponse();
+        } catch (\Throwable) {
+            return null;
+        }
 
         return $response instanceof ResponseInterface ? $response->getStatusCode() : null;
     }
