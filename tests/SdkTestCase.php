@@ -10,7 +10,9 @@ use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Utils;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
@@ -19,6 +21,7 @@ use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * SdkTestCase wires a Client to a Guzzle MockHandler so tests can queue responses
@@ -68,18 +71,35 @@ abstract class SdkTestCase extends TestCase
      * makes the failure a RequestException holding an empty response with that
      * status, as middleware that throws on a status would.
      *
-     * @param array<string, mixed>                       $config   overrides of the default options, as for
-     *                                                             clientWith()
+     * @param array<string, mixed>                       $config     overrides of the default options, as for
+     *                                                               clientWith()
      * @param (\Closure(RequestInterface): string)|null $describe
+     * @param (\Closure(RequestInterface): RequestInterface)|null $middleware changes the request on its way to
+     *                                                                       the handler
      */
-    protected function clientThatCannotConnect(array $config = [], ?\Closure $describe = null, ?int $status = null): Client
-    {
+    protected function clientThatCannotConnect(
+        array $config = [],
+        ?\Closure $describe = null,
+        ?int $status = null,
+        ?\Closure $middleware = null,
+    ): Client {
         return $this->clientWhoseHttpClientThrows(
             $config,
             static fn(RequestInterface $request): TransferException => $status === null
                 ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
                 : new RequestException($describe === null ? 'Server error' : $describe($request), $request, new Response($status)),
+            [],
+            $middleware,
         );
+    }
+
+    /**
+     * A request body stream holding $contents, for middleware in a test to
+     * put on a request.
+     */
+    protected static function stream(string $contents): StreamInterface
+    {
+        return Utils::streamFor($contents);
     }
 
     /**
@@ -92,23 +112,35 @@ abstract class SdkTestCase extends TestCase
      *
      * @param array<string, mixed>                  $config         overrides of the default options, as for
      *                                                              clientWith()
-     * @param \Closure(RequestInterface): \Throwable $throw
-     * @param array<string, mixed>                  $clientDefaults
+     * $middleware, when given, changes each request on its way to the handler,
+     * as Guzzle's Middleware::mapRequest() does.
+     *
+     * @param \Closure(RequestInterface): \Throwable              $throw
+     * @param array<string, mixed>                              $clientDefaults
+     * @param (\Closure(RequestInterface): RequestInterface)|null $middleware
      */
-    protected function clientWhoseHttpClientThrows(array $config, \Closure $throw, array $clientDefaults = []): Client
-    {
+    protected function clientWhoseHttpClientThrows(
+        array $config,
+        \Closure $throw,
+        array $clientDefaults = [],
+        ?\Closure $middleware = null,
+    ): Client {
         if (array_key_exists('http_client', $config)) {
             throw new \LogicException('the client owns its HTTP client');
         }
         // Returned, not thrown: MockHandler rejects the request with a
         // Throwable a queued callable returns, as a real handler does.
         $this->mock = new MockHandler([$throw]);
+        $stack = HandlerStack::create($this->mock);
+        if ($middleware !== null) {
+            $stack->push(Middleware::mapRequest($middleware));
+        }
 
         return new Client(array_merge([
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
-            'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)] + $clientDefaults),
+            'http_client' => new GuzzleClient(['handler' => $stack] + $clientDefaults),
         ], $config));
     }
 

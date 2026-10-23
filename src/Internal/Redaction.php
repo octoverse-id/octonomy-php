@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Internal;
 
+use Psr\Http\Message\RequestInterface;
+
 /**
  * Redaction is the SDK's list of what no exception it throws may carry, and the
  * one place that list is enforced: on the text a message quotes, and on stack
@@ -24,7 +26,8 @@ namespace Octoverse\Octonomy\Internal;
  * rejects (MalformedResponseException::locate()). An injected client or
  * middleware, or a server that echoes its input, can put any of the four in
  * that text, so it passes through text() first, which replaces the values the
- * request carried (of()). The server's own data stays as sent in
+ * request carried (of()), and those of the request a client's exception says
+ * it sent (andSent()). The server's own data stays as sent in
  * ApiException::$serverMessage and $details, which are not messages.
  *
  * Every header value the SDK sends is checked before Guzzle sees it
@@ -81,13 +84,14 @@ final class Redaction
     private ?array $values = null;
 
     /**
-     * @param string|null  $body the request body as it was sent, JSON-encoded, or null for none
-     * @param list<string> $also other values on the list the request carries
+     * @param list<string> $bodies the request body as sent, JSON-encoded, and any other body the request
+     *                             was sent with
+     * @param list<string> $also   other values on the list the request carried
      */
     private function __construct(
         private readonly ?string $token,
         private readonly ?string $actorId,
-        private readonly ?string $body,
+        private readonly array $bodies,
         private readonly array $also = [],
     ) {}
 
@@ -105,13 +109,11 @@ final class Redaction
      * number as it was sent, as JSON writes it and as PHP prints it; true,
      * false and null as JSON writes them.
      *
-     * @param string|null  $body the request body as sent, JSON-encoded, or null for none
-     * @param list<string> $also other values on the list the request carries, such as an X-Actor-ID
-     *                           the HTTP client adds on its own
+     * @param string|null $body the request body as sent, JSON-encoded, or null for none
      */
-    public static function of(string $token, ?string $actorId, ?string $body, array $also = []): self
+    public static function of(string $token, ?string $actorId, ?string $body): self
     {
-        return new self($token, $actorId, $body, $also);
+        return new self($token, $actorId, $body === null ? [] : [$body]);
     }
 
     /**
@@ -120,7 +122,33 @@ final class Redaction
      */
     public static function none(): self
     {
-        return new self(null, null, null);
+        return new self(null, null, []);
+    }
+
+    /**
+     * This redaction, plus what $sent carries on the list: the request an HTTP
+     * client's exception says it sent, once its middleware had run. Middleware
+     * can add an Authorization or X-Actor-ID header, or replace the body,
+     * after the SDK took its snapshot, and the client's error can quote them.
+     */
+    public function andSent(RequestInterface $sent): self
+    {
+        $also = $this->also;
+        foreach ($sent->getHeader('Authorization') as $authorization) {
+            $also[] = $authorization;
+            // The credential alone too, after its scheme ("Bearer", "Basic").
+            $also[] = (string) preg_replace('/^\S+\s+/', '', $authorization);
+        }
+        foreach ($sent->getHeader('X-Actor-ID') as $actorId) {
+            $also[] = $actorId;
+        }
+        $bodies = $this->bodies;
+        $body = $sent->getBody();
+        if ($body->isSeekable()) {
+            $bodies[] = (string) $body;
+        }
+
+        return new self($this->token, $this->actorId, $bodies, $also);
     }
 
     /**
@@ -144,16 +172,21 @@ final class Redaction
     {
         if ($this->values === null) {
             $values = [(string) $this->token, (string) $this->actorId, ...$this->also];
-            if ($this->body !== null) {
-                $values[] = $this->body;
+            foreach (array_unique($this->bodies) as $body) {
+                $values[] = $body;
                 // Objects kept as objects: an associative array would turn a
                 // key such as "123" into an index, and a list's indexes are
-                // not in the JSON at all.
-                self::collect(json_decode($this->body), true, $values);
+                // not in the JSON at all. A body that is not JSON, which only
+                // middleware can send, is taken whole only.
+                $decoded = json_decode($body);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    continue;
+                }
+                self::collect($decoded, true, $values);
                 // Each number also as it was sent, which decoding cannot give
                 // back: -0.0 goes out as "-0" and comes back as 0. Strings are
                 // matched only to be skipped.
-                preg_match_all('/"(?:[^"\\\\]|\\\\.)*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?/', $this->body, $tokens);
+                preg_match_all('/"(?:[^"\\\\]|\\\\.)*"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?/', $body, $tokens);
                 foreach ($tokens[0] as $token) {
                     if ($token[0] !== '"') {
                         $values[] = $token;

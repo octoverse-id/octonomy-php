@@ -187,9 +187,14 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   request, `Authorization` header and body included. A non-JSON 2xx does not chain the
   `JsonException` either, since `json_decode()`'s frame in its trace holds the raw body; its message,
   PHP's own, is quoted.
-- An injected client's own `json`, `form_params`, `multipart`, `body` or `auth` defaults are cancelled
-  for SDK requests, so the body and `Authorization` header sent are the SDK's. A default `X-Actor-ID`
-  it adds, when the request names none, is redacted like the SDK's own.
+- The SDK builds each request itself and sends it with an injected client's own default headers,
+  query, body, `json`, `form_params`, `multipart` and `auth` cancelled, so what goes out is what the
+  context, the message and the redaction describe. The client's transport options and middleware still
+  apply.
+- Middleware can still add a header or replace the body after the SDK's snapshot. When the client's
+  exception holds the request as middleware left it, as Guzzle's and every PSR-18 request or network
+  exception do, its `Authorization`, `X-Actor-ID` and body are redacted too. A value middleware adds
+  that never reaches such an exception is one the SDK never sees, and cannot redact.
 - A body that cannot be encoded as JSON is never sent. The `InvalidArgumentException` says why in
   fixed words, or names by class the exception an object's `jsonSerialize()` threw, and chains
   nothing.

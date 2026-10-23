@@ -35,8 +35,9 @@ changing the types and paths.
 2. `Transport` refuses a v2-only feature (a namespace, `include_global`) on a v1 client before
    anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
    construction, attaches headers (the namespace pair only when the request names one), and
-   JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts (`http_errors`
-   is off so the SDK owns status handling).
+   JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts. It builds the
+   PSR-7 request and hands it to the client's `send()` with the client's own default headers, query,
+   body and auth cancelled (`http_errors` is off so the SDK owns status handling).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it

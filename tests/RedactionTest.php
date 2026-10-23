@@ -123,7 +123,7 @@ final class RedactionTest extends SdkTestCase
             $this->assertEverythingWasSent();
             self::assertCarriesNone($e, self::CREATE_FRAME);
             self::assertStringContainsString(
-                '"refused, Authorization: Bearer [redacted], X-Actor-ID: [redacted], body: [redacted]"',
+                '"refused, Authorization: [redacted], X-Actor-ID: [redacted], body: [redacted]"',
                 $e->getMessage(),
             );
         }
@@ -312,6 +312,15 @@ final class RedactionTest extends SdkTestCase
         ];
         // Not json_encode()'s own refusal, so not described as one, even with
         // a code json_encode() uses.
+        yield 'an object whose jsonSerialize() calls json_encode(), which throws' => [
+            static fn(): array => ['note' => new class implements \JsonSerializable {
+                public function jsonSerialize(): mixed
+                {
+                    return json_encode(INF, JSON_THROW_ON_ERROR);
+                }
+            }],
+            'an object in it threw JsonException from jsonSerialize(), whose message is not shown',
+        ];
         yield 'an object whose jsonSerialize() throws a JsonException of its own' => [
             static fn(): array => ['note' => new class implements \JsonSerializable {
                 public function jsonSerialize(): mixed
@@ -436,11 +445,11 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
-     * An injected client's own defaults cannot replace the SDK's body or
-     * Authorization header, and a default X-Actor-ID it adds, sent because the
-     * request names none, is redacted like the SDK's own.
+     * An injected client's own defaults do not reach an SDK request: not its
+     * body, auth, headers or query, so what is sent is what the context, the
+     * message and the redaction describe.
      */
-    public function testAClientsOwnDefaultsDoNotChangeWhatIsSentOrRedacted(): void
+    public function testAClientsOwnDefaultsDoNotReachTheRequest(): void
     {
         $client = $this->clientWhoseHttpClientThrows(
             ['token' => self::TOKEN],
@@ -453,7 +462,12 @@ final class RedactionTest extends SdkTestCase
             [
                 'json' => ['note' => 'wire-only-default-body'],
                 'auth' => ['user', 'default-password'],
-                'headers' => ['X-Actor-ID' => 'actor-from-the-client-defaults'],
+                'query' => ['application_id' => 'default-app'],
+                'headers' => [
+                    'X-Actor-ID' => 'actor-from-the-client-defaults',
+                    'X-Namespace-Type' => 'merchant',
+                    'X-Namespace-ID' => 'default-namespace',
+                ],
             ],
         );
 
@@ -464,9 +478,72 @@ final class RedactionTest extends SdkTestCase
             $request = $this->lastRequest();
             self::assertSame('Bearer ' . self::TOKEN, $request->getHeaderLine('Authorization'));
             self::assertSame('Name From The Body', $this->lastJsonBody()['name']);
-            self::assertSame('actor-from-the-client-defaults', $request->getHeaderLine('X-Actor-ID'));
-            self::assertStringContainsString('"refused [redacted] with Bearer [redacted] as [redacted]"', $e->getMessage());
-            self::assertStringNotContainsString('actor-from-the-client-defaults', $e->getMessage());
+            self::assertSame('', $request->getUri()->getQuery());
+            foreach (['X-Actor-ID', 'X-Namespace-Type', 'X-Namespace-ID'] as $header) {
+                self::assertFalse($request->hasHeader($header), "{$header} came from the client's defaults");
+            }
+            self::assertNull($e->context->namespace);
+            self::assertSame([], $e->context->query);
+            self::assertStringStartsWith('octonomy: the HTTP client failed on POST /api/v2/tags to ', $e->getMessage());
+            self::assertStringContainsString('"refused [redacted] with Bearer [redacted] as "', $e->getMessage());
+        }
+    }
+
+    /**
+     * On a v1 client, a default include_global or namespace on the injected
+     * client cannot slip past the refusal of v2-only features: it is not sent.
+     */
+    public function testAV1ClientSendsNoneOfAClientsV2OnlyDefaults(): void
+    {
+        $client = $this->clientWhoseHttpClientThrows(
+            ['api_version' => ApiVersion::V1],
+            static fn(RequestInterface $request): \Throwable => new \RuntimeException('refused'),
+            [
+                'query' => ['include_global' => 'true'],
+                'headers' => ['X-Namespace-Type' => 'merchant', 'X-Namespace-ID' => 'default-namespace'],
+            ],
+        );
+
+        try {
+            $client->tags()->list();
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            $request = $this->lastRequest();
+            self::assertSame('/api/v1/tags', $request->getUri()->getPath());
+            self::assertSame('', $request->getUri()->getQuery());
+            self::assertFalse($request->hasHeader('X-Namespace-Type'));
+            self::assertFalse($request->hasHeader('X-Namespace-ID'));
+        }
+    }
+
+    /**
+     * Middleware can add an Authorization or X-Actor-ID header, or replace the
+     * body, after the SDK took its snapshot. When the client's exception
+     * holds that request, as Guzzle's do, what it carries is redacted too.
+     */
+    public function testWhatMiddlewareAddedIsRedactedWhenTheClientReportsIt(): void
+    {
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static fn(RequestInterface $request): string => sprintf(
+                'refused %s as %s',
+                (string) $request->getBody(),
+                $request->getHeaderLine('X-Actor-ID'),
+            ),
+            null,
+            static fn(RequestInterface $request): RequestInterface => $request
+                ->withHeader('X-Actor-ID', 'actor-added-by-middleware')
+                ->withBody(self::stream('{"note":"body-replaced-by-middleware"}')),
+        );
+
+        try {
+            $client->tags()->create(self::body(), self::options());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertSame('actor-added-by-middleware', $this->lastRequest()->getHeaderLine('X-Actor-ID'));
+            self::assertStringContainsString('"refused [redacted] as [redacted]"', $e->getMessage());
+            self::assertStringNotContainsString('added-by-middleware', $e->getMessage());
+            self::assertStringNotContainsString('replaced-by-middleware', $e->getMessage());
         }
     }
 

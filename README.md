@@ -64,7 +64,9 @@ $client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOpt
 ```
 
 You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
-`http_client` option.
+`http_client` option. Its transport options and middleware apply to every SDK request; its own default
+headers, query, body and auth do not, since the SDK builds each request itself. Add a header with
+middleware (`Middleware::mapRequest()`) instead.
 
 ## API version and namespaces
 

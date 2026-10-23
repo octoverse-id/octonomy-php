@@ -7,6 +7,7 @@ namespace Octoverse\Octonomy\Http;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Psr7\Request as Psr7Request;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Exception\ApiException;
@@ -21,6 +22,8 @@ use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
+use Psr\Http\Client\NetworkExceptionInterface;
+use Psr\Http\Client\RequestExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -279,42 +282,43 @@ final class Transport
 
         // Taken from the very bytes and values handed to the client, before it
         // runs: its middleware can change an object the caller still holds.
-        // The client's own default X-Actor-ID goes out when this request sends
-        // none, so it is taken too.
-        $redaction = Redaction::of($this->token, $actor, $encoded, $actor === null ? $this->defaultActorIds() : []);
-
-        $requestOptions = [
-            'headers' => $headers,
-            'http_errors' => false,
-            // The body and the Authorization header are the SDK's alone. An
-            // injected client's own body or auth defaults would replace them
-            // (Guzzle merges defaults under these options, and drops a null
-            // one), and then what is sent would not be what is redacted.
-            'body' => $encoded,
-            'json' => null,
-            'form_params' => null,
-            'multipart' => null,
-            'auth' => null,
-        ];
-        if ($query !== []) {
-            $requestOptions['query'] = $query;
-        }
+        $redaction = Redaction::of($this->token, $actor, $encoded);
 
         try {
-            $response = $this->http->request($context->method, $this->baseUrl . $context->path, $requestOptions);
+            // Built inside the try, so a URL Guzzle cannot parse is reported,
+            // redacted, like any client failure rather than escaping raw.
+            $request = new Psr7Request($context->method, $this->uri($context), $headers, $encoded);
+            // The request is the SDK's alone, so $context and $redaction
+            // describe what goes out. A null option cancels the injected
+            // client's own default for it (Guzzle merges defaults under the
+            // options, then drops a null one): its default headers, query,
+            // body and auth would otherwise add to or replace the SDK's. Its
+            // transport options and its middleware still apply.
+            $response = $this->http->send($request, [
+                'http_errors' => false,
+                'headers' => null,
+                'query' => null,
+                'body' => null,
+                'json' => null,
+                'form_params' => null,
+                'multipart' => null,
+                'auth' => null,
+            ]);
         } catch (\Throwable $e) {
             // Anything the client, a handler or middleware throws, not only a
             // GuzzleException: none may leave with this request's frames
             // unscrubbed. Quoted in the message, not chained as getPrevious():
             // Guzzle's exception holds the request it failed to send,
-            // Authorization header and body included (Redaction).
+            // Authorization header and body included (Redaction). That request,
+            // as middleware left it, is redacted too.
+            $sent = $e instanceof RequestExceptionInterface || $e instanceof NetworkExceptionInterface ? $e->getRequest() : null;
             throw new TransportException(
                 ErrorMessage::forClientFailure(
                     $context,
                     $this->origin,
                     $e,
                     $e instanceof RequestException ? $e->getResponse()?->getStatusCode() : null,
-                    $redaction,
+                    $sent === null ? $redaction : $redaction->andSent($sent),
                 ),
                 $context,
             );
@@ -349,12 +353,16 @@ final class Transport
         try {
             return json_encode($body, JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
-            // json_encode() itself refused the body only when its own frame
-            // threw: a JsonException can also come from an object's
-            // jsonSerialize(), whose frame is then the first. Described from
-            // the error code, or named by class; never quoted and never
-            // chained, since a message or a frame can hold the body.
-            $refused = $e instanceof \JsonException && ($e->getTrace()[0]['function'] ?? null) === 'json_encode';
+            // json_encode() refused the body only when the call above threw:
+            // a JsonException can also come from an object's jsonSerialize(),
+            // or from a json_encode() that one calls, whose frame is then in
+            // another file. Described from the error code, or named by class;
+            // never quoted and never chained, since a message or a frame can
+            // hold the body.
+            $thrower = $e->getTrace()[0] ?? [];
+            $refused = $e instanceof \JsonException
+                && ($thrower['function'] ?? null) === 'json_encode'
+                && ($thrower['file'] ?? null) === __FILE__;
             throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unencodable(
                 $context,
                 $refused
@@ -465,37 +473,14 @@ final class Transport
     }
 
     /**
-     * The X-Actor-ID values an injected Guzzle client adds by default, which
-     * Guzzle sends when the request names none. Read through getConfig(),
-     * which Guzzle 7 has and 8 drops; none when the client has no such method.
-     *
-     * @return list<string>
+     * The URL $context describes: the base URL, the path, and the query as
+     * sent, encoded as Guzzle's query option encodes one.
      */
-    private function defaultActorIds(): array
+    private function uri(RequestContext $context): string
     {
-        $headers = self::configOf($this->http, 'headers');
-        $ids = [];
-        foreach (is_array($headers) ? $headers : [] as $name => $value) {
-            if (is_string($name) && strcasecmp($name, 'X-Actor-ID') === 0) {
-                foreach (is_array($value) ? $value : [$value] as $id) {
-                    if (is_string($id)) {
-                        $ids[] = $id;
-                    }
-                }
-            }
-        }
+        $uri = $this->baseUrl . $context->path;
 
-        return $ids;
-    }
-
-    /**
-     * A Guzzle client's configuration option, or null when $client has no
-     * getConfig(). Typed object, not ClientInterface, because Guzzle 8 drops
-     * the method that Guzzle 7's interface declares.
-     */
-    private static function configOf(object $client, string $option): mixed
-    {
-        return method_exists($client, 'getConfig') ? $client->getConfig($option) : null;
+        return $context->query === [] ? $uri : $uri . '?' . http_build_query($context->query, '', '&', PHP_QUERY_RFC3986);
     }
 
     /**

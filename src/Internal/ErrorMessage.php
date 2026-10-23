@@ -24,9 +24,10 @@ use Octoverse\Octonomy\RequestContext;
  * quote what the request sent ('"x" is not a valid choice.');
  * ApiException::$details keeps them for the caller.
  *
- * A 404 names the kind and the id of the resource it asked for and nothing
- * more. A scoped read deliberately does not reveal whether the row exists
- * outside what the request could see, so the message does not suggest it.
+ * A 404 names the kind and the id of the resource it asked for, says the SDK
+ * cannot tell why, and asks for the request to be checked, and says nothing
+ * about where else the row might be: a scoped read deliberately does not
+ * reveal whether it exists outside what the request could see.
  *
  * @internal
  */
@@ -62,8 +63,9 @@ final class ErrorMessage
         string $contentType = '',
     ): string {
         if ($code === null) {
-            // Not Octonomy's error handler: a proxy, a gateway or a web server
-            // answered, or base_url is not the API. The status says nothing more.
+            // The body did not come from Octonomy's error handler: a proxy, a
+            // gateway, a crash page, or a base_url that is not the API could
+            // have sent it, and the status alone does not say which.
             return sprintf(
                 'octonomy: %s failed with HTTP %d, and the body is not an Octonomy error envelope'
                 . ' ({"error": {...}}; %s), so the SDK cannot tell why.'
