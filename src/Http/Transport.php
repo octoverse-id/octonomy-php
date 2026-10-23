@@ -279,17 +279,25 @@ final class Transport
 
         // Taken from the very bytes and values handed to the client, before it
         // runs: its middleware can change an object the caller still holds.
-        $redaction = Redaction::of($this->token, $actor, $encoded);
+        // The client's own default X-Actor-ID goes out when this request sends
+        // none, so it is taken too.
+        $redaction = Redaction::of($this->token, $actor, $encoded, $actor === null ? $this->defaultActorIds() : []);
 
         $requestOptions = [
             'headers' => $headers,
             'http_errors' => false,
+            // The body and the Authorization header are the SDK's alone. An
+            // injected client's own body or auth defaults would replace them
+            // (Guzzle merges defaults under these options, and drops a null
+            // one), and then what is sent would not be what is redacted.
+            'body' => $encoded,
+            'json' => null,
+            'form_params' => null,
+            'multipart' => null,
+            'auth' => null,
         ];
         if ($query !== []) {
             $requestOptions['query'] = $query;
-        }
-        if ($encoded !== null) {
-            $requestOptions['body'] = $encoded;
         }
 
         try {
@@ -341,15 +349,18 @@ final class Transport
         try {
             return json_encode($body, JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
-            // Described from json_encode()'s error code, or named by class when
-            // an object's jsonSerialize() threw; never quoted and never chained,
-            // since a message or a frame can hold the body.
+            // json_encode() itself refused the body only when its own frame
+            // threw: a JsonException can also come from an object's
+            // jsonSerialize(), whose frame is then the first. Described from
+            // the error code, or named by class; never quoted and never
+            // chained, since a message or a frame can hold the body.
+            $refused = $e instanceof \JsonException && ($e->getTrace()[0]['function'] ?? null) === 'json_encode';
             throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unencodable(
                 $context,
-                $e instanceof \JsonException
+                $refused
                     ? ErrorMessage::jsonError($e->getCode())
                     : sprintf('an object in it threw %s from jsonSerialize(), whose message is not shown', $e::class),
-                $e instanceof \JsonException
+                $refused
                     ? 'put only what JSON can encode in it: UTF-8 strings, finite numbers, booleans, null, and arrays'
                     . ' or objects of those.'
                     : 'fix the jsonSerialize() that throws.',
@@ -370,6 +381,9 @@ final class Transport
         try {
             return Json::decode($raw);
         } catch (\JsonException $e) {
+            // Its message is PHP's own and is quoted; the exception is not
+            // chained, since json_decode()'s frame in its trace holds the raw
+            // body, which can echo the request.
             throw new TransportException(
                 ErrorMessage::forUndecodable(
                     $context,
@@ -380,7 +394,6 @@ final class Transport
                     $redaction,
                 ),
                 $context,
-                $e,
             );
         }
     }
@@ -449,6 +462,40 @@ final class Transport
         } catch (MalformedResponseException $e) {
             throw $e->locate($context, $at, $redaction);
         }
+    }
+
+    /**
+     * The X-Actor-ID values an injected Guzzle client adds by default, which
+     * Guzzle sends when the request names none. Read through getConfig(),
+     * which Guzzle 7 has and 8 drops; none when the client has no such method.
+     *
+     * @return list<string>
+     */
+    private function defaultActorIds(): array
+    {
+        $headers = self::configOf($this->http, 'headers');
+        $ids = [];
+        foreach (is_array($headers) ? $headers : [] as $name => $value) {
+            if (is_string($name) && strcasecmp($name, 'X-Actor-ID') === 0) {
+                foreach (is_array($value) ? $value : [$value] as $id) {
+                    if (is_string($id)) {
+                        $ids[] = $id;
+                    }
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * A Guzzle client's configuration option, or null when $client has no
+     * getConfig(). Typed object, not ClientInterface, because Guzzle 8 drops
+     * the method that Guzzle 7's interface declares.
+     */
+    private static function configOf(object $client, string $option): mixed
+    {
+        return method_exists($client, 'getConfig') ? $client->getConfig($option) : null;
     }
 
     /**

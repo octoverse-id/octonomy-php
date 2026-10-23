@@ -87,7 +87,8 @@ final class TransportTest extends SdkTestCase
             self::fail('expected a TransportException');
         } catch (TransportException $e) {
             self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags/tag_1', ['application_id' => 'app-1']), $e->context);
-            self::assertInstanceOf(\JsonException::class, $e->getPrevious());
+            // Not chained: json_decode()'s frame in its trace holds the raw body.
+            self::assertNull($e->getPrevious());
             self::assertSame(
                 'octonomy: GET /api/v1/tags/tag_1?application_id=app-1 answered HTTP 200 with a body that is not JSON'
                 . ' (Syntax error; Content-Type text/html, 18 bytes), where the Octonomy API sends JSON. The SDK cannot'

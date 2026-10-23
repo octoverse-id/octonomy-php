@@ -310,14 +310,16 @@ final class RedactionTest extends SdkTestCase
             }],
             'an object in it threw RuntimeException from jsonSerialize(), whose message is not shown',
         ];
+        // Not json_encode()'s own refusal, so not described as one, even with
+        // a code json_encode() uses.
         yield 'an object whose jsonSerialize() throws a JsonException of its own' => [
             static fn(): array => ['note' => new class implements \JsonSerializable {
                 public function jsonSerialize(): mixed
                 {
-                    throw new \JsonException('cannot encode description-from-the-body', 4242);
+                    throw new \JsonException('cannot encode description-from-the-body', JSON_ERROR_UTF8);
                 }
             }],
-            'json_encode() refused it with error 4242',
+            'an object in it threw JsonException from jsonSerialize(), whose message is not shown',
         ];
     }
 
@@ -413,13 +415,14 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
-     * A 2xx that is not JSON. The decoder's exception is chained, and its own
-     * trace runs through the same frames, so it is scrubbed too.
+     * A 2xx that is not JSON, here one that echoes the request. The decoder's
+     * exception is not chained: json_decode()'s frame in its trace holds that
+     * raw body.
      */
     public function testAnUndecodableAnswerCarriesNoneOfThem(): void
     {
         $client = $this->clientWith([
-            self::syntheticNegative(SyntheticNegative::GATEWAY, 201, '<html>proxy</html>', ['Content-Type' => 'text/html']),
+            self::syntheticNegative(SyntheticNegative::INVALID_JSON, 201, 'echo: Name From The Body, actor-from-the-call {', ['Content-Type' => 'text/plain']),
         ], self::config());
 
         try {
@@ -427,8 +430,43 @@ final class RedactionTest extends SdkTestCase
             self::fail('expected a TransportException');
         } catch (TransportException $e) {
             $this->assertEverythingWasSent();
-            self::assertInstanceOf(\JsonException::class, $e->getPrevious());
+            self::assertNull($e->getPrevious());
             self::assertCarriesNone($e, self::CREATE_FRAME);
+        }
+    }
+
+    /**
+     * An injected client's own defaults cannot replace the SDK's body or
+     * Authorization header, and a default X-Actor-ID it adds, sent because the
+     * request names none, is redacted like the SDK's own.
+     */
+    public function testAClientsOwnDefaultsDoNotChangeWhatIsSentOrRedacted(): void
+    {
+        $client = $this->clientWhoseHttpClientThrows(
+            ['token' => self::TOKEN],
+            static fn(RequestInterface $request): \Throwable => new \RuntimeException(sprintf(
+                'refused %s with %s as %s',
+                (string) $request->getBody(),
+                $request->getHeaderLine('Authorization'),
+                $request->getHeaderLine('X-Actor-ID'),
+            )),
+            [
+                'json' => ['note' => 'wire-only-default-body'],
+                'auth' => ['user', 'default-password'],
+                'headers' => ['X-Actor-ID' => 'actor-from-the-client-defaults'],
+            ],
+        );
+
+        try {
+            $client->tags()->create(self::body());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            $request = $this->lastRequest();
+            self::assertSame('Bearer ' . self::TOKEN, $request->getHeaderLine('Authorization'));
+            self::assertSame('Name From The Body', $this->lastJsonBody()['name']);
+            self::assertSame('actor-from-the-client-defaults', $request->getHeaderLine('X-Actor-ID'));
+            self::assertStringContainsString('"refused [redacted] with Bearer [redacted] as [redacted]"', $e->getMessage());
+            self::assertStringNotContainsString('actor-from-the-client-defaults', $e->getMessage());
         }
     }
 

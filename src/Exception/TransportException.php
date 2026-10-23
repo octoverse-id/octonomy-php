@@ -14,8 +14,9 @@ use Octoverse\Octonomy\RequestContext;
  *
  * When the HTTP client threw, its error is quoted in the message (with any
  * value the request carried replaced) and not chained: the client's exception
- * holds the request, Authorization header and body included, so getPrevious()
- * is null. When a 2xx body was not JSON, getPrevious() is the \JsonException.
+ * holds the request, Authorization header and body included. When a 2xx body
+ * was not JSON, the decoder's error is quoted and not chained either: its
+ * json_decode() frame holds the raw body. getPrevious() is always null.
  */
 final class TransportException extends OctonomyException
 {

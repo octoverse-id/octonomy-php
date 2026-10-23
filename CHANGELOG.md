@@ -70,7 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each value and nested key) replaced with `[redacted]`.
   `TransportException` covers anything the HTTP client throws and no longer chains it, since
   Guzzle's exception holds the request. The SDK encodes the body itself, once, so what it sends is
-  what it redacts; a body that cannot be encoded throws `InvalidArgumentException` without quoting it. A token, tenant
+  what it redacts, and cancels an injected client's own body and `auth` defaults; a body that cannot
+  be encoded throws `InvalidArgumentException` without quoting it. A non-JSON 2xx no longer chains
+  the `JsonException`. A token, tenant
   id, actor id, user agent or namespace with a control character is refused up front, and again just
   before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.

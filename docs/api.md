@@ -184,15 +184,21 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   the SDK keep theirs.
 - Anything the HTTP client, a handler or middleware throws becomes a `TransportException` that quotes
   its error, redacted, and does not chain it as `getPrevious()`, because Guzzle's exception holds the
-  request, `Authorization` header and body included. A non-JSON 2xx chains the `JsonException`,
-  scrubbed the same way.
+  request, `Authorization` header and body included. A non-JSON 2xx does not chain the
+  `JsonException` either, since `json_decode()`'s frame in its trace holds the raw body; its message,
+  PHP's own, is quoted.
+- An injected client's own `json`, `form_params`, `multipart`, `body` or `auth` defaults are cancelled
+  for SDK requests, so the body and `Authorization` header sent are the SDK's. A default `X-Actor-ID`
+  it adds, when the request names none, is redacted like the SDK's own.
 - A body that cannot be encoded as JSON is never sent. The `InvalidArgumentException` says why in
   fixed words, or names by class the exception an object's `jsonSerialize()` threw, and chains
   nothing.
-- A header value holding a control character, such as a trailing newline, is refused when the
-  `Config`, `RequestOptions` or `NamespaceScope` is built, and again by `Transport` just before sending
-  (the PHP 7.4 line has no `readonly`), without quoting it: Guzzle would refuse it with an error that
-  quotes the whole header, thrown from frames that hold the `Authorization` header and the body.
+- A header value holding a control character, such as a trailing newline, is refused without being
+  quoted: as a `ConfigurationException` when a `Config` is built (token, tenant id, actor id, user
+  agent), as an `InvalidArgumentException` when a `RequestOptions` or `NamespaceScope` is built, and
+  again as an `InvalidArgumentException` by `Transport` just before sending (the PHP 7.4 line has no
+  `readonly`). Guzzle would refuse it with an error that quotes the whole header, thrown from frames
+  that hold the `Authorization` header and the body.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

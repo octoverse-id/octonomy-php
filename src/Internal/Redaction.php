@@ -81,12 +81,14 @@ final class Redaction
     private ?array $values = null;
 
     /**
-     * @param string|null $body the request body as it was sent, JSON-encoded, or null for none
+     * @param string|null  $body the request body as it was sent, JSON-encoded, or null for none
+     * @param list<string> $also other values on the list the request carries
      */
     private function __construct(
         private readonly ?string $token,
         private readonly ?string $actorId,
         private readonly ?string $body,
+        private readonly array $also = [],
     ) {}
 
     /**
@@ -103,11 +105,13 @@ final class Redaction
      * number as it was sent, as JSON writes it and as PHP prints it; true,
      * false and null as JSON writes them.
      *
-     * @param string|null $body the request body as sent, JSON-encoded, or null for none
+     * @param string|null  $body the request body as sent, JSON-encoded, or null for none
+     * @param list<string> $also other values on the list the request carries, such as an X-Actor-ID
+     *                           the HTTP client adds on its own
      */
-    public static function of(string $token, ?string $actorId, ?string $body): self
+    public static function of(string $token, ?string $actorId, ?string $body, array $also = []): self
     {
-        return new self($token, $actorId, $body);
+        return new self($token, $actorId, $body, $also);
     }
 
     /**
@@ -139,7 +143,7 @@ final class Redaction
     private function values(): array
     {
         if ($this->values === null) {
-            $values = [(string) $this->token, (string) $this->actorId];
+            $values = [(string) $this->token, (string) $this->actorId, ...$this->also];
             if ($this->body !== null) {
                 $values[] = $this->body;
                 // Objects kept as objects: an associative array would turn a

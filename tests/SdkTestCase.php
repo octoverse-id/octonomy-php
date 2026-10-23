@@ -87,10 +87,15 @@ abstract class SdkTestCase extends TestCase
      * request, as a handler or middleware that throws would: any Throwable, not
      * only one of Guzzle's.
      *
-     * @param array<string, mixed>                  $config overrides of the default options, as for clientWith()
+     * $clientDefaults are the Guzzle client's own default request options,
+     * such as 'headers' or 'json', as an injected client may carry.
+     *
+     * @param array<string, mixed>                  $config         overrides of the default options, as for
+     *                                                              clientWith()
      * @param \Closure(RequestInterface): \Throwable $throw
+     * @param array<string, mixed>                  $clientDefaults
      */
-    protected function clientWhoseHttpClientThrows(array $config, \Closure $throw): Client
+    protected function clientWhoseHttpClientThrows(array $config, \Closure $throw, array $clientDefaults = []): Client
     {
         if (array_key_exists('http_client', $config)) {
             throw new \LogicException('the client owns its HTTP client');
@@ -103,7 +108,7 @@ abstract class SdkTestCase extends TestCase
             'base_url' => 'https://octonomy.test',
             'token' => 'test-token',
             'tenant_id' => 'tenant-1',
-            'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)]),
+            'http_client' => new GuzzleClient(['handler' => HandlerStack::create($this->mock)] + $clientDefaults),
         ], $config));
     }
 
