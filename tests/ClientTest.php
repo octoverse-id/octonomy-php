@@ -11,7 +11,9 @@ use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Exception\ConflictException;
 use Octoverse\Octonomy\Exception\ForbiddenException;
 use Octoverse\Octonomy\Exception\NotFoundException;
+use Octoverse\Octonomy\Exception\UnsupportedApiVersionException;
 use Octoverse\Octonomy\Exception\ValidationException;
+use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
@@ -112,6 +114,7 @@ final class ClientTest extends SdkTestCase
             self::assertNotNull($e->requestId);
             self::assertSame($error['details'], $e->details);
             self::assertSame($error['message'], $e->getMessage());
+            self::assertEquals(new RequestContext($captured->apiVersion(), 'GET', "/api/{$captured->apiVersion()}/tags/tag_1"), $e->context);
         }
     }
 
@@ -133,18 +136,39 @@ final class ClientTest extends SdkTestCase
         }
         // Captured on v1 only: v2 cannot produce it from the harness corpus.
         yield 'v1 application mismatch' => ['v1/errors/application-mismatch', 'application_mismatch', ValidationException::class];
+        // v1 only by definition: v2 has the namespace axis. A version mismatch,
+        // not invalid input, so not a ValidationException.
+        yield 'v1 namespace not supported' => ['v1/errors/namespace-not-supported', 'namespace_not_supported', UnsupportedApiVersionException::class];
     }
 
-    public function testErrorFallbackForNonEnvelopeBody(): void
+    /**
+     * A gateway's error page carries no envelope, so the status alone decides,
+     * and a 502 or 503 from one is a bare ApiException. A 503 in particular is
+     * not read as the server's namespace_api_disabled flag, which only an
+     * enveloped 503 states.
+     */
+    #[DataProvider('gatewayStatuses')]
+    public function testErrorFallbackForNonEnvelopeBody(int $status): void
     {
-        $client = $this->clientWith([self::syntheticNegative(SyntheticNegative::GATEWAY, 502, 'upstream down', [])]);
+        $client = $this->clientWith([self::syntheticNegative(SyntheticNegative::GATEWAY, $status, 'upstream down', [])]);
 
         try {
             $client->tags()->get('tag_1');
             self::fail('expected an ApiException');
         } catch (ApiException $e) {
-            self::assertSame(502, $e->statusCode);
-            self::assertSame('http_502', $e->errorCode);
+            self::assertSame(ApiException::class, $e::class);
+            self::assertSame($status, $e->statusCode);
+            self::assertSame("http_{$status}", $e->errorCode);
+            self::assertEquals(new RequestContext('v2', 'GET', '/api/v2/tags/tag_1'), $e->context);
         }
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function gatewayStatuses(): iterable
+    {
+        yield 'a 502 from a gateway' => [502];
+        yield 'a 503 from a load balancer' => [503];
     }
 }

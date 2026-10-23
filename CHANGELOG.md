@@ -45,6 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ForbiddenException`, decoded from the `{error:{code,message,details,request_id}}` envelope; plus
   `ConfigurationException`, `TransportException`, and `MalformedResponseException`, which is thrown
   when a 2xx body lacks its envelope instead of hydrating an empty model (#6).
+- Error mapping for the v2 codes (#16): `FeatureDisabledException` for `namespaced_writes_disabled`
+  (403) and `namespace_api_disabled` (503), so a deployment flag is no longer a `ForbiddenException`
+  and an enveloped 503 is no longer a bare `ApiException`; `UnsupportedApiVersionException` for
+  `namespace_not_supported` (400); `AmbiguousResolutionException` for `ambiguous_resolution` (400);
+  `namespace_invalid` maps to `ValidationException` and `scope_immutable` to `ConflictException`.
+  `ErrorCode` declares all 14 codes the server does, and `ApiException::classFor()` exposes the
+  table. A 503 without the envelope stays a bare `ApiException`.
+- `RequestContext` (api_version, method, path, query, namespace; no token, header or body) on every
+  `ApiException` and `TransportException` as `$context`, and on a `MalformedResponseException` raised
+  during a request (#16). `ApiException`'s and `TransportException`'s constructors take it as a
+  required argument, and `MalformedResponseException`'s takes it in place of the endpoint string.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
 - `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`

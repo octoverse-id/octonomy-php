@@ -15,7 +15,8 @@ changing the types and paths.
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
 | `RequestOptions` | Per-call headers: actor (`withActor`) and namespace. What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
-| `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`); `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
+| `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`/`FeatureDisabled`/`UnsupportedApiVersion`/`AmbiguousResolution`), mapped by `ApiException::classFor()`; `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
+| `RequestContext` | The api_version, method, path, query and namespace of one request, built by `Transport` before sending and carried by every exception the request ends in. No token, header or body. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
 | `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
@@ -39,8 +40,9 @@ changing the types and paths.
    rejects comes back as a `MalformedResponseException` naming the endpoint, the api_version and the
    field's path in the body (`data.usage_count`, `data[2].slug`, `pagination.count`). A non-JSON 2xx
    throws `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the
-   `{error:{...}}` envelope leniently and returns the most specific subclass. Guzzle network failures
-   are wrapped in `TransportException`.
+   `{error:{...}}` envelope leniently and returns the most specific subclass, by code first and status
+   second. Guzzle network failures are wrapped in `TransportException`. Each of these exceptions
+   carries the `RequestContext` `Transport` built for the request before sending it.
 
 ```
 Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/{v1|v2}
@@ -51,6 +53,7 @@ Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle 
                                    ├─ 2xx, envelope missing → throw MalformedResponseException
                                    ├─ 2xx, field rejected   → throw MalformedResponseException (endpoint, api_version, field)
                                    └─ !2xx                  → throw ApiException subclass (statusCode, errorCode, details, requestId)
+                                     every throw above, after the guard, carries the request's RequestContext
 ```
 
 Services never see a raw body. That is deliberate: the server wraps every single-resource response,

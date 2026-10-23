@@ -9,6 +9,9 @@ use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Model\Tag;
+use Octoverse\Octonomy\NamespaceScope;
+use Octoverse\Octonomy\RequestContext;
+use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use Octoverse\Octonomy\Tests\SdkTestCase;
@@ -17,9 +20,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * Covers the three ways Transport reads a 2xx — one(), many(), none() — the
  * envelope each one enforces, and how a field the hydrator rejects is placed in
- * the response it came from. Well-formed responses are captured from a real
- * server; the malformed ones are synthetic negatives, because a conforming
- * server cannot produce them.
+ * the response it came from, and that every exception a request ends in
+ * carries that request's RequestContext. Well-formed responses are captured
+ * from a real server; the malformed ones are synthetic negatives, because a
+ * conforming server cannot produce them.
  */
 final class TransportTest extends SdkTestCase
 {
@@ -78,18 +82,68 @@ final class TransportTest extends SdkTestCase
             self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
         ], ApiVersion::V1);
 
-        $this->expectException(TransportException::class);
-
-        $transport->one('GET', 'tags/tag_1', self::asDecoded());
+        try {
+            $transport->one('GET', 'tags/tag_1', self::asDecoded(), ['application_id' => 'app-1']);
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags/tag_1', ['application_id' => 'app-1']), $e->context);
+            self::assertInstanceOf(\JsonException::class, $e->getPrevious());
+        }
     }
 
     public function testOneRaisesTheTypedApiExceptionForANon2xx(): void
     {
         $transport = $this->transportWith([self::captured('v1/errors/not-found')], ApiVersion::V1);
 
-        $this->expectException(NotFoundException::class);
+        try {
+            $transport->one('GET', 'tags/missing', self::asDecoded());
+            self::fail('expected a NotFoundException');
+        } catch (NotFoundException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags/missing'), $e->context);
+        }
+    }
 
-        $transport->one('GET', 'tags/missing', self::asDecoded());
+    /**
+     * The context is built from the call, so it names the request exactly as
+     * it went on the wire: the prefixed path, the query, the namespace pair.
+     */
+    public function testTheContextDescribesTheRequestAsSent(): void
+    {
+        $namespace = new NamespaceScope('merchant', 'm-42');
+        $transport = $this->transportWith([self::captured('v2/errors/not-found')]);
+
+        try {
+            $transport->one(
+                'GET',
+                'tags/tag%2F1',
+                self::asDecoded(),
+                ['application_id' => 'app-1', 'include_global' => 'false'],
+                null,
+                new RequestOptions(namespace: $namespace),
+            );
+            self::fail('expected a NotFoundException');
+        } catch (NotFoundException $e) {
+            $request = $this->lastRequest();
+            self::assertSame($request->getMethod(), $e->context->method);
+            self::assertSame($request->getUri()->getPath(), $e->context->path);
+            self::assertSame($this->lastQuery(), $e->context->query);
+            self::assertSame($namespace, $e->context->namespace);
+            self::assertSame($request->getHeaderLine('X-Namespace-ID'), $e->context->namespace->id);
+            self::assertSame(ApiVersion::V2, $e->context->apiVersion);
+        }
+    }
+
+    public function testOneCarriesTheContextOnAMissingEnvelope(): void
+    {
+        $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '{"id":"tag_1"}')]);
+
+        try {
+            $transport->one('GET', 'tags/tag_1', self::asDecoded());
+            self::fail('expected a MalformedResponseException');
+        } catch (MalformedResponseException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1'), $e->context);
+            self::assertNull($e->field);
+        }
     }
 
     public function testOneHydratesWithItsApiVersionAndCallsThatSurface(): void
@@ -120,10 +174,12 @@ final class TransportTest extends SdkTestCase
                 $e->getMessage(),
             );
             self::assertSame('data.usage_count', $e->field);
+            self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags/tag_1'), $e->context);
             // The model's own report, before Transport placed it, stays chained.
             $previous = $e->getPrevious();
             self::assertInstanceOf(MalformedResponseException::class, $previous);
             self::assertSame('usage_count', $previous->field);
+            self::assertNull($previous->context);
         }
     }
 
@@ -197,9 +253,24 @@ final class TransportTest extends SdkTestCase
             self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>proxy</html>', ['Content-Type' => 'text/html']),
         ], ApiVersion::V1);
 
-        $this->expectException(TransportException::class);
+        try {
+            $transport->many('GET', 'tags', self::asDecoded(), ['limit' => '1']);
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V1, 'GET', '/api/v1/tags', ['limit' => '1']), $e->context);
+        }
+    }
 
-        $transport->many('GET', 'tags', self::asDecoded());
+    public function testManyCarriesTheContextOnAMissingEnvelope(): void
+    {
+        $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::MISSING_ENVELOPE, 200, '[]')]);
+
+        try {
+            $transport->many('GET', 'tags', self::asDecoded());
+            self::fail('expected a MalformedResponseException');
+        } catch (MalformedResponseException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags'), $e->context);
+        }
     }
 
     #[DataProvider('bodiesWithBadPagination')]
@@ -338,8 +409,11 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([self::captured('v1/errors/not-found')], ApiVersion::V1);
 
-        $this->expectException(NotFoundException::class);
-
-        $transport->none('DELETE', 'tags/missing');
+        try {
+            $transport->none('DELETE', 'tags/missing', ['application_id' => 'app-1']);
+            self::fail('expected a NotFoundException');
+        } catch (NotFoundException $e) {
+            self::assertEquals(new RequestContext(ApiVersion::V1, 'DELETE', '/api/v1/tags/missing', ['application_id' => 'app-1']), $e->context);
+        }
     }
 }
