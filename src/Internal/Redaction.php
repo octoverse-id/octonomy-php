@@ -84,15 +84,18 @@ final class Redaction
     private ?array $values = null;
 
     /**
-     * @param list<string> $bodies the request body as sent, JSON-encoded, and any other body the request
-     *                             was sent with
-     * @param list<string> $also   other values on the list the request carried
+     * @param list<string> $bodies   the request body as sent, JSON-encoded, and any other body the request
+     *                               was sent with
+     * @param list<string> $also     other values on the list the request carried
+     * @param bool         $complete false when the request was sent with a body this redaction could not
+     *                               read, so it cannot vouch for text that may quote it
      */
     private function __construct(
         private readonly ?string $token,
         private readonly ?string $actorId,
         private readonly array $bodies,
         private readonly array $also = [],
+        private readonly bool $complete = true,
     ) {}
 
     /**
@@ -130,6 +133,8 @@ final class Redaction
      * client's exception says it sent, once its middleware had run. Middleware
      * can add an Authorization or X-Actor-ID header, or replace the body,
      * after the SDK took its snapshot, and the client's error can quote them.
+     * A body that cannot be read back (a stream that cannot seek, which the
+     * client may already have read to the end) leaves the redaction incomplete.
      */
     public function andSent(RequestInterface $sent): self
     {
@@ -143,12 +148,24 @@ final class Redaction
             $also[] = $actorId;
         }
         $bodies = $this->bodies;
+        $complete = $this->complete;
         $body = $sent->getBody();
         if ($body->isSeekable()) {
             $bodies[] = (string) $body;
+        } elseif ($body->getSize() !== 0) {
+            $complete = false;
         }
 
-        return new self($this->token, $this->actorId, $bodies, $also);
+        return new self($this->token, $this->actorId, $bodies, $also, $complete);
+    }
+
+    /**
+     * Whether this redaction knows every value it should replace. When it does
+     * not, text that may quote the request must not be quoted at all.
+     */
+    public function isComplete(): bool
+    {
+        return $this->complete;
     }
 
     /**

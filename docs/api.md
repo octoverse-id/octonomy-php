@@ -193,8 +193,9 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   apply.
 - Middleware can still add a header or replace the body after the SDK's snapshot. When the client's
   exception holds the request as middleware left it, as Guzzle's and every PSR-18 request or network
-  exception do, its `Authorization`, `X-Actor-ID` and body are redacted too. A value middleware adds
-  that never reaches such an exception is one the SDK never sees, and cannot redact.
+  exception do, its `Authorization`, `X-Actor-ID` and body are redacted too. When that body cannot be
+  read back (a stream that cannot seek), the client's message is not quoted at all. A value middleware
+  adds that never reaches such an exception is one the SDK never sees, and cannot redact.
 - A body that cannot be encoded as JSON is never sent. The `InvalidArgumentException` says why in
   fixed words, or names by class the exception an object's `jsonSerialize()` threw, and chains
   nothing.

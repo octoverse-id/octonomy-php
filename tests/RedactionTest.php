@@ -548,6 +548,35 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
+     * Middleware can replace the body with a stream that cannot seek, which
+     * the client's error then reads to the end to quote it. The SDK cannot
+     * read it back to redact, so it does not quote the client's message at all.
+     */
+    public function testAClientErrorOverABodyThatCannotBeReadBackIsNotQuoted(): void
+    {
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static fn(RequestInterface $request): string => 'refused ' . (string) $request->getBody(),
+            null,
+            static fn(RequestInterface $request): RequestInterface => $request
+                ->withBody(self::stream('{"note":"body-from-pump-middleware"}', false)),
+        );
+
+        try {
+            $client->tags()->create(self::body(), self::options());
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringContainsString(
+                '\\ConnectException, whose message is not shown: the request it holds has a body the SDK cannot read'
+                . ' back to redact.',
+                $e->getMessage(),
+            );
+            self::assertStringNotContainsString('body-from-pump-middleware', $e->getMessage());
+            self::assertStringNotContainsString('refused', $e->getMessage());
+        }
+    }
+
+    /**
      * Refused before sending: PHP's own \LogicException, thrown from frames that
      * hold the body and the RequestOptions all the same.
      */

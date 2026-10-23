@@ -111,7 +111,7 @@ final class ErrorMessage
         $write = !in_array($context->method, ['GET', 'HEAD', 'OPTIONS'], true);
 
         return sprintf(
-            'octonomy: the HTTP client failed on %s to %s%s, with %s: "%s".'
+            'octonomy: the HTTP client failed on %s to %s%s, with %s%s.'
             . ' The SDK cannot tell from this why the request failed%s.'
             . ' Fix: act on the client\'s error; if it could not connect, check that the server at %s is up and'
             . ' reachable from this host%s.',
@@ -119,7 +119,11 @@ final class ErrorMessage
             $origin,
             $status === null ? '' : sprintf(' after an HTTP %d response', $status),
             $clientError::class,
-            $redaction->text($clientError->getMessage()),
+            // Withheld whole when the request the client's exception holds has
+            // a body the redaction could not read: it may be quoted there.
+            $redaction->isComplete()
+                ? sprintf(': "%s"', $redaction->text($clientError->getMessage()))
+                : ', whose message is not shown: the request it holds has a body the SDK cannot read back to redact',
             $write ? ', or whether the server received and applied it' : '',
             $origin,
             $write ? '; before sending the write again, check whether it took effect' : '',

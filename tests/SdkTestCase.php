@@ -11,6 +11,7 @@ use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Utils;
 use Octoverse\Octonomy\ApiVersion;
@@ -95,11 +96,14 @@ abstract class SdkTestCase extends TestCase
 
     /**
      * A request body stream holding $contents, for middleware in a test to
-     * put on a request.
+     * put on a request; one that cannot seek, like a pump or a socket, unless
+     * $seekable.
      */
-    protected static function stream(string $contents): StreamInterface
+    protected static function stream(string $contents, bool $seekable = true): StreamInterface
     {
-        return Utils::streamFor($contents);
+        $stream = Utils::streamFor($contents);
+
+        return $seekable ? $stream : new NoSeekStream($stream);
     }
 
     /**
