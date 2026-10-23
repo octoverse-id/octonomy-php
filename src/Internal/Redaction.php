@@ -134,7 +134,8 @@ final class Redaction
      * can add an Authorization or X-Actor-ID header, or replace the body,
      * after the SDK took its snapshot, and the client's error can quote them.
      * A body that cannot be read back (a stream that cannot seek, which the
-     * client may already have read to the end) leaves the redaction incomplete.
+     * client may already have read to the end) leaves the redaction incomplete,
+     * whatever size it reports: a draining stream reports 0 once it is read.
      */
     public function andSent(RequestInterface $sent): self
     {
@@ -152,7 +153,7 @@ final class Redaction
         $body = $sent->getBody();
         if ($body->isSeekable()) {
             $bodies[] = (string) $body;
-        } elseif ($body->getSize() !== 0) {
+        } else {
             $complete = false;
         }
 

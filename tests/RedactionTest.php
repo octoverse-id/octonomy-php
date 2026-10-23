@@ -550,16 +550,18 @@ final class RedactionTest extends SdkTestCase
     /**
      * Middleware can replace the body with a stream that cannot seek, which
      * the client's error then reads to the end to quote it. The SDK cannot
-     * read it back to redact, so it does not quote the client's message at all.
+     * read it back to redact, so it does not quote the client's message at
+     * all, whatever size the stream reports once it is read.
      */
-    public function testAClientErrorOverABodyThatCannotBeReadBackIsNotQuoted(): void
+    #[DataProvider('bodiesThatCannotBeReadBack')]
+    public function testAClientErrorOverABodyThatCannotBeReadBackIsNotQuoted(string $kind): void
     {
         $client = $this->clientThatCannotConnect(
             self::config(),
             static fn(RequestInterface $request): string => 'refused ' . (string) $request->getBody(),
             null,
             static fn(RequestInterface $request): RequestInterface => $request
-                ->withBody(self::stream('{"note":"body-from-pump-middleware"}', false)),
+                ->withBody(self::stream('{"note":"body-from-pump-middleware"}', $kind)),
         );
 
         try {
@@ -574,6 +576,15 @@ final class RedactionTest extends SdkTestCase
             self::assertStringNotContainsString('body-from-pump-middleware', $e->getMessage());
             self::assertStringNotContainsString('refused', $e->getMessage());
         }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function bodiesThatCannotBeReadBack(): iterable
+    {
+        yield 'a stream that cannot seek' => [self::STREAM_NO_SEEK];
+        yield 'a buffer that drains as it is read' => [self::STREAM_DRAINING];
     }
 
     /**

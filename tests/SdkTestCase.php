@@ -11,6 +11,7 @@ use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\BufferStream;
 use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Utils;
@@ -30,6 +31,11 @@ use Psr\Http\Message\StreamInterface;
  */
 abstract class SdkTestCase extends TestCase
 {
+    /** Kinds of stream() body. */
+    protected const STREAM_SEEKABLE = 'seekable';
+    protected const STREAM_NO_SEEK = 'no seek';
+    protected const STREAM_DRAINING = 'draining';
+
     protected MockHandler $mock;
 
     /**
@@ -96,14 +102,21 @@ abstract class SdkTestCase extends TestCase
 
     /**
      * A request body stream holding $contents, for middleware in a test to
-     * put on a request; one that cannot seek, like a pump or a socket, unless
-     * $seekable.
+     * put on a request: STREAM_SEEKABLE, STREAM_NO_SEEK (cannot seek, like a
+     * socket), or STREAM_DRAINING (cannot seek, and reports a size of 0 once
+     * read, like a buffer).
      */
-    protected static function stream(string $contents, bool $seekable = true): StreamInterface
+    protected static function stream(string $contents, string $kind = self::STREAM_SEEKABLE): StreamInterface
     {
+        if ($kind === self::STREAM_DRAINING) {
+            $buffer = new BufferStream();
+            $buffer->write($contents);
+
+            return $buffer;
+        }
         $stream = Utils::streamFor($contents);
 
-        return $seekable ? $stream : new NoSeekStream($stream);
+        return $kind === self::STREAM_NO_SEEK ? new NoSeekStream($stream) : $stream;
     }
 
     /**
