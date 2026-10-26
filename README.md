@@ -116,6 +116,7 @@ use Octoverse\Octonomy\Model\TagUpdate;
 $client->tags()->update($id, new TagUpdate(name: 'Autumn'));        // {"name": "Autumn"}
 $client->tags()->update($id, new TagUpdate(parentId: null));        // {"parent_id": null}: un-nests it
 $client->tags()->update($id, new TagUpdate(description: null));     // {"description": null}: clears it
+$client->tags()->update($id, new TagUpdate(metadata: []));          // {"metadata": {}}: empties it
 ```
 
 A string field you leave out defaults to `Undefined::VALUE`, which omits it. The server decides what a

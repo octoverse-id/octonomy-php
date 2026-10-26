@@ -28,7 +28,9 @@ use Octoverse\Octonomy\Undefined;
  * metadata and isActive keep two states, because the server has no null for
  * either and Undefined::VALUE, a string, cannot default an array or a bool: null
  * omits the key. metadata replaces the stored object rather than merging into
- * it.
+ * it, and [] empties it: an empty metadata is sent as {}, the JSON object the
+ * server requires. Inside metadata an empty array is sent as a JSON list; use
+ * new \stdClass() for an empty nested object.
  */
 final class VocabularyUpdate
 {
@@ -67,7 +69,9 @@ final class VocabularyUpdate
             $payload['description'] = $this->description;
         }
         if ($this->metadata !== null) {
-            $payload['metadata'] = $this->metadata;
+            // An empty array would encode as the list []; metadata is a JSON
+            // object, and the server refuses anything else (#46).
+            $payload['metadata'] = $this->metadata === [] ? new \stdClass() : $this->metadata;
         }
         if ($this->isActive !== null) {
             $payload['is_active'] = $this->isActive;

@@ -344,6 +344,11 @@ final class Transport
      * same bytes as Guzzle's json option: json_encode()'s default flags, the
      * throw flag aside.
      *
+     * An empty body is sent as {}, not the [] json_encode() writes for an empty
+     * array: every Octonomy request body is a JSON object, and the server
+     * refuses a list (#46). Only the top level; a list inside the body stays a
+     * list.
+     *
      * @param array<string, mixed> $body
      *
      * @throws \InvalidArgumentException when it does not encode; nothing is sent
@@ -351,7 +356,7 @@ final class Transport
     private function encode(RequestContext $context, array $body): string
     {
         try {
-            return json_encode($body, JSON_THROW_ON_ERROR);
+            return json_encode($body === [] ? new \stdClass() : $body, JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
             // json_encode() refused the body only when the call above threw:
             // a JsonException can also come from an object's jsonSerialize(),

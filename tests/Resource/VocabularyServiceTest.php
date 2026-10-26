@@ -221,6 +221,55 @@ final class VocabularyServiceTest extends SdkTestCase
         self::assertSame($row['metadata'], $vocab->metadata);
     }
 
+    /**
+     * An update with nothing set sends {} (#46), not the [] an empty PHP array
+     * encodes as, which the server refuses.
+     */
+    public function testUpdateWithNothingSetSendsAnEmptyObject(): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/update')]);
+
+        $client->vocabularies()->update('voc_1', new VocabularyUpdate(), 'harness-app', self::merchantA());
+
+        self::assertSame('{}', $this->lastRawBody());
+    }
+
+    /**
+     * metadata: [] empties the stored object (#46). It goes out as {}, the JSON
+     * object the server requires, and the fixture is the server's answer.
+     */
+    public function testUpdateEmptiesMetadataWithAnEmptyArray(): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/update-empty-metadata')]);
+
+        $vocab = $client->vocabularies()->update(
+            'voc_1',
+            new VocabularyUpdate(metadata: []),
+            'harness-app',
+            self::merchantA(),
+        );
+
+        self::assertSame('{"metadata":{}}', $this->lastRawBody());
+        self::assertSame([], $vocab->metadata);
+    }
+
+    public function testCreateSendsAnEmptyMetadataAsAnObject(): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/create')]);
+
+        $client->vocabularies()->create(new VocabularyCreate(
+            name: 'Labels',
+            slug: 'labels',
+            applicationId: 'harness-app',
+            metadata: [],
+        ), self::merchantA());
+
+        self::assertSame(
+            '{"name":"Labels","slug":"labels","application_id":"harness-app","metadata":{}}',
+            $this->lastRawBody(),
+        );
+    }
+
     public function testDelete(): void
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/delete')]);
