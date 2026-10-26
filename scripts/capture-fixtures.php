@@ -191,10 +191,13 @@ final class FixtureCapture
             'namespace' => $this->env['OCTONOMY_TEST_NAMESPACE_B_ID'],
         ]);
 
+        // The PATCH bodies below run last of all, each new one after the ones
+        // before it, so every id, request id and timestamp captured earlier
+        // keeps its stand-in.
+        //
         // An explicit null clears a nullable field (#20): Featured loses its
-        // description, parent and vocabulary, and Labels its description. Last of
-        // all, so every id, request id and timestamp captured before keeps its
-        // stand-in, and the response shows each field after the clear.
+        // description, parent and vocabulary, and Labels its description, and
+        // the response shows each field after the clear.
         $this->call('tags/update-clear', 200, 'PATCH', "tags/{$created['featured']}", [], [
             'description' => null,
             'parent_id' => null,
@@ -202,6 +205,16 @@ final class FixtureCapture
         ]);
         $this->call('vocabularies/update-clear', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
             'description' => null,
+        ]);
+        // An empty JSON object (#46): a PATCH of {} changes nothing, and
+        // "metadata": {} empties the stored object, which Featured and Labels
+        // both still carry here.
+        $this->call('tags/update-nothing', 200, 'PATCH', "tags/{$created['featured']}", [], new \stdClass());
+        $this->call('tags/update-empty-metadata', 200, 'PATCH', "tags/{$created['featured']}", [], [
+            'metadata' => new \stdClass(),
+        ]);
+        $this->call('vocabularies/update-empty-metadata', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
+            'metadata' => new \stdClass(),
         ]);
     }
 
@@ -384,7 +397,8 @@ final class FixtureCapture
      * the query.
      *
      * @param array<string, string> $query
-     * @param array<string, mixed>|null $body
+     * @param array<string, mixed>|\stdClass|null $body \stdClass for an empty object, which an
+     *                                                   empty array would encode as []
      * @param array{credential?: 'wildcard'|'merchant-a'|'unknown', tenant?: string, namespace?: string|null} $as
      */
     private function call(
@@ -393,12 +407,12 @@ final class FixtureCapture
         string $method,
         string $path,
         array $query = [],
-        ?array $body = null,
+        array|\stdClass|null $body = null,
         array $as = [],
     ): mixed {
         $credential = $as['credential'] ?? 'wildcard';
         $namespace = array_key_exists('namespace', $as) ? $as['namespace'] : $this->namespace;
-        if ($this->version === 'v2' && $namespace !== null && !isset($body['application_id']) && !isset($query['application_id'])) {
+        if ($this->version === 'v2' && $namespace !== null && !(is_array($body) && isset($body['application_id'])) && !isset($query['application_id'])) {
             $query = ['application_id' => $this->app()] + $query;
         }
 

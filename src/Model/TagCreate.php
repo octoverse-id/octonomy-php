@@ -7,7 +7,9 @@ namespace Octoverse\Octonomy\Model;
 /**
  * TagCreate is the request body for creating a tag. $name, $slug, and $type are
  * required; the remaining fields are optional and omitted from the payload when
- * null.
+ * null. An empty $metadata is sent as {}, the JSON object the server requires;
+ * inside it an empty array is sent as a JSON list, so use new \stdClass() for an
+ * empty nested object.
  */
 final class TagCreate
 {
@@ -49,7 +51,9 @@ final class TagCreate
             $payload['vocabulary_id'] = $this->vocabularyId;
         }
         if ($this->metadata !== null) {
-            $payload['metadata'] = $this->metadata;
+            // An empty array would encode as the list []; metadata is a JSON
+            // object, and the server refuses anything else (#46).
+            $payload['metadata'] = $this->metadata === [] ? new \stdClass() : $this->metadata;
         }
         if ($this->isActive !== null) {
             $payload['is_active'] = $this->isActive;

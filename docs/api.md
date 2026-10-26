@@ -108,6 +108,19 @@ have no null on the server, and the sentinel, a string, cannot default an array 
 two states: `null`, their default, omits the key. `metadata` replaces the stored object rather than
 merging into it.
 
+### Empty objects
+
+PHP has one empty array, and `json_encode()` writes it as the list `[]`. Where the contract wants a
+JSON object the SDK sends `{}` instead (#46):
+
+- An update with nothing set sends `{}`, which the server answers with 200 and changes nothing.
+- An empty `metadata` (`metadata: []`) is sent as `"metadata": {}`. On an update that empties the
+  stored object; a model's empty `metadata`, which hydrates to `[]`, goes back out unchanged.
+
+Only those two places. Inside `metadata` an empty array is sent as a JSON list, so pass
+`new \stdClass()` for an empty nested object. A model hydrates every nested object to an array, so a
+nested `{}` it read comes back as `[]` and would go back out as a list.
+
 ## Responses
 
 - **Single resource:** the model object (e.g. `Tag`), unwrapped from the server's `{ data: {...} }`.

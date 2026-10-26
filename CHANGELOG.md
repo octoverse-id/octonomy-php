@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another field the server answered 200 with the description unchanged, and on its own it left an
   empty body the server refused. `metadata` and `isActive`, which the server cannot set to null, still
   omit a `null`.
+- Empty JSON objects (#46). An update with nothing set sends `{}` rather than `[]`, which the server
+  refused with 400, and an empty `metadata` on any create or update DTO is sent as `{}` rather than
+  `[]`, so `metadata: []` now empties the stored object and a model's empty `metadata` round-trips.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

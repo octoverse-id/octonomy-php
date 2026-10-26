@@ -284,6 +284,93 @@ final class TagServiceTest extends SdkTestCase
         self::assertSame($row['metadata'], $tag->metadata);
     }
 
+    /**
+     * An update with nothing set sends {} (#46), which the server answers with
+     * 200, changing nothing: the fixture is that exchange. Encoded as is, the
+     * empty PHP array would be [], a list the server refuses.
+     */
+    public function testUpdateWithNothingSetSendsAnEmptyObject(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update-nothing')]);
+        $row = self::capturedData('v2/tags/update-nothing');
+
+        $tag = $client->tags()->update('tag_1', new TagUpdate(), 'harness-app', self::merchantA());
+
+        self::assertSame('PATCH', $this->lastRequest()->getMethod());
+        self::assertSame('application/json', $this->lastRequest()->getHeaderLine('Content-Type'));
+        self::assertSame('{}', $this->lastRawBody());
+        self::assertSame($row['name'], $tag->name);
+    }
+
+    /**
+     * metadata: [] empties the stored object (#46). It goes out as {}, the JSON
+     * object the server requires, and the fixture is the server's answer.
+     */
+    public function testUpdateEmptiesMetadataWithAnEmptyArray(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update-empty-metadata')]);
+
+        $tag = $client->tags()->update('tag_1', new TagUpdate(metadata: []), 'harness-app', self::merchantA());
+
+        self::assertSame('{"metadata":{}}', $this->lastRawBody());
+        self::assertSame([], $tag->metadata);
+    }
+
+    public function testCreateSendsAnEmptyMetadataAsAnObject(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/create')]);
+
+        $client->tags()->create(new TagCreate(
+            name: 'Featured',
+            slug: 'featured',
+            type: 'label',
+            applicationId: 'harness-app',
+            metadata: [],
+        ), self::merchantA());
+
+        self::assertSame(
+            '{"name":"Featured","slug":"featured","type":"label","application_id":"harness-app","metadata":{}}',
+            $this->lastRawBody(),
+        );
+    }
+
+    /**
+     * Only an empty metadata itself becomes {}: an empty array inside it stays
+     * the JSON list it encodes as, and a list keeps its order.
+     */
+    public function testMetadataKeepsTheListsInsideIt(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update')]);
+
+        $client->tags()->update(
+            'tag_1',
+            new TagUpdate(metadata: ['labels' => [], 'ranks' => [2, 1]]),
+            'harness-app',
+            self::merchantA(),
+        );
+
+        self::assertSame('{"metadata":{"labels":[],"ranks":[2,1]}}', $this->lastRawBody());
+    }
+
+    /**
+     * A tag's empty metadata hydrates to [] and goes back out as {}, so it
+     * round-trips into an update unchanged.
+     */
+    public function testAnEmptyMetadataReadFromATagRoundTrips(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/list'), self::captured('v2/tags/update')]);
+
+        $empty = array_values(array_filter(
+            $client->tags()->list(new TagListParams(applicationId: 'harness-app'), self::merchantA())->data,
+            static fn(Tag $tag): bool => $tag->metadata === [],
+        ));
+        self::assertNotEmpty($empty, 'v2/tags/list must hold a tag with empty metadata for this test to mean anything');
+
+        $client->tags()->update($empty[0]->id, new TagUpdate(metadata: $empty[0]->metadata), 'harness-app', self::merchantA());
+
+        self::assertSame('{"metadata":{}}', $this->lastRawBody());
+    }
+
     public function testDelete(): void
     {
         $client = $this->clientWith([self::captured('v2/tags/delete')]);

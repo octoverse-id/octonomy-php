@@ -239,6 +239,15 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
+     * The last request's body exactly as sent. lastJsonBody() decodes {} and []
+     * to the same empty array, so a test about which one went out reads this.
+     */
+    protected function lastRawBody(): string
+    {
+        return (string) $this->lastRequest()->getBody();
+    }
+
+    /**
      * Decode the JSON body of the last request.
      *
      * @return array<array-key, mixed>

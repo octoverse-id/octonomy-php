@@ -59,7 +59,8 @@ stays a faithful, ergonomic client.
   `Undefined::VALUE`, and `toArray()` omits only that (`!==`, never `instanceof`) and sends an explicit
   `null`. Which nulls the server accepts is its call, not the DTO's. A non-string field cannot default
   to the string sentinel and keeps `null` = omit, which is safe only while the server has no null for
-  it.
+  it. Where the contract wants a JSON object, an empty array goes out as `{}` (#46): `Transport` does it
+  for an empty body, and each DTO for its `metadata`.
 - No new public class or method without a doc comment and tests.
 
 ## PHP Conventions

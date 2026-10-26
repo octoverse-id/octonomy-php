@@ -156,6 +156,26 @@ final class TransportTest extends SdkTestCase
         }
     }
 
+    /**
+     * An empty body goes out as {}, the JSON object every Octonomy body is,
+     * not the [] json_encode() writes for an empty array (#46); with no body
+     * at all, nothing is sent.
+     */
+    public function testAnEmptyBodyIsSentAsAnEmptyObject(): void
+    {
+        $transport = $this->transportWith([self::captured('v2/tags/update-nothing'), self::captured('v2/tags/delete')]);
+
+        $transport->one('PATCH', 'tags/tag_1', self::asDecoded(), [], []);
+
+        self::assertSame('{}', $this->lastRawBody());
+        self::assertSame('application/json', $this->lastRequest()->getHeaderLine('Content-Type'));
+
+        $transport->none('DELETE', 'tags/tag_1');
+
+        self::assertSame('', $this->lastRawBody());
+        self::assertFalse($this->lastRequest()->hasHeader('Content-Type'));
+    }
+
     public function testOneHydratesWithItsApiVersionAndCallsThatSurface(): void
     {
         $transport = $this->transportWith([self::captured('v2/tags/get')], ApiVersion::V2);

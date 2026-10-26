@@ -73,15 +73,19 @@ final class CapturedCorpusTest extends SdkTestCase
      * What only one version can show: v1 refuses namespace headers and an
      * application-bound grant without its application; v2 lists the global
      * partition and include_global beside a namespace, and records the PATCH
-     * that clears nullable fields with an explicit null (#20).
+     * that clears nullable fields with an explicit null (#20) and the ones that
+     * send an empty JSON object (#46).
      */
     private const REQUIRED_ONLY_IN = [
         'v1' => ['errors/application-mismatch', 'errors/namespace-not-supported'],
         'v2' => [
             'tags/update-clear',
+            'tags/update-empty-metadata',
+            'tags/update-nothing',
             'vocabularies/list-global',
             'vocabularies/list-include-global',
             'vocabularies/update-clear',
+            'vocabularies/update-empty-metadata',
         ],
     ];
 
