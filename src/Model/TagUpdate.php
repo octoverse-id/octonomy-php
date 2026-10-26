@@ -17,11 +17,12 @@ use Octoverse\Octonomy\Undefined;
  *   new TagUpdate(parentId: null)     // {"parent_id": null}, un-nests the tag
  *
  * The server decides what a null does, and the SDK sends it either way.
- * description, parentId and vocabularyId accept it and clear the field. On
- * applicationId it is a change of application unless the tag is already
- * tenant-shared, and the server refuses such a change with 409
- * scope_immutable (ConflictException). name, slug and type cannot be null, so it
- * is a 400 (ValidationException).
+ * description, parentId and vocabularyId accept it and clear the field. The
+ * server never clears applicationId, since a tag's application is fixed at
+ * creation: a null is a 400 (ValidationException) on a namespaced tag, a 409
+ * scope_immutable (ConflictException) on a global tag with an application, and
+ * changes nothing on a tenant-shared one. name, slug and type cannot be null,
+ * so it is a 400 (ValidationException).
  *
  * metadata and isActive keep two states, because the server has no null for
  * either and Undefined::VALUE, a string, cannot default an array or a bool: null

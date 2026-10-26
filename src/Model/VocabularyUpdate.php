@@ -18,10 +18,12 @@ use Octoverse\Octonomy\Undefined;
  *   new VocabularyUpdate(description: null)   // {"description": null}, clears it
  *
  * The server decides what a null does, and the SDK sends it either way.
- * description accepts it and is cleared. On applicationId it is a change of
- * application unless the vocabulary is already tenant-shared, and the server
- * refuses such a change with 409 scope_immutable (ConflictException). name and
- * slug cannot be null, so it is a 400 (ValidationException).
+ * description accepts it and is cleared. The server never clears
+ * applicationId, since a vocabulary's application is fixed at creation: a null
+ * is a 400 (ValidationException) on a namespaced vocabulary, a 409
+ * scope_immutable (ConflictException) on a global one with an application, and
+ * changes nothing on a tenant-shared one. name and slug cannot be null, so it is
+ * a 400 (ValidationException).
  *
  * metadata and isActive keep two states, because the server has no null for
  * either and Undefined::VALUE, a string, cannot default an array or a bool: null

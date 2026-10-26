@@ -108,7 +108,7 @@ A v1 client refuses a namespace or `includeGlobal` with a `LogicException` befor
 ## Partial updates
 
 `update()` sends a PATCH, and the server changes only the fields the body names. A field you leave out
-of a `TagUpdate` or `VocabularyUpdate` is left alone, and `null` clears one:
+of a `TagUpdate` or `VocabularyUpdate` is left alone, and `null` asks the server to clear one:
 
 ```php
 use Octoverse\Octonomy\Model\TagUpdate;

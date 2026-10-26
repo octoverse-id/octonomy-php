@@ -13,8 +13,9 @@ namespace Octoverse\Octonomy;
  *   description: 'text'            ->  {"description": "text"}
  *
  * Before it, null had to mean "leave it alone", so the SDK could not send the
- * null that clears a field: TagUpdate(description: null) sent {} and the server
- * answered 200 having changed nothing (#20).
+ * null that clears a field: TagUpdate(name: 'Autumn', description: null) sent
+ * {"name": "Autumn"}, and the server answered 200 with the description
+ * unchanged (#20).
  *
  * A string constant, not an enum, because the 1.x line is downgraded to PHP 7.4
  * and Rector cannot carry an enum there (issue #5): it rewrote an enum case to

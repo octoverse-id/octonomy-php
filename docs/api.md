@@ -100,7 +100,7 @@ What the server does with a null (checked against 3.2.1):
 | Field | A null |
 | ----- | ------ |
 | `description`; on a tag also `parentId` and `vocabularyId` | clears it |
-| `applicationId` | `409 scope_immutable` (`ConflictException`) when the row has an application; a no-op on a tenant-shared row |
+| `applicationId` | never clears it, since a row's application is fixed at creation: `400 validation_error` (`ValidationException`) on a namespaced row, `409 scope_immutable` (`ConflictException`) on a global row with an application, a no-op on a tenant-shared row |
 | `name`, `slug`, and on a tag `type` | `400 validation_error` (`ValidationException`) |
 
 The SDK sends the null in every case and leaves the answer to the server. `metadata` and `isActive`

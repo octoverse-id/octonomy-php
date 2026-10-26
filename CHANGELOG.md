@@ -82,9 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   input DTOs.
 - Tri-state `TagUpdate` and `VocabularyUpdate` (#20). Every string field defaults to the new
   `Undefined::VALUE`, which omits it, so an explicit `null` is now sent: `new TagUpdate(description:
-  null)` sends `{"description": null}` and clears the description, where it used to send `{}`, answer
-  200 and change nothing. `metadata` and `isActive`, which the server cannot set to null, still omit a
-  `null`.
+  null)` sends `{"description": null}` and clears the description. A null used to be dropped: beside
+  another field the server answered 200 with the description unchanged, and on its own it left an
+  empty body the server refused. `metadata` and `isActive`, which the server cannot set to null, still
+  omit a `null`.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).
