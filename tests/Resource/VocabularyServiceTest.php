@@ -11,6 +11,8 @@ use Octoverse\Octonomy\Model\VocabularyUpdate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\SdkTestCase;
+use Octoverse\Octonomy\Undefined;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * VocabularyService on the default surface, api_version v2. Most v2 responses
@@ -102,7 +104,7 @@ final class VocabularyServiceTest extends SdkTestCase
         self::assertContains(null, $namespaces);
     }
 
-    public function testUpdateOmitsNullFields(): void
+    public function testUpdateSendsOnlyTheFieldsSet(): void
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/update')]);
 
@@ -119,6 +121,104 @@ final class VocabularyServiceTest extends SdkTestCase
         self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
         self::assertSame(['description' => 'Labels the merchandising team curates'], $this->lastJsonBody());
         self::assertSame('Labels the merchandising team curates', $vocab->description);
+    }
+
+    /**
+     * A string field has three states (#20): Undefined::VALUE, its default,
+     * omits the key; null sends an explicit null; a string sends the string.
+     *
+     * @param array<string, mixed> $body
+     */
+    #[DataProvider('vocabularyUpdateBodies')]
+    public function testUpdateSendsEachFieldInItsState(VocabularyUpdate $input, array $body): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/update')]);
+
+        $client->vocabularies()->update('voc_1', $input, 'harness-app', self::merchantA());
+
+        self::assertSame($body, $this->lastJsonBody());
+    }
+
+    /**
+     * @return iterable<string, array{VocabularyUpdate, array<string, mixed>}>
+     */
+    public static function vocabularyUpdateBodies(): iterable
+    {
+        // isActive keeps each body non-empty, so the omitted keys are the point.
+        yield 'every string field left at its default is omitted' => [
+            new VocabularyUpdate(isActive: false),
+            ['is_active' => false],
+        ];
+        yield 'a string field passed Undefined::VALUE is omitted' => [
+            new VocabularyUpdate(
+                name: Undefined::VALUE,
+                slug: Undefined::VALUE,
+                applicationId: Undefined::VALUE,
+                description: Undefined::VALUE,
+                isActive: false,
+            ),
+            ['is_active' => false],
+        ];
+        // The named argument that skips the fields before it is the call the PHP
+        // 7.4 downgrade once crashed on (issue #5).
+        yield 'one string field passed null is sent as null, alone' => [
+            new VocabularyUpdate(description: null),
+            ['description' => null],
+        ];
+        // The server refuses some of these nulls; the SDK sends them regardless.
+        yield 'every string field passed null is sent as null' => [
+            new VocabularyUpdate(name: null, slug: null, applicationId: null, description: null),
+            ['name' => null, 'slug' => null, 'application_id' => null, 'description' => null],
+        ];
+        yield 'every field passed a value is sent as that value' => [
+            new VocabularyUpdate(
+                name: 'Labels',
+                slug: 'labels',
+                applicationId: 'harness-app',
+                description: 'Merchandising labels',
+                metadata: ['owner' => 'catalog'],
+                isActive: true,
+            ),
+            [
+                'name' => 'Labels',
+                'slug' => 'labels',
+                'application_id' => 'harness-app',
+                'description' => 'Merchandising labels',
+                'metadata' => ['owner' => 'catalog'],
+                'is_active' => true,
+            ],
+        ];
+        // The server has no null for these two, so null cannot be a third state.
+        yield 'metadata and isActive passed null are omitted' => [
+            new VocabularyUpdate(name: 'Labels', metadata: null, isActive: null),
+            ['name' => 'Labels'],
+        ];
+    }
+
+    /**
+     * An explicit null clears the description, which the server confirmed when
+     * the fixture was captured: the same PATCH answered 200 with it cleared.
+     */
+    public function testUpdateClearsTheDescriptionWithNull(): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/update-clear')]);
+        $row = self::capturedData('v2/vocabularies/update-clear');
+
+        $vocab = $client->vocabularies()->update(
+            'voc_1',
+            new VocabularyUpdate(description: null),
+            'harness-app',
+            self::merchantA(),
+        );
+
+        self::assertSame('PATCH', $this->lastRequest()->getMethod());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
+        self::assertSame(['description' => null], $this->lastJsonBody());
+
+        self::assertNull($vocab->description);
+        // Fields the body did not name are untouched.
+        self::assertSame($row['name'], $vocab->name);
+        self::assertSame($row['metadata'], $vocab->metadata);
     }
 
     public function testDelete(): void

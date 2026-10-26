@@ -105,6 +105,23 @@ the assignments the request can see on v2.
 A v1 client refuses a namespace or `includeGlobal` with a `LogicException` before sending anything:
 `/api/v1` has no namespace axis, and would reject the headers or silently drop the parameter.
 
+## Partial updates
+
+`update()` sends a PATCH, and the server changes only the fields the body names. A field you leave out
+of a `TagUpdate` or `VocabularyUpdate` is left alone, and `null` clears one:
+
+```php
+use Octoverse\Octonomy\Model\TagUpdate;
+
+$client->tags()->update($id, new TagUpdate(name: 'Autumn'));        // {"name": "Autumn"}
+$client->tags()->update($id, new TagUpdate(parentId: null));        // {"parent_id": null}: un-nests it
+$client->tags()->update($id, new TagUpdate(description: null));     // {"description": null}: clears it
+```
+
+A string field you leave out defaults to `Undefined::VALUE`, which omits it. The server decides what a
+null does: [`docs/api.md`](docs/api.md#update-bodies) lists which fields it clears and which it
+refuses. `metadata` and `isActive` cannot be null on the server, so `null` omits them.
+
 ## Errors
 
 Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exception\ApiException`, which
