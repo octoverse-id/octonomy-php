@@ -97,7 +97,8 @@ Two named rules sit on top (issue #14):
   (`octonomy/core/pagination.py`). The SDK follows the server, enforces both envelopes in
   `Transport`, and notes the divergence in code. No SDK code reads the specs.
 - **Immutability:** response models and input DTOs are `readonly`. Input DTOs send only the fields the
-  caller set (PATCH-friendly) via `toArray()`.
+  caller set (PATCH-friendly) via `toArray()`. An Update DTO's string fields default to
+  `Undefined::VALUE` rather than `null`, so an explicit `null` is sent and a PATCH can clear a field.
 - **No hidden behavior:** the client never retries, logs, or mutates global state. Retries, timeouts,
   and transport tuning belong to the injected Guzzle client.
 - **One server rule, checked locally:** a v2-only feature on a v1 client throws before the request.

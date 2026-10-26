@@ -13,6 +13,8 @@ use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\Tests\SdkTestCase;
+use Octoverse\Octonomy\Undefined;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * TagService on the default surface, api_version v2. The v2 responses were
@@ -152,6 +154,134 @@ final class TagServiceTest extends SdkTestCase
         ], $this->lastJsonBody());
         self::assertSame('Hand-picked by the merchandising team', $tag->description);
         self::assertSame(['color' => 'red', 'rank' => 1], $tag->metadata);
+    }
+
+    /**
+     * A string field has three states (#20): Undefined::VALUE, its default,
+     * omits the key; null sends an explicit null; a string sends the string.
+     *
+     * @param array<string, mixed> $body
+     */
+    #[DataProvider('tagUpdateBodies')]
+    public function testUpdateSendsEachFieldInItsState(TagUpdate $input, array $body): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update')]);
+
+        $client->tags()->update('tag_1', $input, 'harness-app', self::merchantA());
+
+        self::assertSame($body, $this->lastJsonBody());
+    }
+
+    /**
+     * @return iterable<string, array{TagUpdate, array<string, mixed>}>
+     */
+    public static function tagUpdateBodies(): iterable
+    {
+        // isActive keeps each body non-empty, so the omitted keys are the point.
+        yield 'every string field left at its default is omitted' => [
+            new TagUpdate(isActive: false),
+            ['is_active' => false],
+        ];
+        yield 'a string field passed Undefined::VALUE is omitted' => [
+            new TagUpdate(
+                name: Undefined::VALUE,
+                slug: Undefined::VALUE,
+                type: Undefined::VALUE,
+                applicationId: Undefined::VALUE,
+                description: Undefined::VALUE,
+                parentId: Undefined::VALUE,
+                vocabularyId: Undefined::VALUE,
+                isActive: false,
+            ),
+            ['is_active' => false],
+        ];
+        // The named argument that skips the fields before it is the call the PHP
+        // 7.4 downgrade once crashed on (issue #5).
+        yield 'one string field passed null is sent as null, alone' => [
+            new TagUpdate(parentId: null),
+            ['parent_id' => null],
+        ];
+        // The server refuses some of these nulls; the SDK sends them regardless.
+        yield 'every string field passed null is sent as null' => [
+            new TagUpdate(
+                name: null,
+                slug: null,
+                type: null,
+                applicationId: null,
+                description: null,
+                parentId: null,
+                vocabularyId: null,
+            ),
+            [
+                'name' => null,
+                'slug' => null,
+                'type' => null,
+                'application_id' => null,
+                'description' => null,
+                'parent_id' => null,
+                'vocabulary_id' => null,
+            ],
+        ];
+        yield 'every field passed a value is sent as that value' => [
+            new TagUpdate(
+                name: 'Featured',
+                slug: 'featured',
+                type: 'label',
+                applicationId: 'harness-app',
+                description: 'Hand-picked items',
+                parentId: 'tag_parent',
+                vocabularyId: 'voc_1',
+                metadata: ['color' => 'red'],
+                isActive: true,
+            ),
+            [
+                'name' => 'Featured',
+                'slug' => 'featured',
+                'type' => 'label',
+                'application_id' => 'harness-app',
+                'description' => 'Hand-picked items',
+                'parent_id' => 'tag_parent',
+                'vocabulary_id' => 'voc_1',
+                'metadata' => ['color' => 'red'],
+                'is_active' => true,
+            ],
+        ];
+        // The server has no null for these two, so null cannot be a third state.
+        yield 'metadata and isActive passed null are omitted' => [
+            new TagUpdate(name: 'Featured', metadata: null, isActive: null),
+            ['name' => 'Featured'],
+        ];
+    }
+
+    /**
+     * An explicit null clears a field, which the server confirmed when the
+     * fixture was captured: the same PATCH answered 200 with all three cleared.
+     */
+    public function testUpdateClearsNullableFieldsWithNull(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update-clear')]);
+        $row = self::capturedData('v2/tags/update-clear');
+
+        $tag = $client->tags()->update('tag_1', new TagUpdate(
+            description: null,
+            parentId: null,
+            vocabularyId: null,
+        ), 'harness-app', self::merchantA());
+
+        self::assertSame('PATCH', $this->lastRequest()->getMethod());
+        self::assertSame(['application_id' => 'harness-app'], $this->lastQuery());
+        self::assertSame([
+            'description' => null,
+            'parent_id' => null,
+            'vocabulary_id' => null,
+        ], $this->lastJsonBody());
+
+        self::assertNull($tag->description);
+        self::assertNull($tag->parentId);
+        self::assertNull($tag->vocabularyId);
+        // Fields the body did not name are untouched.
+        self::assertSame($row['name'], $tag->name);
+        self::assertSame($row['metadata'], $tag->metadata);
     }
 
     public function testDelete(): void

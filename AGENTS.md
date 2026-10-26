@@ -54,8 +54,12 @@ stays a faithful, ergonomic client.
   coerced or defaulted. The only exceptions are named rules in `Internal\Json` with the server-side
   reason in a comment: the v2-only namespace pair, and Tag's `parent_id`/`vocabulary_id`, which the
   server omits when null. Never add a lenient reader.
-- Input DTOs use nullable promoted properties + `toArray()` that omits nulls so PATCH sends only what
-  the caller set.
+- `*Create` and `*ListParams` DTOs use nullable promoted properties + `toArray()` that omits nulls.
+  `*Update` DTOs are tri-state (#20) so PATCH can clear a field: each `?string` field defaults to
+  `Undefined::VALUE`, and `toArray()` omits only that (`!==`, never `instanceof`) and sends an explicit
+  `null`. Which nulls the server accepts is its call, not the DTO's. A non-string field cannot default
+  to the string sentinel and keeps `null` = omit, which is safe only while the server has no null for
+  it.
 - No new public class or method without a doc comment and tests.
 
 ## PHP Conventions

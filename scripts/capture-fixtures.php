@@ -184,11 +184,24 @@ final class FixtureCapture
         // random id.
         $this->call('vocabularies/list-include-global', 200, 'GET', 'vocabularies', ['include_global' => 'true']);
 
-        $this->captureFlow(['tag' => 'sale', 'type' => 'label', 'alias' => 'promo', 'other' => 'red']);
+        $created = $this->captureFlow(['tag' => 'sale', 'type' => 'label', 'alias' => 'promo', 'other' => 'red']);
 
         $this->call('errors/forbidden', 403, 'GET', 'tags', [], null, [
             'credential' => 'merchant-a',
             'namespace' => $this->env['OCTONOMY_TEST_NAMESPACE_B_ID'],
+        ]);
+
+        // An explicit null clears a nullable field (#20): Featured loses its
+        // description, parent and vocabulary, and Labels its description. Last of
+        // all, so every id, request id and timestamp captured before keeps its
+        // stand-in, and the response shows each field after the clear.
+        $this->call('tags/update-clear', 200, 'PATCH', "tags/{$created['featured']}", [], [
+            'description' => null,
+            'parent_id' => null,
+            'vocabulary_id' => null,
+        ]);
+        $this->call('vocabularies/update-clear', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
+            'description' => null,
         ]);
     }
 
@@ -200,8 +213,11 @@ final class FixtureCapture
      * @param array{tag: string, type: string, alias: string, other: string} $seeded
      *        tag/type: a seeded tag with an alias; alias: that alias's slug;
      *        other: a second seeded tag in the same partition
+     *
+     * @return array{featured: string, labels: string} the ids of the tag and the
+     *         vocabulary it created with every nullable field set
      */
-    private function captureFlow(array $seeded): void
+    private function captureFlow(array $seeded): array
     {
         $app = $this->app();
 
@@ -350,6 +366,8 @@ final class FixtureCapture
         // downgrades an unauthenticated request without one to 403.
         $this->call('errors/authentication-required', 403, 'GET', 'tags', [], null, ['credential' => 'unknown']);
         $this->call('errors/tenant-mismatch', 400, 'GET', 'tags', [], null, ['tenant' => 'harness-other-tenant']);
+
+        return ['featured' => $featured, 'labels' => $labels];
     }
 
     // --- HTTP ----------------------------------------------------------------------

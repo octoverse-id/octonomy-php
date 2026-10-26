@@ -84,6 +84,30 @@ methods need `tags:read`; mutating methods need `tags:write`.
 `include_global`. `VocabularyListParams` exposes `application_id`, `include_shared`, `is_active`,
 paging, and, on v2, `include_global`. Boolean params are serialized as `"true"`/`"false"`.
 
+### Update bodies
+
+`TagUpdate` and `VocabularyUpdate` are PATCH bodies, and the server leaves alone every field the body
+does not name. Each string field has three states (#20):
+
+| Argument | Body | Effect |
+| -------- | ---- | ------ |
+| left out, or `Undefined::VALUE` | no key | unchanged |
+| `null` | `"field": null` | whatever the server does with a null, below |
+| a string | `"field": "..."` | set to that string |
+
+What the server does with a null (checked against 3.2.1):
+
+| Field | A null |
+| ----- | ------ |
+| `description`; on a tag also `parentId` and `vocabularyId` | clears it |
+| `applicationId` | never clears it, since a row's application is fixed at creation: `400 validation_error` (`ValidationException`) on a namespaced row, `409 scope_immutable` (`ConflictException`) on a global row with an application, a no-op on a tenant-shared row |
+| `name`, `slug`, and on a tag `type` | `400 validation_error` (`ValidationException`) |
+
+The SDK sends the null in every case and leaves the answer to the server. `metadata` and `isActive`
+have no null on the server, and the sentinel, a string, cannot default an array or a bool, so they keep
+two states: `null`, their default, omits the key. `metadata` replaces the stored object rather than
+merging into it.
+
 ## Responses
 
 - **Single resource:** the model object (e.g. `Tag`), unwrapped from the server's `{ data: {...} }`.
