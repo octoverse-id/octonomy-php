@@ -371,6 +371,80 @@ final class TagServiceTest extends SdkTestCase
         self::assertSame('{"metadata":{}}', $this->lastRawBody());
     }
 
+    /**
+     * Metadata read from a tag goes back out as the server sent it (#48). A
+     * nested {} and a nested object keyed "0", "1" stay \stdClass, which an
+     * array could not tell from a list, and the lists beside them stay lists.
+     * The fixture's request is the first update, so its response also answers
+     * the second, which sends the same body.
+     */
+    public function testNestedMetadataReadFromATagGoesBackOutAsItWasRead(): void
+    {
+        $captured = self::captured('v2/tags/update-nested-metadata');
+        $client = $this->clientWith([$captured, $captured, self::captured('v2/tags/create')]);
+        $sent = '{"attrs":{},"ids":{"0":"a","1":"b"},"ranks":[2,1],"rows":[{"k":{}}],"labels":[]}';
+
+        $tag = $client->tags()->update('tag_1', new TagUpdate(metadata: [
+            'attrs' => new \stdClass(),
+            'ids' => (object) ['a', 'b'],
+            'ranks' => [2, 1],
+            'rows' => [['k' => new \stdClass()]],
+            'labels' => [],
+        ]), 'harness-app', self::merchantA());
+        self::assertSame('{"metadata":' . $sent . '}', $this->lastRawBody());
+
+        $metadata = $tag->metadata;
+        self::assertNotNull($metadata);
+        self::assertInstanceOf(\stdClass::class, $metadata['attrs']);
+        self::assertSame([], get_object_vars($metadata['attrs']));
+        self::assertInstanceOf(\stdClass::class, $metadata['ids']);
+        self::assertSame(['a', 'b'], get_object_vars($metadata['ids']));
+        self::assertSame([2, 1], $metadata['ranks']);
+        self::assertEquals([(object) ['k' => new \stdClass()]], $metadata['rows']);
+        self::assertSame([], $metadata['labels']);
+
+        $client->tags()->update($tag->id, new TagUpdate(metadata: $metadata), 'harness-app', self::merchantA());
+        self::assertSame('{"metadata":' . $sent . '}', $this->lastRawBody());
+
+        $client->tags()->create(new TagCreate(
+            name: 'Copy',
+            slug: 'copy',
+            type: 'label',
+            applicationId: 'harness-app',
+            metadata: $metadata,
+        ), self::merchantA());
+        self::assertSame(
+            '{"name":"Copy","slug":"copy","type":"label","application_id":"harness-app","metadata":' . $sent . '}',
+            $this->lastRawBody(),
+        );
+    }
+
+    /**
+     * The usual edit: read the metadata, change a key, send it back. The keys
+     * left alone keep their shape (#48).
+     */
+    public function testEditingMetadataKeepsTheShapeOfTheKeysLeftAlone(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/update-nested-metadata'), self::captured('v2/tags/update')]);
+        $metadata = $client->tags()->update('tag_1', new TagUpdate(metadata: [
+            'attrs' => new \stdClass(),
+            'ids' => (object) ['a', 'b'],
+            'ranks' => [2, 1],
+            'rows' => [['k' => new \stdClass()]],
+            'labels' => [],
+        ]), 'harness-app', self::merchantA())->metadata;
+        self::assertNotNull($metadata);
+
+        $metadata['color'] = 'red';
+        unset($metadata['labels']);
+        $client->tags()->update('tag_1', new TagUpdate(metadata: $metadata), 'harness-app', self::merchantA());
+
+        self::assertSame(
+            '{"metadata":{"attrs":{},"ids":{"0":"a","1":"b"},"ranks":[2,1],"rows":[{"k":{}}],"color":"red"}}',
+            $this->lastRawBody(),
+        );
+    }
+
     public function testDelete(): void
     {
         $client = $this->clientWith([self::captured('v2/tags/delete')]);

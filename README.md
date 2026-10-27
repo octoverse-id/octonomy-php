@@ -123,6 +123,9 @@ A string field you leave out defaults to `Undefined::VALUE`, which omits it. The
 null does: [`docs/api.md`](docs/api.md#update-bodies) lists which fields it clears and which it
 refuses. `metadata` and `isActive` cannot be null on the server, so `null` omits them.
 
+A model's `metadata` goes back into an update with the objects and lists it was read with: a nested
+JSON object reads as a `\stdClass` ([`docs/api.md`](docs/api.md#metadata-round-trips)).
+
 ## Errors
 
 Non-2xx responses throw a typed exception extending `Octoverse\Octonomy\Exception\ApiException`, which

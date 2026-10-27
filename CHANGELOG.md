@@ -89,6 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty JSON objects (#46). An update with nothing set sends `{}` rather than `[]`, which the server
   refused with 400, and an empty `metadata` on any create or update DTO is sent as `{}` rather than
   `[]`, so `metadata: []` now empties the stored object and a model's empty `metadata` round-trips.
+- Metadata round trips (#48). A model's `metadata` keeps each nested JSON object as a `\stdClass`
+  instead of converting it to an array, so read its members as properties
+  (`$tag->metadata['attrs']->size`). A nested `{}` or `{"0": "a"}` read from a model used to go back
+  out as the list `[]` or `["a"]`, and the server stored the list without an error. Every create and
+  update DTO now sends `metadata` as a JSON object whatever its keys, so metadata stored as
+  `{"0": "a"}`, which reads as `[0 => 'a']`, is no longer sent as a list the server refuses.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

@@ -53,14 +53,17 @@ stays a faithful, ergonomic client.
   be present as a key (nullability governs the value only), a wrong JSON type raises, and nothing is
   coerced or defaulted. The only exceptions are named rules in `Internal\Json` with the server-side
   reason in a comment: the v2-only namespace pair, and Tag's `parent_id`/`vocabulary_id`, which the
-  server omits when null. Never add a lenient reader.
+  server omits when null. Never add a lenient reader. Caller-written JSON (`metadata`) becomes an
+  array at its top level only: below it an object stays `\stdClass` and a list an array, so it goes
+  back out with the shape it was read with (#48).
 - `*Create` and `*ListParams` DTOs use nullable promoted properties + `toArray()` that omits nulls.
   `*Update` DTOs are tri-state (#20) so PATCH can clear a field: each `?string` field defaults to
   `Undefined::VALUE`, and `toArray()` omits only that (`!==`, never `instanceof`) and sends an explicit
   `null`. Which nulls the server accepts is its call, not the DTO's. A non-string field cannot default
   to the string sentinel and keeps `null` = omit, which is safe only while the server has no null for
-  it. Where the contract wants a JSON object, an empty array goes out as `{}` (#46): `Transport` does it
-  for an empty body, and each DTO for its `metadata`.
+  it. Where the contract wants a JSON object, the SDK sends one even when the array would encode as a
+  list: `Transport` sends an empty body as `{}` (#46), and each DTO casts its `metadata` to an object
+  (#48).
 - No new public class or method without a doc comment and tests.
 
 ## PHP Conventions

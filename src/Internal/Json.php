@@ -73,22 +73,6 @@ final class Json
     }
 
     /**
-     * Convert a JSON object from decode() into a string-keyed array, nested
-     * objects included, the form a model exposes once a reader has checked it.
-     *
-     * @return array<string, mixed>
-     */
-    public static function objectToArray(\stdClass $object): array
-    {
-        $out = [];
-        foreach (get_object_vars($object) as $key => $value) {
-            $out[(string) $key] = self::toArrays($value);
-        }
-
-        return $out;
-    }
-
-    /**
      * Run a model's reads, and mark any field they reject with the api_version
      * the model read the body as, which the readers themselves do not know.
      *
@@ -204,13 +188,20 @@ final class Json
     }
 
     /**
-     * Read a nullable JSON object field (e.g. `metadata`), converted to an
-     * array once it is known to be an object. A JSON list is rejected, which is
-     * why the members must still hold the \stdClass decode() produced.
+     * Read a nullable JSON object field of caller-written JSON (e.g.
+     * `metadata`). A JSON list is rejected, which is why the members must still
+     * hold the \stdClass decode() produced.
+     *
+     * Only the top level becomes an array, under PHP's array keys ("0" becomes
+     * 0). Below it every object stays the \stdClass decode() made and every list
+     * stays an array, because an array cannot say which of the two it was: a
+     * nested {} or {"0": "a"} read as an array would go back out as the list []
+     * or ["a"] (#48). The top level needs no such care, since the field is an
+     * object by contract and the request DTOs always send it as one.
      *
      * @param array<string, mixed> $d
      *
-     * @return array<string, mixed>|null
+     * @return array<array-key, mixed>|null
      *
      * @throws MalformedResponseException when the key is absent, or neither an object nor null
      */
@@ -224,7 +215,7 @@ final class Json
             throw self::wrongType($key, 'an object or null', $v);
         }
 
-        return self::objectToArray($v);
+        return get_object_vars($v);
     }
 
     /**
@@ -300,18 +291,6 @@ final class Json
         };
 
         return new MalformedResponseException("must be {$expected}, got {$type}", $key);
-    }
-
-    private static function toArrays(mixed $value): mixed
-    {
-        if ($value instanceof \stdClass) {
-            return self::objectToArray($value);
-        }
-        if (is_array($value)) {
-            return array_map(self::toArrays(...), $value);
-        }
-
-        return $value;
     }
 
     /**

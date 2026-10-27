@@ -7,7 +7,9 @@ namespace Octoverse\Octonomy\Tests\Fixture;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Model\Tag;
+use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\Model\Vocabulary;
+use Octoverse\Octonomy\Model\VocabularyUpdate;
 use Octoverse\Octonomy\Tests\SdkTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -73,19 +75,22 @@ final class CapturedCorpusTest extends SdkTestCase
      * What only one version can show: v1 refuses namespace headers and an
      * application-bound grant without its application; v2 lists the global
      * partition and include_global beside a namespace, and records the PATCH
-     * that clears nullable fields with an explicit null (#20) and the ones that
-     * send an empty JSON object (#46).
+     * that clears nullable fields with an explicit null (#20), the ones that
+     * send an empty JSON object (#46), and the ones that store metadata an
+     * array cannot hold without losing its shape (#48).
      */
     private const REQUIRED_ONLY_IN = [
         'v1' => ['errors/application-mismatch', 'errors/namespace-not-supported'],
         'v2' => [
             'tags/update-clear',
             'tags/update-empty-metadata',
+            'tags/update-nested-metadata',
             'tags/update-nothing',
             'vocabularies/list-global',
             'vocabularies/list-include-global',
             'vocabularies/update-clear',
             'vocabularies/update-empty-metadata',
+            'vocabularies/update-numeric-metadata',
         ],
     ];
 
@@ -269,7 +274,8 @@ final class CapturedCorpusTest extends SdkTestCase
     public function testEveryCapturedTagHydrates(): void
     {
         $rows = self::modelRows('tags', static fn(string $operation, mixed $data): array => match (true) {
-            in_array($operation, ['tags/create', 'tags/get', 'tags/update', 'tags/list', 'tags/list-page'], true) => self::oneOrMany($data),
+            in_array($operation, ['tags/create', 'tags/get', 'tags/list', 'tags/list-page'], true),
+            str_starts_with($operation, 'tags/update') => self::oneOrMany($data),
             str_starts_with($operation, 'tag-resolution/') => [$data->tag],
             $operation === 'resources/replace' => $data->tags,
             $operation === 'resources/tags' => array_column($data, 'tag'),
@@ -292,7 +298,10 @@ final class CapturedCorpusTest extends SdkTestCase
             // row lacks has already failed hydration above.
             self::assertSame(array_key_exists('parent_id', $row) ? $row['parent_id'] : null, $tag->parentId, $name);
             self::assertSame(array_key_exists('vocabulary_id', $row) ? $row['vocabulary_id'] : null, $tag->vocabularyId, $name);
-            self::assertSame($row['metadata'], $tag->metadata, $name);
+            // Sent back unchanged, metadata is the JSON the server sent (#48).
+            self::assertSame(self::json($members['metadata']), self::json(
+                $tag->metadata === null ? null : (new TagUpdate(metadata: $tag->metadata))->toArray()['metadata'],
+            ), $name);
             self::assertSame($row['is_active'], $tag->isActive, $name);
             self::assertSame($row['usage_count'], $tag->usageCount, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $tag->createdAt, $name);
@@ -316,7 +325,10 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['name'], $vocabulary->name, $name);
             self::assertSame($row['slug'], $vocabulary->slug, $name);
             self::assertSame($row['description'], $vocabulary->description, $name);
-            self::assertSame($row['metadata'], $vocabulary->metadata, $name);
+            // Sent back unchanged, metadata is the JSON the server sent (#48).
+            self::assertSame(self::json($members['metadata']), self::json(
+                $vocabulary->metadata === null ? null : (new VocabularyUpdate(metadata: $vocabulary->metadata))->toArray()['metadata'],
+            ), $name);
             self::assertSame($row['is_active'], $vocabulary->isActive, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $vocabulary->createdAt, $name);
             self::assertEquals(new \DateTimeImmutable($row['updated_at']), $vocabulary->updatedAt, $name);
@@ -347,6 +359,14 @@ final class CapturedCorpusTest extends SdkTestCase
     private static function apiVersion(string $name): string
     {
         return str_starts_with($name, 'v2/') ? ApiVersion::V2 : ApiVersion::V1;
+    }
+
+    /**
+     * $value encoded as Transport encodes a request body.
+     */
+    private static function json(mixed $value): string
+    {
+        return json_encode($value, JSON_THROW_ON_ERROR);
     }
 
     /**

@@ -270,6 +270,42 @@ final class VocabularyServiceTest extends SdkTestCase
         );
     }
 
+    /**
+     * Metadata stored as {"0": "a", "1": "b"} reads as [0 => 'a', 1 => 'b'],
+     * which json_encode() alone writes as the list ["a", "b"], a 400. The DTOs
+     * send metadata as an object whatever its keys, so it goes back out as it
+     * was read (#48). The fixture's request is the first update, so its
+     * response also answers the second, which sends the same body.
+     */
+    public function testMetadataKeyedLikeAListGoesBackOutAsAnObject(): void
+    {
+        $captured = self::captured('v2/vocabularies/update-numeric-metadata');
+        $client = $this->clientWith([$captured, $captured, self::captured('v2/vocabularies/create')]);
+
+        $vocab = $client->vocabularies()->update(
+            'voc_1',
+            new VocabularyUpdate(metadata: ['a', 'b']),
+            'harness-app',
+            self::merchantA(),
+        );
+        self::assertSame('{"metadata":{"0":"a","1":"b"}}', $this->lastRawBody());
+        self::assertSame(['a', 'b'], $vocab->metadata);
+
+        $client->vocabularies()->update($vocab->id, new VocabularyUpdate(metadata: $vocab->metadata), 'harness-app', self::merchantA());
+        self::assertSame('{"metadata":{"0":"a","1":"b"}}', $this->lastRawBody());
+
+        $client->vocabularies()->create(new VocabularyCreate(
+            name: 'Copy',
+            slug: 'copy',
+            applicationId: 'harness-app',
+            metadata: $vocab->metadata,
+        ), self::merchantA());
+        self::assertSame(
+            '{"name":"Copy","slug":"copy","application_id":"harness-app","metadata":{"0":"a","1":"b"}}',
+            $this->lastRawBody(),
+        );
+    }
+
     public function testDelete(): void
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/delete')]);
