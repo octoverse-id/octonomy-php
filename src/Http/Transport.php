@@ -16,6 +16,7 @@ use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Json;
 use Octoverse\Octonomy\Internal\Redaction;
+use Octoverse\Octonomy\Internal\RequestId;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestContext;
@@ -32,12 +33,12 @@ use Psr\Http\Message\StreamFactoryInterface;
 /**
  * Transport is the single HTTP entry point for the SDK. It builds requests under
  * the /api/{version} prefix of the configured api_version, attaches the
- * auth/tenant headers and any per-request namespace pair, sends them through a
- * PSR-18 client, Guzzle's unless one is injected, and converts non-2xx
- * responses into typed exceptions. A v2-only feature on a v1 client is refused
- * before anything is sent. Every exception it throws for a request carries that
- * request's RequestContext, and none carries the token, a header or the body
- * (Redaction).
+ * auth/tenant headers and any per-request namespace pair and request id, sends
+ * them through a PSR-18 client, Guzzle's unless one is injected, and converts
+ * non-2xx responses into typed exceptions. A v2-only feature on a v1 client is
+ * refused before anything is sent. Every exception it throws for a request
+ * carries that request's RequestContext, and none carries the token, a header
+ * or the body (Redaction).
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -278,6 +279,13 @@ final class Transport
         $actor = $this->actor($options);
         if ($actor !== null) {
             $headers['X-Actor-ID'] = $actor;
+        }
+        // Only the caller's own id, never one the SDK mints: without it no
+        // header is sent and the server mints its own. Checked again, not
+        // trusted from RequestOptions, for the PHP 7.4 line's sake.
+        $requestId = $options?->requestId;
+        if ($requestId !== null) {
+            $headers['X-Request-ID'] = RequestId::check($requestId);
         }
         if ($namespace !== null) {
             $headers['X-Namespace-Type'] = $namespace->type;

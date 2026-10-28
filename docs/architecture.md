@@ -11,10 +11,10 @@ changing the types and paths.
 | ---------------- | -------------- |
 | `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()` and `apiVersion()`. |
 | `Config` | Validated configuration (base URL, token, tenant, actor, a PSR-18 http client or the timeout of the Guzzle client the SDK builds, user agent, api_version, PSR-17 factories). |
-| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
+| `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace/request-id headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
-| `RequestOptions` | Per-call headers: actor (`withActor`) and namespace. What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
+| `RequestOptions` | Per-call headers: actor (`withActor`), namespace, and request id (`withRequestId`). What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`/`FeatureDisabled`/`UnsupportedApiVersion`/`AmbiguousResolution`), mapped by `ApiException::classFor()`; `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `RequestContext` | The api_version, method, path, query and namespace of one request, built by `Transport` before sending and carried by every exception the request ends in. No token, header or body. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
@@ -22,6 +22,7 @@ changing the types and paths.
 | `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
 | `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion; `@internal`. |
 | `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
+| `Internal\RequestId` | The check of a caller's `X-Request-ID`, in `RequestOptions` and again in `Transport`: non-blank printable ASCII, no space at either end, so the server records the id the caller logged; `@internal`. |
 | `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), and `scrub()`, which removes the SDK frames' arguments from a trace; `@internal`. |
 
 ## Request lifecycle
@@ -34,7 +35,8 @@ changing the types and paths.
    - `none()` for a 204 (delete/deactivate) → nothing; any body is ignored.
 2. `Transport` refuses a v2-only feature (a namespace, `include_global`) on a v1 client before
    anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
-   construction, attaches headers (the namespace pair only when the request names one), and
+   construction, attaches headers (the namespace pair and `X-Request-ID` only when the request names
+   them, the request id checked again), and
    JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts. It builds the
    PSR-7 request with the PSR-17 factories and hands it to a Guzzle client's `send()`, with the
    client's own default headers, query, body, `json` and `auth` cancelled (`http_errors` is off so the

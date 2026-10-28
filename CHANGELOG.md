@@ -104,6 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ConfigurationException`. Requests are built with PSR-17 factories, Guzzle's unless
   `request_factory` and `stream_factory` are given. `psr/http-client`, `psr/http-factory` and
   `psr/http-message` are now required directly; they hold interfaces only.
+- `X-Request-ID` (#19): `RequestOptions::withRequestId()`, or `RequestOptions(requestId: ...)` beside
+  an actor or a namespace, sends the caller's own id for one call. The server records it in place of
+  the `req_<uuid>` it would mint: in the audit row of a mutation, the outbox event and its webhook, its
+  request log, and the error envelope (`ApiException::$requestId`). The SDK never generates an id, so
+  without one no header is sent, and there is no `Config` field for one. An id the server would record
+  changed (blank, outside printable ASCII, or with a space at either end) throws
+  `InvalidArgumentException` before sending.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

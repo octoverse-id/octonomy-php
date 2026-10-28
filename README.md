@@ -56,6 +56,7 @@ Every request carries credentials from the constructor options:
 | `Authorization: Bearer <token>` | `token` | Service token (scopes: `tags:read`, `tags:write`, `audit:read`) |
 | `X-Tenant-ID` | `tenant_id` | Scopes every request to one tenant |
 | `X-Actor-ID` *(optional)* | `actor_id` or `RequestOptions::withActor(...)` | Attributes mutations in the audit log |
+| `X-Request-ID` *(optional)* | `RequestOptions::withRequestId(...)` | Correlates one call with what the server records about it |
 
 ```php
 use Octoverse\Octonomy\Model\TagUpdate;
@@ -63,6 +64,25 @@ use Octoverse\Octonomy\RequestOptions;
 
 $client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOptions::withActor('svc-catalog'));
 ```
+
+### Request correlation
+
+Pass your own id for a call, such as a UUID or the trace id you already log, and Octonomy records it
+in place of one it would mint: in the audit row of a mutation, the outbox event and the webhook
+delivered from it, its structured request log, and the error envelope of a failed call, which the SDK
+exposes as `ApiException::$requestId`. That ties your log line for the call to each of them.
+
+```php
+$options = new RequestOptions(actorId: 'svc-catalog', requestId: $traceId);
+$client->tags()->update($id, new TagUpdate(isActive: false), options: $options);
+```
+
+The SDK never generates an id: without one no `X-Request-ID` is sent and the server mints
+`req_<uuid>`. There is no client-wide id either, since an id names one call. A successful call returns
+only its model, so log the id on your side when you send it. The id must be non-blank printable ASCII
+with no space at either end, or `InvalidArgumentException` is thrown when the `RequestOptions` is
+built, because the server would otherwise record a different string. Keep it to 100 characters: the
+server stores it in a column that wide, and a longer one fails a mutation with a bare 500.
 
 ## HTTP client
 
