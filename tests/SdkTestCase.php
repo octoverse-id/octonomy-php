@@ -12,6 +12,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\BufferStream;
+use GuzzleHttp\Psr7\HttpFactory;
 use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Utils;
@@ -20,6 +21,8 @@ use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Http\Transport;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
+use Octoverse\Octonomy\Tests\Fixture\RecordingFactory;
+use Octoverse\Octonomy\Tests\Fixture\ReplayingClient;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
@@ -28,6 +31,7 @@ use Psr\Http\Message\StreamInterface;
 /**
  * SdkTestCase wires a Client to a Guzzle MockHandler so tests can queue responses
  * captured from a real server and inspect the request the SDK actually sent.
+ * psr18ClientWith() wires it to a PSR-18 client that is not Guzzle's instead.
  */
 abstract class SdkTestCase extends TestCase
 {
@@ -37,6 +41,9 @@ abstract class SdkTestCase extends TestCase
     protected const STREAM_DRAINING = 'draining';
 
     protected MockHandler $mock;
+
+    /** The client psr18ClientWith() built, when it built the Client under test. */
+    private ?ReplayingClient $replaying = null;
 
     /**
      * Build a Client whose requests are answered, in order, by $responses.
@@ -64,6 +71,67 @@ abstract class SdkTestCase extends TestCase
         self::refuseCrossVersionReplay($client->apiVersion(), $responses);
 
         return $client;
+    }
+
+    /**
+     * Build a Client whose http_client is a PSR-18 client that is not Guzzle's
+     * (ReplayingClient), answering its requests, in order, with $responses.
+     * The SDK can only call sendRequest() on it. lastRequest() and the helpers
+     * built on it read what it was handed.
+     *
+     * $throw, when given, makes it throw what $throw returns for each request
+     * instead, as a PSR-18 client throws a network or request exception.
+     *
+     * @param list<CapturedFixture|SyntheticNegative>      $responses
+     * @param array<string, mixed>                          $config    overrides of the default options, as for
+     *                                                                 clientWith()
+     * @param (\Closure(RequestInterface): \Throwable)|null $throw
+     */
+    protected function psr18ClientWith(array $responses, array $config = [], ?\Closure $throw = null): Client
+    {
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('psr18ClientWith() owns the HTTP client; pass captured() or syntheticNegative() responses instead');
+        }
+        self::refuseAnythingButFixtures($responses);
+        $this->replaying = new ReplayingClient($responses, $throw);
+
+        $client = new Client(array_merge([
+            'base_url' => 'https://octonomy.test',
+            'token' => 'test-token',
+            'tenant_id' => 'tenant-1',
+            'http_client' => $this->replaying,
+        ], $config));
+        self::refuseCrossVersionReplay($client->apiVersion(), $responses);
+
+        return $client;
+    }
+
+    /**
+     * A PSR-17 request and stream factory that records its calls and marks its
+     * requests (RecordingFactory::MARK), over Guzzle's own factory.
+     */
+    protected static function recordingFactory(): RecordingFactory
+    {
+        $guzzle = new HttpFactory();
+
+        return new RecordingFactory($guzzle, $guzzle);
+    }
+
+    /**
+     * The timeout of the Guzzle client the SDK built for $client, when it was
+     * given no http_client of its own.
+     */
+    protected static function timeoutOfTheClientBuiltFor(Client $client): mixed
+    {
+        // Read from the private properties that hold it, by a closure bound to
+        // each class: no accessor exposes the client, and none should.
+        $transport = \Closure::bind(fn(): Transport => $this->transport, $client, Client::class)();
+        $http = \Closure::bind(fn(): object => $this->http, $transport, Transport::class)();
+        if (!$http instanceof GuzzleClient) {
+            throw new \LogicException('the client was not built by the SDK: it was given an http_client');
+        }
+
+        return $http->getConfig('timeout');
     }
 
     /**
@@ -150,6 +218,7 @@ abstract class SdkTestCase extends TestCase
         // Returned, not thrown: MockHandler rejects the request with a
         // Throwable a queued callable returns, as a real handler does.
         $this->mock = new MockHandler([$throw]);
+        $this->replaying = null;
         $stack = HandlerStack::create($this->mock);
         if ($middleware !== null) {
             $stack->push(Middleware::mapRequest($middleware));
@@ -191,7 +260,10 @@ abstract class SdkTestCase extends TestCase
      */
     protected function assertNothingSent(): void
     {
-        self::assertNull($this->mock->getLastRequest(), 'expected the SDK to refuse the call before sending a request');
+        self::assertNull(
+            $this->replaying !== null ? $this->replaying->lastRequest() : $this->mock->getLastRequest(),
+            'expected the SDK to refuse the call before sending a request',
+        );
     }
 
     /**
@@ -230,7 +302,7 @@ abstract class SdkTestCase extends TestCase
 
     protected function lastRequest(): RequestInterface
     {
-        $request = $this->mock->getLastRequest();
+        $request = $this->replaying !== null ? $this->replaying->lastRequest() : $this->mock->getLastRequest();
         if ($request === null) {
             self::fail('expected a request to have been sent');
         }
@@ -409,12 +481,13 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
+     * Checked here rather than left to a union type: the PHP 7.4 downgrade
+     * deletes union types, and the 7.4 line must refuse the same inputs (#10).
+     *
      * @param list<CapturedFixture|SyntheticNegative> $responses
      */
-    private function mockedHttpClient(array $responses): GuzzleClient
+    private static function refuseAnythingButFixtures(array $responses): void
     {
-        // Checked here rather than left to the closure's union type below: the PHP 7.4
-        // downgrade deletes union types, and the 7.4 line must refuse the same inputs (#10).
         foreach ($responses as $response) {
             if (!$response instanceof CapturedFixture && !$response instanceof SyntheticNegative) {
                 throw new \TypeError(sprintf(
@@ -423,6 +496,15 @@ abstract class SdkTestCase extends TestCase
                 ));
             }
         }
+    }
+
+    /**
+     * @param list<CapturedFixture|SyntheticNegative> $responses
+     */
+    private function mockedHttpClient(array $responses): GuzzleClient
+    {
+        self::refuseAnythingButFixtures($responses);
+        $this->replaying = null;
 
         $this->mock = new MockHandler(array_map(
             static fn(CapturedFixture|SyntheticNegative $response): Response => $response->response(),

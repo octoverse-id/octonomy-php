@@ -185,6 +185,22 @@ final class ErrorMessage
     }
 
     /**
+     * The message for a timeout given together with an HTTP client. The SDK
+     * sets a timeout only on the client it builds, so this one would be
+     * dropped without a word, as it was before #18.
+     */
+    public static function timeoutWithHttpClient(float $timeout): string
+    {
+        return sprintf(
+            'octonomy: timeout and http_client are both set, and the timeout of %s seconds would be ignored: the'
+            . ' SDK sets the timeout of only the HTTP client it builds itself. Fix: set the timeout on the client'
+            . ' passed as http_client, such as Guzzle\'s \'timeout\' option, or leave http_client out to have the'
+            . ' SDK build a client with this timeout.',
+            $timeout,
+        );
+    }
+
+    /**
      * The message for a 2xx whose body is not JSON. Octonomy answers every
      * endpoint that has a body with JSON, so the SDK cannot read this one, and
      * cannot tell what sent it. (An empty body is not this case: Json::decode()

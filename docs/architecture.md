@@ -1,7 +1,7 @@
 # Architecture
 
 `octonomy-php` is a thin, hand-written client for the Octonomy REST API (`/api/v2` by default,
-`/api/v1` on request), built on Guzzle. The
+`/api/v1` on request), sending through any PSR-18 client, Guzzle's by default. The
 design goal is that an agent (or human) can add a new resource by copying an existing service file and
 changing the types and paths.
 
@@ -10,7 +10,7 @@ changing the types and paths.
 | File / namespace | Responsibility |
 | ---------------- | -------------- |
 | `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()` and `apiVersion()`. |
-| `Config` | Validated configuration (base URL, token, tenant, actor, http client, timeout, user agent, api_version). |
+| `Config` | Validated configuration (base URL, token, tenant, actor, a PSR-18 http client or the timeout of the Guzzle client the SDK builds, user agent, api_version, PSR-17 factories). |
 | `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
@@ -36,8 +36,10 @@ changing the types and paths.
    anything is sent. Then it builds `base_url + /api/{version}/ + path` from the version fixed at
    construction, attaches headers (the namespace pair only when the request names one), and
    JSON-encodes the body itself, once, so the bytes it sends are the bytes it redacts. It builds the
-   PSR-7 request and hands it to the client's `send()` with the client's own default headers, query,
-   body, `json` and `auth` cancelled (`http_errors` is off so the SDK owns status handling).
+   PSR-7 request with the PSR-17 factories and hands it to a Guzzle client's `send()`, with the
+   client's own default headers, query, body, `json` and `auth` cancelled (`http_errors` is off so the
+   SDK owns status handling), or to any other PSR-18 client's `sendRequest()`, which returns every
+   status. Guzzle's own `sendRequest()` would apply those defaults, so it is never used (#18).
 3. On a 2xx, `one()`/`many()` decode the body and check the envelope; a 2xx that lacks it throws
    `MalformedResponseException` instead of hydrating an empty model. Then they call
    `$hydrate($object, $apiVersion)` on each object. Hydration is strict (see below), and a field it
@@ -46,12 +48,13 @@ changing the types and paths.
    throws `TransportException`. On a non-2xx, `ApiException::fromResponse()` decodes the
    `{error:{...}}` envelope leniently and returns the most specific subclass, by code first and status
    second. Anything the HTTP client throws becomes a `TransportException` that quotes its error,
-   redacted, without chaining it, since Guzzle's exception holds the request's headers and body. Each of these exceptions
+   redacted, without chaining it, since the client's exception can hold the request's headers and
+   body (Guzzle's and every PSR-18 request or network exception do). Each of these exceptions
    carries the `RequestContext` `Transport` built for the request before sending it, and none
    carries what `Internal\Redaction` lists.
 
 ```
-Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ Guzzle ─▶ Octonomy /api/{v1|v2}
+Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ PSR-18 client ─▶ Octonomy /api/{v1|v2}
                                    │
                                    ├─ v1 + namespace or include_global → throw LogicException, nothing sent
                                    ├─ 2xx, envelope ok      → data object → Model::fromArray($object, $apiVersion)

@@ -37,6 +37,11 @@ stays a faithful, ergonomic client.
 - One file per resource service (`Resource/TagService.php`, …), reached from an accessor on `Client`.
 - Methods take required inputs first and an optional `?RequestOptions $options = null` last.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
+- `http_client` is any PSR-18 client, and no adapter class wraps one (#18). `Transport` sends a Guzzle
+  client through `send()` with its own default headers, query, body, `json` and `auth` cancelled, never
+  through its PSR-18 `sendRequest()`, which applies every one of them over the SDK's request; any other
+  client gets `sendRequest()`. `timeout` sets only the client the SDK builds, and with `http_client`
+  it is refused, not dropped.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
   `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
   `MalformedResponseException` rather than hydrating an empty model. `one()`/`many()` run the model's
@@ -74,15 +79,18 @@ stays a faithful, ergonomic client.
   `docs/development.md#the-php-74-line`). No enums: use string class constants (#5). Never rely on a
   union type or `readonly` for behavior a test asserts, since the downgrade deletes both; make the
   check explicit.
-- Guzzle (`guzzlehttp/guzzle`) is the **only** runtime dependency. Do not add others without a strong
-  reason; dev tools (phpunit, phpstan, php-cs-fixer) are require-dev.
+- Guzzle (`guzzlehttp/guzzle`) is the **only** runtime dependency that ships code. `psr/http-client`,
+  `psr/http-factory` and `psr/http-message` are required too, because `Config` and `Transport` type
+  against them (#18); they hold interfaces only, and Guzzle requires them anyway. Do not add others
+  without a strong reason; dev tools (phpunit, phpstan, php-cs-fixer) are require-dev.
 - Keep the tree php-cs-fixer-clean and PHPStan-clean at the configured level (`phpstan.neon.dist`).
 - The library throws typed exceptions; it never `echo`/`var_dump`/`die`s or writes logs.
 - When changing a non-obvious mapping or semantic, add a comment explaining why.
 
 ## Testing Expectations
 
-- PHPUnit tests using Guzzle's `MockHandler` (see `tests/SdkTestCase.php`). Assert the request
+- PHPUnit tests using Guzzle's `MockHandler` (see `tests/SdkTestCase.php`), or `psr18ClientWith()` for
+  an `http_client` that is not Guzzle's. Assert the request
   method, path, auth headers (`Authorization`, `X-Tenant-ID`), query params, and JSON body; assert the
   decoded model/`ResultList` on the response side.
 - Response bodies in tests come from captured fixtures (`tests/fixtures/captured/<api_version>/`,
@@ -93,9 +101,9 @@ stays a faithful, ergonomic client.
   not declare) are synthetic, since a conforming server cannot produce them; build them only with
   `SdkTestCase::syntheticNegative()` or `syntheticNegativeFrom()`, naming the `SyntheticNegative`
   kind that applies. A body captured from one api_version is not a capture of the other's response.
-  `clientWith()`/`transportWith()` accept nothing else, and no test outside the fixture helpers may
-  reference `GuzzleHttp\`. Request-side assertions stay hand-written: they test SDK behavior, not
-  server shape.
+  `clientWith()`/`transportWith()`/`psr18ClientWith()` accept nothing else, and no test outside the
+  fixture helpers may reference `GuzzleHttp\`. Request-side assertions stay hand-written: they test SDK
+  behavior, not server shape.
 - Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
   pinned server) and never edited by hand; the manifest records each file's hash and the unit suite
   fails on any difference. A refresh is its own reviewed PR, never automatic. Moving the harness

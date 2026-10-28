@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Client foundation targeting the Octonomy REST API: `Client` with
   options-array/`Config` construction and validation, a Guzzle-backed `Transport` that sets
   `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`, `Accept`, and `User-Agent`, and an
-  injectable `http_client`. Guzzle is the only runtime dependency.
+  injectable `http_client`. Guzzle is the only runtime dependency that ships code.
 - `api_version` option (`Config::$apiVersion`, `Client::apiVersion()`): the client calls **`/api/v2`**
   by default, or `/api/v1` with `'api_version' => 'v1'`, which current servers still serve and a server
   older than 2.0.0 needs. It is set at construction only and never per request, and any other value
@@ -95,6 +95,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out as the list `[]` or `["a"]`, and the server stored the list without an error. Every create and
   update DTO now sends `metadata` as a JSON object whatever its keys, so metadata stored as
   `{"0": "a"}`, which reads as `[0 => 'a']`, is no longer sent as a list the server refuses.
+- Any PSR-18 client as `http_client` (#18), such as Symfony's `Psr18Client`, where only a Guzzle
+  client was accepted; no adapter class is involved. A Guzzle client is still sent each request through
+  `send()` with its own defaults cancelled, since its PSR-18 `sendRequest()` would put its default
+  `auth`, query and body in place of the SDK's; any other client gets `sendRequest()`. `timeout` is now
+  `?float`, null by default, and sets only the client the SDK builds (30 seconds when omitted): given
+  together with `http_client`, which used to drop it without a word, it throws
+  `ConfigurationException`. Requests are built with PSR-17 factories, Guzzle's unless
+  `request_factory` and `stream_factory` are given. `psr/http-client`, `psr/http-factory` and
+  `psr/http-message` are now required directly; they hold interfaces only.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

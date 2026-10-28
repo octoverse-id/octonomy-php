@@ -447,7 +447,9 @@ final class RedactionTest extends SdkTestCase
     /**
      * An injected client's own defaults do not reach an SDK request: not its
      * headers, query, body or auth, so what is sent is what the context, the
-     * message and the redaction describe.
+     * message and the redaction describe. That is why a Guzzle client is sent
+     * through send() rather than its PSR-18 sendRequest(), which would apply
+     * every one of them (#18).
      */
     public function testAClientsOwnDefaultsDoNotReachTheRequest(): void
     {
