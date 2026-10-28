@@ -414,7 +414,7 @@ final class RedactionTest extends SdkTestCase
     public static function valuesChangedAfterTheirCheck(): iterable
     {
         yield 'an actor id' => [
-            static fn(): RequestOptions => self::unchecked(RequestOptions::class, ['actorId' => "actor-from-the-call\n", 'namespace' => null]),
+            static fn(): RequestOptions => self::unchecked(RequestOptions::class, ['actorId' => "actor-from-the-call\n", 'namespace' => null, 'requestId' => null]),
             'X-Actor-ID',
         ];
         yield 'a namespace id' => [
