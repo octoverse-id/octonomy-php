@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
-use GuzzleHttp\ClientInterface;
 use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Redaction;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 
 /**
  * Config is the validated configuration for a Client. Build it directly or via
@@ -17,6 +19,12 @@ use Octoverse\Octonomy\Internal\Redaction;
  * to ApiVersion::V1, which an Octonomy server older than 2.0.0 needs. The
  * Client reads it once, when it is constructed, and never changes it; there is
  * no per-request override.
+ *
+ * $httpClient is any PSR-18 client; without one the SDK builds a Guzzle client
+ * with a $timeout of 30 seconds unless set. A timeout given together with
+ * $httpClient is refused: the SDK sets the timeout of only the client it builds,
+ * so it would be ignored. $requestFactory and $streamFactory are the PSR-17
+ * factories the requests are built with, Guzzle's by default.
  *
  * No ConfigurationException quotes the token or the actor id. A token, tenant
  * id, actor id or user agent that an HTTP header cannot carry is refused here,
@@ -28,14 +36,19 @@ use Octoverse\Octonomy\Internal\Redaction;
 final class Config
 {
     /** The option keys fromArray() reads. */
-    private const OPTIONS = ['base_url', 'token', 'tenant_id', 'actor_id', 'http_client', 'timeout', 'user_agent', 'api_version'];
+    private const OPTIONS = [
+        'base_url', 'token', 'tenant_id', 'actor_id', 'http_client', 'timeout', 'user_agent', 'api_version',
+        'request_factory', 'stream_factory',
+    ];
 
     /**
-     * @param string $apiVersion an ApiVersion constant
+     * @param float|null $timeout    seconds, for the client the SDK builds when $httpClient is null
+     * @param string     $apiVersion an ApiVersion constant
      *
      * @throws ConfigurationException when a required value is blank, the base URL is not absolute, a
-     *                                value sent as a header holds a control character, or the
-     *                                api_version is not one of the ApiVersion constants
+     *                                value sent as a header holds a control character, the
+     *                                api_version is not one of the ApiVersion constants, or a
+     *                                timeout is given together with an HTTP client
      */
     public function __construct(
         public readonly string $baseUrl,
@@ -43,9 +56,11 @@ final class Config
         public readonly string $tenantId,
         public readonly ?string $actorId = null,
         public readonly ?ClientInterface $httpClient = null,
-        public readonly float $timeout = 30.0,
+        public readonly ?float $timeout = null,
         public readonly ?string $userAgent = null,
         public readonly string $apiVersion = ApiVersion::V2,
+        public readonly ?RequestFactoryInterface $requestFactory = null,
+        public readonly ?StreamFactoryInterface $streamFactory = null,
     ) {
         if (trim($baseUrl) === '') {
             throw new ConfigurationException(
@@ -96,17 +111,25 @@ final class Config
         }
 
         ApiVersion::check($apiVersion);
+
+        // The SDK sets a timeout only on the client it builds. It does not
+        // change one it was given, which PSR-18 offers no way to do per request
+        // either.
+        if ($httpClient !== null && $timeout !== null) {
+            throw new ConfigurationException(ErrorMessage::timeoutWithHttpClient($timeout));
+        }
     }
 
     /**
      * Build a Config from an options array, the form accepted by Client.
      *
      * Recognized keys: base_url, token, tenant_id (required); actor_id,
-     * http_client (GuzzleHttp\ClientInterface), timeout, user_agent, api_version
-     * ("v1" or "v2", default "v2") (optional). Unlike the other optional keys, an
-     * api_version given as null is refused rather than read as absent: it picks
-     * the contract every response is read against, so a value that was meant to
-     * arrive and did not must not quietly become v2.
+     * http_client (a PSR-18 Psr\Http\Client\ClientInterface), timeout (not with
+     * http_client), user_agent, api_version ("v1" or "v2", default "v2"),
+     * request_factory and stream_factory (PSR-17) (optional). Unlike the other
+     * optional keys, an api_version given as null is refused rather than read as
+     * absent: it picks the contract every response is read against, so a value
+     * that was meant to arrive and did not must not quietly become v2.
      *
      * When an option is refused and $options holds keys this method does not
      * read, the message names them, since a misspelt key ('baseUrl', 'tenant')
@@ -139,11 +162,19 @@ final class Config
         $httpClient = $options['http_client'] ?? null;
         if ($httpClient !== null && !$httpClient instanceof ClientInterface) {
             throw new ConfigurationException(sprintf(
-                'octonomy: http_client must implement GuzzleHttp\\ClientInterface, got %s. Fix: pass a'
-                . ' GuzzleHttp\\Client, configured with any middleware you need, or leave http_client out to use a'
-                . ' default one.',
+                'octonomy: http_client must implement Psr\\Http\\Client\\ClientInterface (PSR-18), got %s. Fix:'
+                . ' pass a PSR-18 client, such as a GuzzleHttp\\Client configured with any middleware you need, or'
+                . ' leave http_client out to use a default one.',
                 self::typeOf($httpClient),
             ));
+        }
+        $requestFactory = $options['request_factory'] ?? null;
+        if ($requestFactory !== null && !$requestFactory instanceof RequestFactoryInterface) {
+            throw self::notAFactory('request_factory', RequestFactoryInterface::class, $requestFactory);
+        }
+        $streamFactory = $options['stream_factory'] ?? null;
+        if ($streamFactory !== null && !$streamFactory instanceof StreamFactoryInterface) {
+            throw self::notAFactory('stream_factory', StreamFactoryInterface::class, $streamFactory);
         }
         if (array_key_exists('api_version', $options) && $options['api_version'] === null) {
             throw new ConfigurationException(
@@ -158,10 +189,24 @@ final class Config
             tenantId: self::stringOption($options, 'tenant_id') ?? '',
             actorId: self::stringOption($options, 'actor_id'),
             httpClient: $httpClient,
-            timeout: self::floatOption($options, 'timeout') ?? 30.0,
+            timeout: self::floatOption($options, 'timeout'),
             userAgent: self::stringOption($options, 'user_agent'),
             apiVersion: self::stringOption($options, 'api_version') ?? ApiVersion::V2,
+            requestFactory: $requestFactory,
+            streamFactory: $streamFactory,
         );
+    }
+
+    private static function notAFactory(string $key, string $interface, mixed $value): ConfigurationException
+    {
+        return new ConfigurationException(sprintf(
+            'octonomy: %s must implement %s (PSR-17), got %s. Fix: pass a PSR-17 factory, such as the one your'
+            . ' PSR-7 library provides, or leave %s out to use the default one.',
+            $key,
+            $interface,
+            self::typeOf($value),
+            $key,
+        ));
     }
 
     /**

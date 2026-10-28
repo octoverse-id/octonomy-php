@@ -11,47 +11,43 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * Holds the AGENTS.md rule that response bodies in tests come from captured
  * fixtures.
  *
- * SdkTestCase::clientWith() and transportWith() accept only a CapturedFixture or
- * a SyntheticNegative, so a hand-built response cannot reach the SDK through
- * them. The remaining way round is to build an HTTP stack of your own: a Response
- * under any alias or factory, a MockHandler, a handler callable, a Guzzle client.
- * Every one of those names something in the GuzzleHttp namespace, so outside the
- * three helpers that own the stack, no test may name it at all.
+ * SdkTestCase::clientWith(), transportWith() and psr18ClientWith() accept only a
+ * CapturedFixture or a SyntheticNegative, so a hand-built response cannot reach
+ * the SDK through them. The remaining way round is to build an HTTP stack of
+ * your own: a Response under any alias or factory, a MockHandler, a handler
+ * callable, a Guzzle client. Every one of those names something in the
+ * GuzzleHttp namespace, so outside the three helpers that own the stack, no test
+ * may name it at all. The other is a PSR-18 client of a test's own, which can
+ * return a captured response with its body replaced without naming Guzzle, so
+ * ReplayingClient is the only one a test may write.
  */
 final class NoHandWrittenResponseBodiesTest extends SdkTestCase
 {
     /** The files that own the mocked HTTP stack. */
     private const OWNERS = ['SdkTestCase.php', 'Fixture/CapturedFixture.php', 'Fixture/SyntheticNegative.php'];
 
+    /** The one PSR-18 client in the tests. */
+    private const PSR18_CLIENT = 'Fixture/ReplayingClient.php';
+
     public function testOnlyTheFixtureHelpersTouchTheHttpStack(): void
     {
-        $root = dirname(__DIR__);
-        $offenders = [];
-        $scanned = 0;
-        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
-        foreach ($files as $file) {
-            \assert($file instanceof \SplFileInfo);
-            $relative = substr($file->getPathname(), strlen($root) + 1);
-            if ($file->getExtension() !== 'php' || in_array($relative, self::OWNERS, true)) {
-                continue;
-            }
-            ++$scanned;
-            $source = file_get_contents($file->getPathname());
-            self::assertIsString($source);
-            // Matches `use GuzzleHttp\...`, `\GuzzleHttp\...` and the string form
-            // 'GuzzleHttp\...' a class_exists() or new $name could use.
-            if (preg_match_all('/\bGuzzleHttp\\\\{1,2}\w/', $source, $matches, PREG_OFFSET_CAPTURE) > 0) {
-                foreach ($matches[0] as [, $offset]) {
-                    $offenders[] = $relative . ':' . (substr_count(substr($source, 0, $offset), "\n") + 1);
-                }
-            }
-        }
-
-        self::assertGreaterThan(5, $scanned);
+        // Matches `use GuzzleHttp\...`, `\GuzzleHttp\...` and the string form
+        // 'GuzzleHttp\...' a class_exists() or new $name could use.
         self::assertSame(
             [],
-            $offenders,
+            self::filesMatching('/\bGuzzleHttp\\\\{1,2}\w/', self::OWNERS),
             'only the fixture helpers may build responses: replay one with captured(), or mark a shape no server sends with syntheticNegative()',
+        );
+    }
+
+    public function testOnlyTheReplayingClientIsAPsr18Client(): void
+    {
+        // The PSR-18 interface by its full name, as `use`, `implements` and
+        // the string form write it.
+        self::assertSame(
+            [],
+            self::filesMatching('/\bPsr\\\\{1,2}Http\\\\{1,2}Client\\\\{1,2}ClientInterface\b/', [self::PSR18_CLIENT]),
+            'only ReplayingClient may be an http_client of a test\'s own: use psr18ClientWith(), which replays captured() or syntheticNegative() responses',
         );
     }
 
@@ -63,6 +59,23 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         $this->clientWith([], ['http_client' => null]);
     }
 
+    public function testPsr18ClientWithRefusesAnHttpClientOfItsOwn(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('psr18ClientWith() owns the HTTP client');
+
+        $this->psr18ClientWith([], ['http_client' => null]);
+    }
+
+    public function testPsr18ClientWithRefusesAResponseThatIsNotAFixture(): void
+    {
+        $this->expectException(\TypeError::class);
+        $this->expectExceptionMessage('responses must come from captured() or syntheticNegative(), got stdClass');
+
+        /** @phpstan-ignore argument.type (passing the wrong type is the point) */
+        $this->psr18ClientWith([new \stdClass()]);
+    }
+
     public function testClientWithRefusesAResponseThatIsNotAFixture(): void
     {
         $this->expectException(\TypeError::class);
@@ -70,6 +83,40 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
 
         /** @phpstan-ignore argument.type (passing the wrong type is the point) */
         $this->clientWith([new \stdClass()]);
+    }
+
+    /**
+     * Each place in a PHP file under tests/, outside $allowed, that $pattern
+     * matches, as file:line.
+     *
+     * @param list<string> $allowed paths relative to tests/
+     *
+     * @return list<string>
+     */
+    private static function filesMatching(string $pattern, array $allowed): array
+    {
+        $root = dirname(__DIR__);
+        $offenders = [];
+        $scanned = 0;
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            \assert($file instanceof \SplFileInfo);
+            $relative = substr($file->getPathname(), strlen($root) + 1);
+            if ($file->getExtension() !== 'php' || in_array($relative, $allowed, true)) {
+                continue;
+            }
+            ++$scanned;
+            $source = file_get_contents($file->getPathname());
+            self::assertIsString($source);
+            if (preg_match_all($pattern, $source, $matches, PREG_OFFSET_CAPTURE) > 0) {
+                foreach ($matches[0] as [, $offset]) {
+                    $offenders[] = $relative . ':' . (substr_count(substr($source, 0, $offset), "\n") + 1);
+                }
+            }
+        }
+        self::assertGreaterThan(5, $scanned);
+
+        return $offenders;
     }
 
     /**

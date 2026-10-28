@@ -9,8 +9,8 @@ composer install
 make test
 ```
 
-Requires PHP 8.2+. Guzzle is the only runtime dependency; dev tools (PHPUnit, PHPStan, php-cs-fixer)
-are installed via `composer install`.
+Requires PHP 8.2+. Guzzle is the only runtime dependency that ships code, beside the PSR HTTP interface
+packages it implements; dev tools (PHPUnit, PHPStan, php-cs-fixer) are installed via `composer install`.
 
 ## Quality gates
 
@@ -29,7 +29,8 @@ These are also Composer scripts: `composer cs`, `composer stan`, `composer test`
 ## Testing approach
 
 Tests use Guzzle's `MockHandler` (via `tests/SdkTestCase.php`) to stand up a fake Octonomy and assert
-the wire contract:
+the wire contract. `psr18ClientWith()` does the same through `ReplayingClient`, a PSR-18 client that is
+not Guzzle's, for what the SDK sends through `sendRequest()`:
 
 - **Request side:** method, path, `Authorization` and `X-Tenant-ID` headers, query params, and JSON
   body — read back through `$this->lastRequest()`, `$this->lastQuery()`, `$this->lastJsonBody()`.
@@ -181,7 +182,7 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
 | Piece | What it is |
 | ----- | ---------- |
 | `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. Bump it in a PR of its own; Dependabot opens those. |
-| `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8`, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
+| `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8` and the PSR HTTP interfaces, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
 | `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness script, and the vendored specs with `docs/versioning.md` (which tests read) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
 | `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, each with the same outcome (passed, skipped or failed), compared through each run's JUnit log. It reports every failing check, not just the first. |
 

@@ -247,11 +247,15 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   request, `Authorization` header and body included. A non-JSON 2xx does not chain the
   `JsonException` either, since `json_decode()`'s frame in its trace holds the raw body; its message,
   PHP's own, is quoted.
-- The SDK builds each request itself and sends it with an injected client's own default headers,
-  query, body, `json` and `auth` cancelled, so what goes out is what the context, the message and the
-  redaction describe. The client's transport options and middleware still apply. A default
-  `form_params` or `multipart` would replace the SDK's body, and Guzzle's option types give a request
-  no way to cancel one, so a client passed to the SDK must not set them.
+- The SDK builds each request itself. It sends it to a Guzzle client through `send()`, with the
+  client's own default headers, query, body, `json` and `auth` cancelled, so what goes out is what the
+  context, the message and the redaction describe. The client's transport options and middleware
+  still apply. A default `form_params` or `multipart` would replace the SDK's body, and Guzzle's option
+  types give a request no way to cancel one, so a client passed to the SDK must not set them. Guzzle's
+  PSR-18 `sendRequest()` takes no options and would apply every one of those defaults, so it is not
+  used. Any other PSR-18 client gets the request through `sendRequest()`; what it adds on the way out
+  is that client's, as what middleware adds is (next point). See the
+  [README](../README.md#http-client).
 - Middleware can still add a header or replace the body after the SDK's snapshot. When the client's
   exception holds the request as middleware left it, as Guzzle's and every PSR-18 request or network
   exception do, its `Authorization`, `X-Actor-ID` and body are redacted too. When that body cannot be

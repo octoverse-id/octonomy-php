@@ -19,7 +19,8 @@ request.
 composer require octoverse-id/octonomy-php
 ```
 
-Requires PHP 8.2+ and Guzzle 7.
+Requires PHP 8.2+. Requests go through Guzzle (7.8 or 8) unless you pass another
+[PSR-18 client](#http-client).
 
 ## Quickstart
 
@@ -63,12 +64,38 @@ use Octoverse\Octonomy\RequestOptions;
 $client->tags()->update($id, new TagUpdate(isActive: false), options: RequestOptions::withActor('svc-catalog'));
 ```
 
-You can also pass a configured Guzzle client (e.g. with retries or a custom base) via the
-`http_client` option. Its transport options and middleware apply to every SDK request; its own default
-headers, query and body do not, since the SDK builds each request itself. Add a header with middleware
-(`Middleware::mapRequest()`) instead. Its default `auth` is disabled for SDK requests too. Do not give it
-a default `form_params` or `multipart`: Guzzle would put either in place of the SDK's body, and its
-option types offer no way for a request to cancel one.
+## HTTP client
+
+Without an `http_client` option the SDK builds a Guzzle client with a 30-second timeout, or the
+`timeout` you give in seconds. Pass any [PSR-18](https://www.php-fig.org/psr/psr-18/) client as
+`http_client` instead, such as a Guzzle client with retry middleware or Symfony's `Psr18Client`, and
+set its timeout on that client: `timeout` applies only to the client the SDK builds, so passing both
+throws `ConfigurationException` rather than dropping the timeout.
+
+- **A Guzzle client** gets each request through `send()`. Its transport options and middleware apply,
+  redirects as it configures them included. Its own default headers, query, body and `auth` do not,
+  since the SDK builds each request itself; add a header with middleware (`Middleware::mapRequest()`)
+  instead. Do not give it a default `form_params` or `multipart`: Guzzle would put either in place of
+  the SDK's body, and its option types offer no way for a request to cancel one.
+- **Any other PSR-18 client** gets the finished request through `sendRequest()`, and what it does on
+  the way out is up to that client. That includes a PSR-18 decorator around a Guzzle client: through
+  `sendRequest()`, Guzzle puts the wrapped client's default `auth`, query and body in place of the
+  SDK's (a default `auth` replaces the `Authorization` header), adds its default headers, and does not
+  follow redirects. Give a client wrapped that way none of those defaults.
+
+```php
+use Symfony\Component\HttpClient\Psr18Client;
+
+$client = new Client([
+    'base_url'    => 'https://octonomy.example.com',
+    'token'       => 'svc_live_...',
+    'tenant_id'   => 'acme',
+    'http_client' => new Psr18Client(),
+]);
+```
+
+Requests are built with Guzzle's PSR-17 factory unless you pass your own as `request_factory` and
+`stream_factory`.
 
 ## API version and namespaces
 

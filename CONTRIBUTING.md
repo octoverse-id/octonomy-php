@@ -12,7 +12,8 @@ composer install
 make test
 ```
 
-Requires PHP 8.2+. Guzzle is the only runtime dependency; everything else is `require-dev`.
+Requires PHP 8.2+. Guzzle is the only runtime dependency that ships code, beside the PSR HTTP interface
+packages it implements; everything else is `require-dev`.
 
 ## Quality gates
 
@@ -34,7 +35,7 @@ does the same locally with Docker (see
 These mirror [AGENTS.md](AGENTS.md):
 
 - `declare(strict_types=1)` in every file; PSR-4 / PSR-12.
-- **Guzzle is the only runtime dependency.**
+- **Guzzle is the only runtime dependency that ships code** (plus the PSR HTTP interfaces, #18).
 - One file per resource service (`src/Resource/*Service.php`), reached from an accessor on `Client`.
 - Methods take required inputs first, `?RequestOptions $options = null` last.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
@@ -52,7 +53,8 @@ These mirror [AGENTS.md](AGENTS.md):
 
 ## Testing expectations
 
-- PHPUnit + Guzzle `MockHandler` (extend `tests/SdkTestCase.php`). Assert request
+- PHPUnit + Guzzle `MockHandler` (extend `tests/SdkTestCase.php`; `psr18ClientWith()` for a client that
+  is not Guzzle's). Assert request
   method/path/headers/query/body and the decoded response.
 - Replay responses captured from a real server (`self::captured('v1/tags/get')`); never write a
   response body by hand. Only shapes no conforming server sends go through

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Http;
 
 use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Psr7\Request as Psr7Request;
+use GuzzleHttp\ClientInterface as GuzzleClientInterface;
+use GuzzleHttp\Psr7\HttpFactory;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Exception\ApiException;
@@ -21,18 +21,23 @@ use Octoverse\Octonomy\Pagination;
 use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
+use Psr\Http\Client\ClientInterface;
 use Psr\Http\Client\NetworkExceptionInterface;
 use Psr\Http\Client\RequestExceptionInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 
 /**
  * Transport is the single HTTP entry point for the SDK. It builds requests under
  * the /api/{version} prefix of the configured api_version, attaches the
  * auth/tenant headers and any per-request namespace pair, sends them through a
- * Guzzle client, and converts non-2xx responses into typed exceptions. A v2-only
- * feature on a v1 client is refused before anything is sent. Every exception it
- * throws for a request carries that request's RequestContext, and none carries
- * the token, a header or the body (Redaction).
+ * PSR-18 client, Guzzle's unless one is injected, and converts non-2xx
+ * responses into typed exceptions. A v2-only feature on a v1 client is refused
+ * before anything is sent. Every exception it throws for a request carries that
+ * request's RequestContext, and none carries the token, a header or the body
+ * (Redaction).
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a
@@ -46,7 +51,12 @@ use Psr\Http\Message\ResponseInterface;
  */
 final class Transport
 {
+    /** Seconds, for the client the SDK builds when none is injected. */
+    private const DEFAULT_TIMEOUT = 30.0;
+
     private readonly ClientInterface $http;
+    private readonly RequestFactoryInterface $requests;
+    private readonly StreamFactoryInterface $streams;
     private readonly string $apiVersion;
     private readonly string $baseUrl;
 
@@ -65,7 +75,8 @@ final class Transport
      * request calls and the field set every response hydrates, for the life of
      * this Transport.
      *
-     * @throws ConfigurationException when $config carries an unknown api_version
+     * @throws ConfigurationException when $config carries an unknown api_version, or both an HTTP
+     *                                client and a timeout
      */
     public function __construct(Config $config, string $sdkVersion)
     {
@@ -73,11 +84,18 @@ final class Transport
         // readonly in the downgrade, so a Config can be changed after its
         // constructor checked it.
         $this->apiVersion = ApiVersion::check($config->apiVersion);
+        // Checked again for the same reason: on the PHP 7.4 line a Config can
+        // be given a client after its constructor accepted its timeout.
+        if ($config->httpClient !== null && $config->timeout !== null) {
+            throw new ConfigurationException(ErrorMessage::timeoutWithHttpClient($config->timeout));
+        }
         $this->token = $config->token;
         $this->actorId = $config->actorId;
         $this->baseUrl = rtrim($config->baseUrl, '/');
         $this->origin = self::origin($config->baseUrl);
-        $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout]);
+        $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout ?? self::DEFAULT_TIMEOUT]);
+        $this->requests = $config->requestFactory ?? new HttpFactory();
+        $this->streams = $config->streamFactory ?? new HttpFactory();
         $this->defaultHeaders = [
             'Authorization' => 'Bearer ' . $config->token,
             'X-Tenant-ID' => $config->tenantId,
@@ -284,26 +302,19 @@ final class Transport
         $redaction = Redaction::of($this->token, $actor, $encoded);
 
         try {
-            // Built inside the try, so a URL Guzzle cannot parse is reported,
-            // redacted, like any client failure rather than escaping raw.
-            $request = new Psr7Request($context->method, $this->uri($context), $headers, $encoded);
+            // Built inside the try, so a URL the factory cannot parse is
+            // reported, redacted, like any client failure rather than escaping
+            // raw.
+            $request = $this->requests->createRequest($context->method, $this->uri($context));
+            foreach ($headers as $name => $value) {
+                $request = $request->withHeader($name, $value);
+            }
+            if ($encoded !== null) {
+                $request = $request->withBody($this->streams->createStream($encoded));
+            }
             // The request is the SDK's alone, so $context and $redaction
-            // describe what goes out. Guzzle merges the injected client's own
-            // defaults under these options and then drops a null one, so a
-            // null headers, body or json cancels that default, the query, the
-            // request's own, replaces a default one, and auth false disables a
-            // default one, leaving the SDK's Authorization header. Guzzle's
-            // declared option types allow no such cancelling of form_params
-            // or multipart, so a client passed to the SDK must not set them
-            // (README). Its transport options and its middleware still apply.
-            $response = $this->http->send($request, [
-                'http_errors' => false,
-                'headers' => null,
-                'query' => $context->query,
-                'body' => null,
-                'json' => null,
-                'auth' => false,
-            ]);
+            // describe what goes out, up to what the client does to it.
+            $response = $this->dispatch($request, $context->query);
         } catch (\Throwable $e) {
             // Anything the client, a handler or middleware throws, not only a
             // GuzzleException: none may leave with this request's frames
@@ -336,6 +347,45 @@ final class Transport
         }
 
         return [$response, $redaction];
+    }
+
+    /**
+     * Send $request through the client, as the SDK built it.
+     *
+     * A Guzzle client goes through send(), not its PSR-18 sendRequest(), since
+     * only send() takes the options that keep the client's own defaults off the
+     * request. Guzzle's sendRequest() puts its default auth, query and body in
+     * place of the SDK's (a Basic Authorization header for a Bearer one), adds
+     * its default headers, and does not follow redirects (#18). Through send(),
+     * Guzzle merges the client's defaults under these options and then drops a
+     * null one, so a null headers, body or json cancels that default, the query,
+     * the request's own, replaces a default one, and auth false disables a
+     * default one, leaving the SDK's Authorization header. Guzzle's declared
+     * option types allow no such cancelling of form_params or multipart, so a
+     * client passed to the SDK must not set them (README). Its transport options
+     * and its middleware still apply, redirects as it configures them included.
+     *
+     * Any other client gets sendRequest(), which takes no options: what it does
+     * to the request on the way out, defaults and middleware included, is that
+     * client's (README). PSR-18 has it return a 4xx or 5xx rather than throw.
+     *
+     * @param array<string, string> $query the query $request's URI already carries, which
+     *                                     Guzzle's query option sets in place of a default one
+     */
+    private function dispatch(RequestInterface $request, array $query): ResponseInterface
+    {
+        if (!$this->http instanceof GuzzleClientInterface) {
+            return $this->http->sendRequest($request);
+        }
+
+        return $this->http->send($request, [
+            'http_errors' => false,
+            'headers' => null,
+            'query' => $query,
+            'body' => null,
+            'json' => null,
+            'auth' => false,
+        ]);
     }
 
     /**
