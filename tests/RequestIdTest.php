@@ -59,6 +59,15 @@ final class RequestIdTest extends SdkTestCase
     }
 
     /**
+     * The issue's signature, withRequestId(string $id): a parameter name is
+     * public API once a caller names it.
+     */
+    public function testWithRequestIdTakesTheIdByName(): void
+    {
+        self::assertSame(self::REQUEST_ID, RequestOptions::withRequestId(id: self::REQUEST_ID)->requestId);
+    }
+
+    /**
      * The other PSR-18 path: a client that is not Guzzle's gets the same
      * header through sendRequest().
      */
@@ -199,9 +208,9 @@ final class RequestIdTest extends SdkTestCase
             . ' control character other than a tab, and the server reads a byte above 0x7E as Latin-1, so it would'
             . ' record an id other than the one you logged. Fix: pass a printable ASCII id, such as a UUID, and'
             . ' remove any trailing newline left by reading it from a file.';
-        $space = static fn(string $id, string $trimmed): string => "octonomy: requestId \"{$id}\" begins or ends with a"
-            . ' space, which is trimmed from a header value on the way, so the server would record'
-            . " \"{$trimmed}\" and not the id you logged. Fix: pass the trimmed id.";
+        $space = 'octonomy: requestId begins or ends with a space, which is trimmed from a header value on the way,'
+            . ' so the server would record an id other than the one you logged. Fix: trim the id before you log'
+            . ' it and pass it.';
 
         yield 'an empty id' => ['', $blank];
         yield 'an id of spaces only' => ['   ', $blank];
@@ -215,8 +224,8 @@ final class RequestIdTest extends SdkTestCase
         yield 'a DEL byte' => ["req\x7Fabc", $byte('7F', 3)];
         // Probed against 3.2.1: recorded as "req-cafÃ©".
         yield 'a non-ASCII id' => ['req-café', $byte('C3', 7)];
-        yield 'a leading space' => [' req-abc', $space(' req-abc', 'req-abc')];
-        yield 'a trailing space' => ['req-abc ', $space('req-abc ', 'req-abc')];
+        yield 'a leading space' => [' req-abc', $space];
+        yield 'a trailing space' => ['req-abc ', $space];
     }
 
     /**

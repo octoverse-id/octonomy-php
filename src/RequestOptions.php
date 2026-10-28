@@ -85,11 +85,11 @@ final class RequestOptions
      * envelope) and rolls it back. That limit is the server's, and the SDK does
      * not check it.
      *
-     * @throws \InvalidArgumentException when $requestId is blank, holds a byte outside printable ASCII, or
-     *                                   begins or ends with a space
+     * @throws \InvalidArgumentException when $id is blank, holds a byte outside printable ASCII, or begins or
+     *                                   ends with a space
      */
-    public static function withRequestId(string $requestId): self
+    public static function withRequestId(string $id): self
     {
-        return new self(requestId: $requestId);
+        return new self(requestId: $id);
     }
 }

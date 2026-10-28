@@ -297,6 +297,9 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   again as an `InvalidArgumentException` by `Transport` just before sending (the PHP 7.4 line has no
   `readonly`). Guzzle would refuse it with an error that quotes the whole header, thrown from frames
   that hold the `Authorization` header and the body.
+- A request id refused for any reason ([Request correlation](#request-correlation)) is not quoted
+  either: it is the caller's string, which can hold a value on the list, such as the actor id the same
+  call sends.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

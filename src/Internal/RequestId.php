@@ -46,8 +46,10 @@ final class RequestId
     /**
      * $id, when the server would record it as given.
      *
-     * The message names the problem by its byte and offset rather than quoting
-     * the id, which can hold a byte a log cannot print.
+     * No message quotes the id. It is the caller's string, which can hold a
+     * value on Redaction's list, such as the actor id the same call sends, and
+     * a byte outside printable ASCII, which a log may not print, is named by
+     * its value and offset instead.
      *
      * @throws \InvalidArgumentException when $id is blank, holds a byte outside printable ASCII, or begins
      *                                   or ends with a space
@@ -75,12 +77,11 @@ final class RequestId
             )));
         }
         if (trim($id, ' ') !== $id) {
-            throw Redaction::scrub(new \InvalidArgumentException(sprintf(
-                'octonomy: requestId "%s" begins or ends with a space, which is trimmed from a header value on the'
-                . ' way, so the server would record "%s" and not the id you logged. Fix: pass the trimmed id.',
-                $id,
-                trim($id, ' '),
-            )));
+            throw Redaction::scrub(new \InvalidArgumentException(
+                'octonomy: requestId begins or ends with a space, which is trimmed from a header value on the way,'
+                . ' so the server would record an id other than the one you logged. Fix: trim the id before you log'
+                . ' it and pass it.',
+            ));
         }
 
         return $id;

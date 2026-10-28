@@ -35,10 +35,10 @@ use Psr\Http\Message\StreamFactoryInterface;
  * the /api/{version} prefix of the configured api_version, attaches the
  * auth/tenant headers and any per-request namespace pair and request id, sends
  * them through a PSR-18 client, Guzzle's unless one is injected, and converts
- * non-2xx responses into typed exceptions. A v2-only feature on a v1 client is refused
- * before anything is sent. Every exception it throws for a request carries that
- * request's RequestContext, and none carries the token, a header or the body
- * (Redaction).
+ * non-2xx responses into typed exceptions. A v2-only feature on a v1 client is
+ * refused before anything is sent. Every exception it throws for a request
+ * carries that request's RequestContext, and none carries the token, a header
+ * or the body (Redaction).
  *
  * A 2xx is read through exactly one of three methods, chosen by the endpoint's
  * response shape: one() for a single resource, many() for a list, none() for a

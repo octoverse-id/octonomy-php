@@ -685,6 +685,35 @@ final class RedactionTest extends SdkTestCase
     }
 
     /**
+     * A refused request id is not quoted either: it is the caller's string,
+     * which can hold a value on the list, such as the actor id the same call
+     * sends. Refused when the options are built, and again by Transport, as
+     * on the PHP 7.4 line, whose options can change after that.
+     */
+    public function testARefusedRequestIdQuotesNoneOfThem(): void
+    {
+        foreach ([' actor-from-the-call', 'actor-from-the-call ', "actor-from-the-call\n", 'actor-from-the-call-é', ' ' . self::TOKEN] as $id) {
+            try {
+                new RequestOptions(actorId: 'actor-from-the-call', requestId: $id);
+                self::fail('expected the request id to be refused');
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringStartsWith('octonomy: requestId ', $e->getMessage());
+                self::assertCarriesNone($e, null);
+            }
+
+            $client = $this->clientWith([], self::config());
+            try {
+                $client->tags()->create(self::body(), self::unchecked(RequestOptions::class, ['actorId' => 'actor-from-the-call', 'namespace' => null, 'requestId' => $id]));
+                self::fail('expected the request id to be refused');
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringStartsWith('octonomy: requestId ', $e->getMessage());
+                $this->assertNothingSent();
+                self::assertCarriesNone($e, self::CREATE_FRAME);
+            }
+        }
+    }
+
+    /**
      * Only the SDK's frames lose their arguments: the caller's and PHP's keep
      * theirs, here array_map()'s.
      */

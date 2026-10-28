@@ -81,8 +81,8 @@ The SDK never generates an id: without one no `X-Request-ID` is sent and the ser
 `req_<uuid>`. There is no client-wide id either, since an id names one call. A successful call returns
 only its model, so log the id on your side when you send it. The id must be non-blank printable ASCII
 with no space at either end, or `InvalidArgumentException` is thrown when the `RequestOptions` is
-built, because the server would otherwise record a different string. Keep it to 100 characters: the server stores it in a
-column that wide, and a longer one fails a mutation with a bare 500.
+built, because the server would otherwise record a different string. Keep it to 100 characters: the
+server stores it in a column that wide, and a longer one fails a mutation with a bare 500.
 
 ## HTTP client
 
