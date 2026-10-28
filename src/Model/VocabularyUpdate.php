@@ -28,14 +28,15 @@ use Octoverse\Octonomy\Undefined;
  * metadata and isActive keep two states, because the server has no null for
  * either and Undefined::VALUE, a string, cannot default an array or a bool: null
  * omits the key. metadata replaces the stored object rather than merging into
- * it, and [] empties it: an empty metadata is sent as {}, the JSON object the
- * server requires. Inside metadata an empty array is sent as a JSON list; use
- * new \stdClass() for an empty nested object.
+ * it, and [] empties it. It is always sent as a JSON object, so a vocabulary's
+ * metadata goes back out with every object and list it was read with (#48).
+ * Inside metadata an empty array is sent as a JSON list; use new \stdClass()
+ * for an empty nested object.
  */
 final class VocabularyUpdate
 {
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<array-key, mixed>|null $metadata
      */
     public function __construct(
         public readonly ?string $name = Undefined::VALUE,
@@ -69,9 +70,10 @@ final class VocabularyUpdate
             $payload['description'] = $this->description;
         }
         if ($this->metadata !== null) {
-            // An empty array would encode as the list []; metadata is a JSON
-            // object, and the server refuses anything else (#46).
-            $payload['metadata'] = $this->metadata === [] ? new \stdClass() : $this->metadata;
+            // Always a JSON object, the only kind the server accepts. An array
+            // encodes as a list when it is empty (#46) or keyed 0, 1, ..., and
+            // a model holds stored {"0": ...} metadata keyed that way (#48).
+            $payload['metadata'] = (object) $this->metadata;
         }
         if ($this->isActive !== null) {
             $payload['is_active'] = $this->isActive;

@@ -21,11 +21,18 @@ use Octoverse\Octonomy\Internal\Json;
  * its namespace (plus global ones when the caller may see global rows) and
  * within its application scope (octonomy/tags/selectors.py upstream). So the
  * same tag can report different counts from the two surfaces.
+ *
+ * $metadata holds the members of the tag's metadata object, under PHP's array
+ * keys ("0" becomes 0). Below the top level a JSON object is a \stdClass
+ * and a JSON list is an array, so a nested {} or {"0": "a"} keeps its shape,
+ * and the value goes back into a TagCreate or TagUpdate with every object and
+ * list it was read with (#48). A \stdClass is a handle: changing one changes
+ * this tag's copy too, so clone it first to keep the tag as it was read.
  */
 final class Tag
 {
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<array-key, mixed>|null $metadata
      */
     public function __construct(
         public readonly string $id,

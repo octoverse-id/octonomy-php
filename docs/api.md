@@ -108,18 +108,41 @@ have no null on the server, and the sentinel, a string, cannot default an array 
 two states: `null`, their default, omits the key. `metadata` replaces the stored object rather than
 merging into it.
 
-### Empty objects
+### Objects and lists
 
-PHP has one empty array, and `json_encode()` writes it as the list `[]`. Where the contract wants a
-JSON object the SDK sends `{}` instead (#46):
+A PHP array cannot say whether it was a JSON object or a JSON list: `json_encode()` writes `[]` and
+`[0 => 'a']` as lists. Where the contract wants a JSON object the SDK sends one whatever the array's
+keys:
 
-- An update with nothing set sends `{}`, which the server answers with 200 and changes nothing.
-- An empty `metadata` (`metadata: []`) is sent as `"metadata": {}`. On an update that empties the
-  stored object; a model's empty `metadata`, which hydrates to `[]`, goes back out unchanged.
+- An update with nothing set sends `{}`, which the server answers with 200 and changes nothing (#46).
+- `metadata` is always sent as an object whose members are the array's keys (#46, #48). So
+  `metadata: []` is sent as `"metadata": {}`, which on an update empties the stored object, and
+  `[0 => 'a']` as `{"0": "a"}`.
 
-Only those two places. Inside `metadata` an empty array is sent as a JSON list, so pass
-`new \stdClass()` for an empty nested object. A model hydrates every nested object to an array, so a
-nested `{}` it read comes back as `[]` and would go back out as a list.
+Only those two places. Inside `metadata` a `\stdClass` is sent as an object and an array as
+`json_encode()` writes it, so pass `new \stdClass()` for an empty nested object.
+
+### Metadata round trips
+
+A model's `metadata` holds the members of the stored object as an array, under PHP's array keys (`"0"`
+becomes `0`). Below that top level it keeps JSON's own distinction, as `json_decode()` does: an object
+is a `\stdClass` and a list is an array. So metadata read from a model goes back into a create or
+update DTO with every object and list it was read with, a nested `{}` or `{"0": "a"}` included (#48):
+
+```php
+$tag = $client->tags()->get($id);   // metadata: {"attrs": {}, "ranks": [2, 1]}
+$tag->metadata['attrs'];            // a \stdClass with no properties
+$tag->metadata['ranks'];            // [2, 1]
+
+$metadata = $tag->metadata;
+$metadata['color'] = 'red';
+$client->tags()->update($id, new TagUpdate(metadata: $metadata));
+// {"metadata": {"attrs": {}, "ranks": [2, 1], "color": "red"}}
+```
+
+Read a nested object's members as properties (`$tag->metadata['attrs']->size`) or through
+`get_object_vars()`. A `\stdClass` is a handle, so changing one changes the model's copy too: clone it
+first to keep the model as it was read.
 
 ## Responses
 

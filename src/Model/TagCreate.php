@@ -7,14 +7,18 @@ namespace Octoverse\Octonomy\Model;
 /**
  * TagCreate is the request body for creating a tag. $name, $slug, and $type are
  * required; the remaining fields are optional and omitted from the payload when
- * null. An empty $metadata is sent as {}, the JSON object the server requires;
- * inside it an empty array is sent as a JSON list, so use new \stdClass() for an
- * empty nested object.
+ * null.
+ *
+ * $metadata is always sent as a JSON object, the only kind the server accepts:
+ * the array's keys are its members, so [] is sent as {}, and a tag's metadata
+ * goes back out with every object and list it was read with (#48). Inside it a
+ * \stdClass is sent as an object and an array as json_encode() writes it, so an
+ * empty array is a JSON list: use new \stdClass() for an empty nested object.
  */
 final class TagCreate
 {
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<array-key, mixed>|null $metadata
      */
     public function __construct(
         public readonly string $name,
@@ -51,9 +55,10 @@ final class TagCreate
             $payload['vocabulary_id'] = $this->vocabularyId;
         }
         if ($this->metadata !== null) {
-            // An empty array would encode as the list []; metadata is a JSON
-            // object, and the server refuses anything else (#46).
-            $payload['metadata'] = $this->metadata === [] ? new \stdClass() : $this->metadata;
+            // Always a JSON object, the only kind the server accepts. An array
+            // encodes as a list when it is empty (#46) or keyed 0, 1, ..., and
+            // a model holds stored {"0": ...} metadata keyed that way (#48).
+            $payload['metadata'] = (object) $this->metadata;
         }
         if ($this->isActive !== null) {
             $payload['is_active'] = $this->isActive;

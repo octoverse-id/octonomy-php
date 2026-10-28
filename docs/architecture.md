@@ -74,7 +74,8 @@ its nullable fields (`octonomy/tags/serializers.py` upstream). A wrong JSON type
 coerced (`"5"` is not an `int`) or defaulted, and a timestamp must be RFC 3339 (`"yesterday"` raises).
 `Transport` hands a model its object's members with nested objects still `\stdClass`
 (`Json::members()`), so an object field such as `metadata` rejects a JSON list, which array
-decoding would have made indistinguishable. `fromArray()` wraps its reads in `Json::readAs()`, so a
+decoding would have made indistinguishable. `metadata` keeps them below its top level, so it goes
+back out with the objects and lists it was read with (#48). `fromArray()` wraps its reads in `Json::readAs()`, so a
 fault names the api_version even when a model is hydrated outside a request.
 Two named rules sit on top (issue #14):
 

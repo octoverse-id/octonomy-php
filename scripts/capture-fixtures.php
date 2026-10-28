@@ -216,6 +216,22 @@ final class FixtureCapture
         $this->call('vocabularies/update-empty-metadata', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
             'metadata' => new \stdClass(),
         ]);
+        // Metadata an array cannot hold without losing its shape (#48): on
+        // Featured a nested {} and a nested object keyed "0", "1" beside lists,
+        // one of them holding an object; on Labels a top-level object keyed
+        // "0", "1". Each response is what the server stored.
+        $this->call('tags/update-nested-metadata', 200, 'PATCH', "tags/{$created['featured']}", [], [
+            'metadata' => [
+                'attrs' => new \stdClass(),
+                'ids' => (object) ['a', 'b'],
+                'ranks' => [2, 1],
+                'rows' => [['k' => new \stdClass()]],
+                'labels' => [],
+            ],
+        ]);
+        $this->call('vocabularies/update-numeric-metadata', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
+            'metadata' => (object) ['a', 'b'],
+        ]);
     }
 
     /**

@@ -13,11 +13,19 @@ use Octoverse\Octonomy\Internal\Json;
  * scoped to a single application. $namespaceType and $namespaceId place it in a
  * merchant or sub-tenant namespace; both are null for a global vocabulary, and
  * always null from api_version v1, which sees only the global partition.
+ *
+ * $metadata holds the members of the vocabulary's metadata object, under PHP's
+ * array keys ("0" becomes 0). Below the top level a JSON object is a
+ * \stdClass and a JSON list is an array, so a nested {} or {"0": "a"} keeps its
+ * shape, and the value goes back into a VocabularyCreate or VocabularyUpdate
+ * with every object and list it was read with (#48). A \stdClass is a handle:
+ * changing one changes this vocabulary's copy too, so clone it first to keep
+ * the vocabulary as it was read.
  */
 final class Vocabulary
 {
     /**
-     * @param array<string, mixed>|null $metadata
+     * @param array<array-key, mixed>|null $metadata
      */
     public function __construct(
         public readonly string $id,

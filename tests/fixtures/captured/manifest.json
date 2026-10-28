@@ -79,6 +79,7 @@
         "v2/tags/resources.json": "sha256:287ecea7b294aca76bee36a985e540b0226ff3d64a2a8155ea1fb02d66f282c3",
         "v2/tags/update-clear.json": "sha256:f99dd96c86b1dd8a8848325aab77a9cacaa2885f534532ceba1115931a15abab",
         "v2/tags/update-empty-metadata.json": "sha256:6caa9ae9b628dc6aa60338f087aa4e91ff852dfedfbf4044c9a35e960d3d8e2d",
+        "v2/tags/update-nested-metadata.json": "sha256:9e850fe2f96120993723151f2c690b9761c735142ac785d8526d073aae40f0d4",
         "v2/tags/update-nothing.json": "sha256:f5643594eb6111364bfb114f54cdce088a8e268bd76b345521e71d9e35681b0f",
         "v2/tags/update.json": "sha256:19fb09600e4416a5b1a4fba6ee8534cbd30063a7cd9b8a3bd48c073e1e5735dd",
         "v2/vocabularies/create.json": "sha256:6406754a622918b3a8d0d36774d8c2cc77f34360c1714a0771ab6fa6d05e923f",
@@ -89,6 +90,7 @@
         "v2/vocabularies/list.json": "sha256:3ab7377e7611b3399857866c3c3051700112ec5aebeba09072e0da37399c1235",
         "v2/vocabularies/update-clear.json": "sha256:3ba52c018f0ef4f29d14e0a12f9d91bc3000a98909ea3a480040767132792c93",
         "v2/vocabularies/update-empty-metadata.json": "sha256:c679aa1fb65f0d51438870bf79fc44fe76718e4f7a654b26038cccbf72a5b12d",
+        "v2/vocabularies/update-numeric-metadata.json": "sha256:bc4bdf1c6906fd76d079d0b4779d4b713ea982e36ffba8e4924223cbb3feef0b",
         "v2/vocabularies/update.json": "sha256:d0f0985a36f4395eae8b5c6c0e9b70f0bb6e2f2abfbe0cf4fe03696092de0c65"
     }
 }
