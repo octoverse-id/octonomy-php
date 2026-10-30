@@ -6,7 +6,13 @@ namespace Octoverse\Octonomy\Tests\Fixture;
 
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Exception\ApiException;
+use Octoverse\Octonomy\Model\Assignment;
+use Octoverse\Octonomy\Model\AuditLog;
+use Octoverse\Octonomy\Model\ResourceTag;
 use Octoverse\Octonomy\Model\Tag;
+use Octoverse\Octonomy\Model\TagAlias;
+use Octoverse\Octonomy\Model\TagAliasUpdate;
+use Octoverse\Octonomy\Model\TagResource;
 use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\Model\Vocabulary;
 use Octoverse\Octonomy\Model\VocabularyUpdate;
@@ -332,6 +338,126 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['is_active'], $vocabulary->isActive, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $vocabulary->createdAt, $name);
             self::assertEquals(new \DateTimeImmutable($row['updated_at']), $vocabulary->updatedAt, $name);
+        }
+    }
+
+    /**
+     * Every captured alias, a resolution's matched alias included, hydrates
+     * strictly as its own api_version.
+     */
+    public function testEveryCapturedAliasHydrates(): void
+    {
+        $rows = self::modelRows('tag aliases', static fn(string $operation, mixed $data): array => match (true) {
+            str_starts_with($operation, 'tag-aliases/'), $operation === 'tags/aliases' => self::oneOrMany($data),
+            str_starts_with($operation, 'tag-resolution/') => $data->matched_alias === null ? [] : [$data->matched_alias],
+            default => [],
+        });
+        self::assertGreaterThan(10, count($rows));
+
+        foreach ($rows as [$name, $members, $row]) {
+            $alias = TagAlias::fromArray($members, self::apiVersion($name));
+            self::assertSame($row['id'], $alias->id, $name);
+            self::assertSame($row['tenant_id'], $alias->tenantId, $name);
+            self::assertSame($row['application_id'], $alias->applicationId, $name);
+            self::assertNamespacePair($name, $row, $alias->namespaceType, $alias->namespaceId);
+            self::assertSame($row['tag_id'], $alias->tagId, $name);
+            self::assertSame($row['name'], $alias->name, $name);
+            self::assertSame($row['slug'], $alias->slug, $name);
+            // Sent back unchanged, metadata is the JSON the server sent (#48).
+            self::assertSame(self::json($members['metadata']), self::json(
+                (new TagAliasUpdate(metadata: $alias->metadata))->toArray()['metadata'],
+            ), $name);
+            self::assertSame($row['is_active'], $alias->isActive, $name);
+            self::assertEquals(new \DateTimeImmutable($row['created_at']), $alias->createdAt, $name);
+            self::assertEquals(new \DateTimeImmutable($row['updated_at']), $alias->updatedAt, $name);
+        }
+    }
+
+    /**
+     * Every captured assignment, a bulk assignment's included.
+     */
+    public function testEveryCapturedAssignmentHydrates(): void
+    {
+        $rows = self::modelRows('assignments', static fn(string $operation, mixed $data): array => match (true) {
+            in_array($operation, ['tag-assignments/create', 'tag-assignments/create-existing'], true) => [$data],
+            $operation === 'tag-assignments/bulk-assign' => $data->assignments,
+            default => [],
+        });
+        self::assertGreaterThan(5, count($rows));
+
+        foreach ($rows as [$name, $members, $row]) {
+            $assignment = Assignment::fromArray($members, self::apiVersion($name));
+            self::assertSame($row['id'], $assignment->id, $name);
+            self::assertSame($row['tenant_id'], $assignment->tenantId, $name);
+            self::assertSame($row['application_id'], $assignment->applicationId, $name);
+            self::assertNamespacePair($name, $row, $assignment->namespaceType, $assignment->namespaceId);
+            self::assertSame($row['tag_id'], $assignment->tagId, $name);
+            self::assertSame($row['resource_type'], $assignment->resourceType, $name);
+            self::assertSame($row['resource_id'], $assignment->resourceId, $name);
+            self::assertSame($row['assigned_by'], $assignment->assignedBy, $name);
+            self::assertEquals(new \DateTimeImmutable($row['assigned_at']), $assignment->assignedAt, $name);
+        }
+    }
+
+    /**
+     * Every captured tag on a resource and resource of a tag. A resource tag's
+     * own tag is checked in full by testEveryCapturedTagHydrates.
+     */
+    public function testEveryCapturedResourceRowHydrates(): void
+    {
+        $resourceTags = self::modelRows('resource tags', static fn(string $operation, mixed $data): array => $operation === 'resources/tags' ? $data : []);
+        $tagResources = self::modelRows('tag resources', static fn(string $operation, mixed $data): array => $operation === 'tags/resources' ? $data : []);
+        self::assertGreaterThan(2, count($resourceTags));
+        self::assertGreaterThan(2, count($tagResources));
+
+        foreach ($resourceTags as [$name, $members, $row]) {
+            $resourceTag = ResourceTag::fromArray($members, self::apiVersion($name));
+            self::assertSame($row['assignment_id'], $resourceTag->assignmentId, $name);
+            self::assertNamespacePair($name, $row, $resourceTag->namespaceType, $resourceTag->namespaceId);
+            self::assertSame($row['assigned_by'], $resourceTag->assignedBy, $name);
+            self::assertEquals(new \DateTimeImmutable($row['assigned_at']), $resourceTag->assignedAt, $name);
+            self::assertSame($row['tag']['id'], $resourceTag->tag->id, $name);
+        }
+        foreach ($tagResources as [$name, $members, $row]) {
+            $tagResource = TagResource::fromArray($members, self::apiVersion($name));
+            self::assertSame($row['application_id'], $tagResource->applicationId, $name);
+            self::assertNamespacePair($name, $row, $tagResource->namespaceType, $tagResource->namespaceId);
+            self::assertSame($row['resource_type'], $tagResource->resourceType, $name);
+            self::assertSame($row['resource_id'], $tagResource->resourceId, $name);
+            self::assertSame($row['assigned_by'], $tagResource->assignedBy, $name);
+            self::assertEquals(new \DateTimeImmutable($row['assigned_at']), $tagResource->assignedAt, $name);
+        }
+    }
+
+    /**
+     * Every captured audit log entry, with its changes intact: read back as
+     * JSON, they are the JSON the server sent.
+     */
+    public function testEveryCapturedAuditLogHydrates(): void
+    {
+        $rows = self::modelRows('audit logs', static fn(string $operation, mixed $data): array => str_ends_with($operation, 'audit-logs') || $operation === 'audit-logs/list'
+            ? $data
+            : []);
+        self::assertGreaterThan(10, count($rows));
+
+        foreach ($rows as [$name, $members, $row]) {
+            $log = AuditLog::fromArray($members, self::apiVersion($name));
+            self::assertSame($row['id'], $log->id, $name);
+            self::assertSame($row['tenant_id'], $log->tenantId, $name);
+            self::assertSame($row['application_id'], $log->applicationId, $name);
+            self::assertNamespacePair($name, $row, $log->namespaceType, $log->namespaceId);
+            self::assertSame($row['action'], $log->action, $name);
+            self::assertSame($row['entity_type'], $log->entityType, $name);
+            self::assertSame($row['entity_id'], $log->entityId, $name);
+            self::assertSame($row['tag_id'], $log->tagId, $name);
+            self::assertSame($row['resource_type'], $log->resourceType, $name);
+            self::assertSame($row['resource_id'], $log->resourceId, $name);
+            self::assertSame($row['actor_id'], $log->actorId, $name);
+            self::assertSame($row['request_id'], $log->requestId, $name);
+            self::assertSame($row['operation_id'], $log->operationId, $name);
+            self::assertSame(self::json($members['changes']), self::json((object) $log->changes), $name);
+            self::assertSame(self::json($members['metadata']), self::json((object) $log->metadata), $name);
+            self::assertEquals(new \DateTimeImmutable($row['created_at']), $log->createdAt, $name);
         }
     }
 

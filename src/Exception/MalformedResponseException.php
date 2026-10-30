@@ -77,6 +77,27 @@ final class MalformedResponseException extends OctonomyException
     }
 
     /**
+     * The same fault, placed inside the object it came from: a model nested in
+     * another reports a field by its own key, and the reader that hydrated it
+     * prefixes $at, the nested object's place in its parent ("tag" or
+     * "assignments[2]"), so the report reaches the response as
+     * "data.tag.slug".
+     *
+     * @internal
+     */
+    public function within(string $at): self
+    {
+        return new self(
+            $this->problem,
+            $this->field === null ? $at : "{$at}.{$this->field}",
+            $this->context,
+            $this->apiVersion,
+            $this,
+            $this->got,
+        );
+    }
+
+    /**
      * The same fault, placed in the response it came from. A model reports a
      * field by its key alone; Transport, which knows the request and where in
      * the body the model's object sat ($at, such as "data" or "data[2]"),

@@ -86,8 +86,10 @@ the SDK refuses both up front.
 
 ## Scopes
 
-Service tokens carry scopes enforced by the server: `tags:read`, `tags:write`, `audit:read`. Read
-methods need `tags:read`; mutating methods need `tags:write`.
+Service tokens carry scopes enforced by the server: `tags:read`, `tags:write`, `audit:read`. The
+audit-log lists (`auditLogs()->list()`, `tags()->listAuditLogs()`, `resources()->listAuditLogs()`)
+need `audit:read`; every other read method needs `tags:read`, and mutating methods need
+`tags:write`.
 
 ## Implemented
 
@@ -103,6 +105,30 @@ methods need `tags:read`; mutating methods need `tags:write`.
 | `tags()->list()` | GET | `/tags` |
 | `tags()->update()` | PATCH | `/tags/{id}` (`?application_id`) |
 | `tags()->delete()` | DELETE | `/tags/{id}` (`?application_id`) |
+| `tags()->resolve()` | GET | `/tag-resolution?slug` (`?application_id`, `?type`, `?scope`, `?include_global`) |
+| `tags()->listAliases()` | GET | `/tags/{id}/aliases` |
+| `tags()->listResources()` | GET | `/tags/{id}/resources` |
+| `tags()->listAuditLogs()` | GET | `/tags/{id}/audit-logs` |
+| `aliases()->create()` | POST | `/tag-aliases` |
+| `aliases()->get()` | GET | `/tag-aliases/{id}` (`?application_id`, `?include_global`) |
+| `aliases()->list()` | GET | `/tag-aliases` |
+| `aliases()->update()` | PATCH | `/tag-aliases/{id}` (`?application_id`) |
+| `aliases()->delete()` | DELETE | `/tag-aliases/{id}` (`?application_id`) |
+| `assignments()->create()` | POST | `/tag-assignments` |
+| `assignments()->remove()` | DELETE | `/tag-assignments` (the assignment in the body) |
+| `assignments()->bulkAssign()` | POST | `/tag-assignments/bulk-assign` |
+| `assignments()->bulkRemove()` | POST | `/tag-assignments/bulk-remove` |
+| `resources()->listTags()` | GET | `/resources/{type}/{id}/tags?application_id` |
+| `resources()->replaceTags()` | POST | `/resources/{type}/{id}/tags` |
+| `resources()->listAuditLogs()` | GET | `/resources/{type}/{id}/audit-logs` |
+| `auditLogs()->list()` | GET | `/audit-logs` |
+
+Every id and resource type in a path is percent-encoded as one segment, so `a/b` is sent as `a%2Fb`. A
+type or id that is exactly `.` or `..`, which the server accepts, is sent as `%2E` or `%2E%2E`: left as
+it is, libcurl would remove it as a dot segment and send the request to another endpoint. A proxy in
+front of the server that decodes and normalizes paths before forwarding them can still remove it. An
+empty id or type throws `InvalidArgumentException` before anything is sent, since the server refuses a
+blank one.
 
 ### List parameters
 
@@ -110,6 +136,34 @@ methods need `tags:read`; mutating methods need `tags:write`.
 `parent_id`, `q` (as `query`), `slug`, `type`, `vocabulary_id`, plus `limit`/`offset` and, on v2,
 `include_global`. `VocabularyListParams` exposes `application_id`, `include_shared`, `is_active`,
 paging, and, on v2, `include_global`. Boolean params are serialized as `"true"`/`"false"`.
+
+| Params | Used by | Filters (each also takes `limit`/`offset` and, on v2, `include_global`) |
+| ------ | ------- | ------- |
+| `TagAliasListParams` | `aliases()->list()`, `tags()->listAliases()` | `application_id`, `include_shared`, `is_active`, `q` (as `query`), `slug`, `tag_id` |
+| `ResourceTagListParams` | `resources()->listTags()`, which takes the required `application_id` itself | `include_inactive`, `type` |
+| `TagResourceListParams` | `tags()->listResources()` | `application_id`, `resource_type` |
+| `AuditLogListParams` | `auditLogs()->list()`, `tags()->listAuditLogs()`, `resources()->listAuditLogs()` | `application_id`, `action`, `entity_type`, `entity_id`, `tag_id`, `resource_type`, `resource_id`, `actor_id`, `operation_id` |
+
+The server applies every `AuditLogListParams` filter on all three audit lists, so on the tag's or the
+resource's list the matching filters narrow further. A list of aliases or of a resource's tags shows
+active rows only unless `is_active` or `include_inactive` says otherwise.
+
+### Assignment bodies
+
+`AssignmentCreate` names the tag one way, through its named constructor: `forTag()`, `forAliasId()` or
+`forAliasSlug()`; an alias assigns the tag it points to. Assigning a tag the resource already has is
+not an error: the server answers 200 with the existing assignment instead of 201, and `create()`
+returns it the same way. `remove()` sends `DELETE /tag-assignments` with the assignment in its body, and
+the server answers 204 whether or not the resource had the tag.
+
+`BulkAssign`, `BulkRemove` and `ResourceTagsReplace` send their tag ids and alias slugs as JSON lists,
+in order, whatever the array's keys, so an array left with gaps by `array_filter()` is not sent as an
+object. `ResourceTagsReplace::$tagIds` is required, so clearing a resource's tags is never a default:
+`new ResourceTagsReplace('cms', [])` removes them all.
+
+The bulk and replace endpoints answer with a summary object, not the list the spec declares:
+`BulkAssignResult` (`created`, `existing`, `skipped`, `assignments`), `BulkRemoveResult` (`removed`) and
+`ResourceTagsReplaceResult` (`created`, `removed`, `tags`).
 
 ### Update bodies
 
@@ -173,7 +227,9 @@ first to keep the model as it was read.
 
 ## Responses
 
-- **Single resource:** the model object (e.g. `Tag`), unwrapped from the server's `{ data: {...} }`.
+- **Single resource:** the model object (e.g. `Tag`), unwrapped from the server's `{ data: {...} }`. A
+  model nested in another (a resolution's `tag`, a bulk result's `assignments`) hydrates as its own
+  model does, and a field it breaks is reported at its path, such as `data.assignments[2].tag_id`.
 - **List:** `ResultList<T>` = `{ data: T[], pagination: {limit, offset, count, next, previous} }`.
 - **Delete:** no body (deactivation on the server).
 - **Errors:** `{ error: {code, message, details, request_id} }` → a typed `ApiException` subclass.
@@ -311,5 +367,4 @@ Two failures are not HTTP errors and do not extend `ApiException`:
 
 ## Not yet implemented
 
-Tag aliases, tag resolution, tag assignments (incl. bulk), resource tags, audit logs, and health — see
-[roadmap.md](roadmap.md).
+Health — see [roadmap.md](roadmap.md).

@@ -37,7 +37,7 @@ final class ErrorMessage
      * The collections whose "{collection}/{id}" path names a single resource,
      * by the kind a 404 message calls it.
      */
-    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary'];
+    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary', 'tag-aliases' => 'tag alias'];
 
     private function __construct() {}
 
@@ -182,6 +182,19 @@ final class ErrorMessage
             $what,
             $header,
         );
+    }
+
+    /**
+     * The message for an empty path segment (Path::of()), which no URL can
+     * carry, so nothing was sent. The server refuses a blank id or resource
+     * type everywhere, so the SDK knows the request could not have named a
+     * resource.
+     */
+    public static function emptyPathSegment(): string
+    {
+        return 'octonomy: an id or another path segment is empty, so the request would name no single resource,'
+            . ' and the server refuses a blank id or resource type. Nothing was sent. Fix: pass the id of the'
+            . ' resource you mean.';
     }
 
     /**

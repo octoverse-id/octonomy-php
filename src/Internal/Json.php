@@ -219,6 +219,117 @@ final class Json
     }
 
     /**
+     * nullableObject() for a JSON object field the server never sends as null,
+     * such as an alias's metadata or an audit entry's changes: the column is a
+     * non-null JSONField defaulting to {} (octonomy/tags/models.py,
+     * octonomy/audit/models.py upstream), so a null is drift. The top level
+     * becomes an array and everything below it keeps its JSON shape, as there.
+     *
+     * @param array<string, mixed> $d
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws MalformedResponseException when the key is absent or not an object
+     */
+    public static function object(array $d, string $key): array
+    {
+        $v = self::present($d, $key);
+        if (!$v instanceof \stdClass) {
+            throw self::wrongType($key, 'an object', $v);
+        }
+
+        return get_object_vars($v);
+    }
+
+    /**
+     * Read a resource nested in another, such as a resolution's tag, by running
+     * $hydrate over the nested object's members. A field the nested model
+     * rejects is reported at its path through this field ("tag.slug").
+     *
+     * @template T
+     *
+     * @param array<string, mixed>                       $d
+     * @param \Closure(array<string, mixed>, string): T $hydrate a model's fromArray(...)
+     * @param string                                     $apiVersion the api_version the body is read as, which
+     *                                                               the nested model's field set depends on too
+     *
+     * @return T
+     *
+     * @throws MalformedResponseException when the key is absent, its value is not an object, or the object
+     *                                    fails to hydrate
+     */
+    public static function resource(array $d, string $key, \Closure $hydrate, string $apiVersion): mixed
+    {
+        $v = self::present($d, $key);
+        if (!$v instanceof \stdClass) {
+            throw self::wrongType($key, 'an object', $v);
+        }
+
+        return self::hydrateWithin($key, $hydrate, $v, $apiVersion);
+    }
+
+    /**
+     * resource() for a nested resource that may be null, such as a
+     * resolution's matched alias when the slug matched a tag. The key must
+     * still be present.
+     *
+     * @template T
+     *
+     * @param array<string, mixed>                       $d
+     * @param \Closure(array<string, mixed>, string): T $hydrate
+     *
+     * @return T|null
+     *
+     * @throws MalformedResponseException when the key is absent, its value is neither an object nor null,
+     *                                    or the object fails to hydrate
+     */
+    public static function nullableResource(array $d, string $key, \Closure $hydrate, string $apiVersion): mixed
+    {
+        $v = self::present($d, $key);
+        if ($v === null) {
+            return null;
+        }
+        if (!$v instanceof \stdClass) {
+            throw self::wrongType($key, 'an object or null', $v);
+        }
+
+        return self::hydrateWithin($key, $hydrate, $v, $apiVersion);
+    }
+
+    /**
+     * Read a JSON list of nested resources, such as a bulk assignment's
+     * assignments, hydrating each with $hydrate. A field one of them rejects is
+     * reported at its place in the list ("assignments[2].tag_id").
+     *
+     * @template T
+     *
+     * @param array<string, mixed>                       $d
+     * @param \Closure(array<string, mixed>, string): T $hydrate
+     *
+     * @return list<T>
+     *
+     * @throws MalformedResponseException when the key is absent, its value is not a list, an item is not
+     *                                    an object, or an item fails to hydrate
+     */
+    public static function resources(array $d, string $key, \Closure $hydrate, string $apiVersion): array
+    {
+        $v = self::present($d, $key);
+        // decode() makes every JSON object a \stdClass, so an array is a list.
+        if (!is_array($v)) {
+            throw self::wrongType($key, 'a list', $v);
+        }
+        $out = [];
+        foreach (array_values($v) as $i => $item) {
+            if (!$item instanceof \stdClass) {
+                throw self::wrongType("{$key}[{$i}]", 'an object', $item);
+            }
+            $out[] = self::hydrateWithin("{$key}[{$i}]", $hydrate, $item, $apiVersion);
+        }
+
+        return $out;
+    }
+
+    /**
      * @param array<string, mixed> $d
      *
      * @throws MalformedResponseException when the key is absent or not an RFC 3339 timestamp
@@ -276,6 +387,25 @@ final class Json
         }
 
         return $d[$key];
+    }
+
+    /**
+     * Run a nested model's $hydrate over $object, placing any field it rejects
+     * at $at, the object's place in the model being read.
+     *
+     * @template T
+     *
+     * @param \Closure(array<string, mixed>, string): T $hydrate
+     *
+     * @return T
+     */
+    private static function hydrateWithin(string $at, \Closure $hydrate, \stdClass $object, string $apiVersion): mixed
+    {
+        try {
+            return $hydrate(self::members($object), $apiVersion);
+        } catch (MalformedResponseException $e) {
+            throw $e->within($at);
+        }
     }
 
     private static function wrongType(string $key, string $expected, mixed $actual): MalformedResponseException

@@ -9,7 +9,7 @@ changing the types and paths.
 
 | File / namespace | Responsibility |
 | ---------------- | -------------- |
-| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()` / `tags()` and `apiVersion()`. |
+| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()`, `tags()`, `aliases()`, `assignments()`, `resources()`, `auditLogs()` and `apiVersion()`. |
 | `Config` | Validated configuration (base URL, token, tenant, actor, a PSR-18 http client or the timeout of the Guzzle client the SDK builds, user agent, api_version, PSR-17 factories). |
 | `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace/request-id headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
@@ -18,9 +18,10 @@ changing the types and paths.
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`/`FeatureDisabled`/`UnsupportedApiVersion`/`AmbiguousResolution`), mapped by `ApiException::classFor()`; `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
 | `RequestContext` | The api_version, method, path, query and namespace of one request, built by `Transport` before sending and carried by every exception the request ends in. No token, header or body. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
-| `Model\*` | Response DTOs (`Vocabulary`, `Tag`) and input DTOs (`*Create`, `*Update`, `*ListParams`). |
-| `Resource\*Service` | One per resource: CRUD methods delegating to `Transport`. |
-| `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion; `@internal`. |
+| `Model\*` | Response DTOs (`Vocabulary`, `Tag`, `TagAlias`, `TagResolution`, `Assignment`, `ResourceTag`, `TagResource`, `AuditLog`, and the bulk and replace results) and input DTOs (`*Create`, `*Update`, `*ListParams`, `AssignmentRemove`, `BulkAssign`, `BulkRemove`, `ResourceTagsReplace`). |
+| `Resource\*Service` | One per resource group: methods delegating to `Transport`. |
+| `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion, and nested models (`resource()`, `resources()`) reported at their path; `@internal`. |
+| `Internal\Path` | `Path::of(...$segments)`, every request path below the version prefix: each segment percent-encoded on its own, a `.` or `..` segment as `%2E`/`%2E%2E` so no HTTP client removes it, and an empty segment refused before sending; `@internal`. |
 | `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
 | `Internal\RequestId` | The check of a caller's `X-Request-ID`, in `RequestOptions` and again in `Transport`: non-blank printable ASCII, no space at either end, so the server records the id the caller logged; `@internal`. |
 | `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), and `scrub()`, which removes the SDK frames' arguments from a trace; `@internal`. |
@@ -125,8 +126,10 @@ To add a resource, follow `Resource/TagService.php`:
 
 1. Read the matching schema(s) in `docs/openapi-v2.yaml` (and `docs/openapi.yaml` for v1), and the
    divergence note at the top of each.
-2. Add `Model/<Resource>.php` (+ `*Create`/`*Update`/`*ListParams`) and `Resource/<Resource>Service.php`.
+2. Add `Model/<Resource>.php` (+ `*Create`/`*Update`/`*ListParams`) and `Resource/<Resource>Service.php`,
+   building each path with `Internal\Path::of()`.
 3. Wire the accessor onto `Client`.
-4. Add `MockHandler`-based tests that replay captured fixtures, and a CHANGELOG entry.
+4. Add `MockHandler`-based tests that replay captured fixtures, list the model in
+   `StrictHydrationRegressionTest::MODELS`, and add a CHANGELOG entry.
 
-See [roadmap.md](roadmap.md) for the queued resources.
+See [roadmap.md](roadmap.md) for what is still queued.
