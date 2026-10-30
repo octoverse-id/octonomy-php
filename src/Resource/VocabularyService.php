@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Resource;
 
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Internal\Path;
 use Octoverse\Octonomy\Internal\ScopeQuery;
 use Octoverse\Octonomy\Model\Vocabulary;
 use Octoverse\Octonomy\Model\VocabularyCreate;
@@ -55,7 +56,7 @@ final class VocabularyService
     ): Vocabulary {
         return $this->transport->one(
             'GET',
-            'vocabularies/' . rawurlencode($id),
+            Path::of('vocabularies', $id),
             Vocabulary::fromArray(...),
             ScopeQuery::of($applicationId, $includeGlobal),
             null,
@@ -94,7 +95,7 @@ final class VocabularyService
     ): Vocabulary {
         return $this->transport->one(
             'PATCH',
-            'vocabularies/' . rawurlencode($id),
+            Path::of('vocabularies', $id),
             Vocabulary::fromArray(...),
             ScopeQuery::of($applicationId),
             $input->toArray(),
@@ -112,7 +113,7 @@ final class VocabularyService
     {
         $this->transport->none(
             'DELETE',
-            'vocabularies/' . rawurlencode($id),
+            Path::of('vocabularies', $id),
             ScopeQuery::of($applicationId),
             null,
             $options,

@@ -111,6 +111,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without one no header is sent, and there is no `Config` field for one. An id the server would record
   changed (blank, outside printable ASCII, or with a space at either end) throws
   `InvalidArgumentException` before sending.
+- The remaining resource groups (#23), each on both api_versions with the v2 namespace pair:
+  - `aliases()` (`TagAliasService`): create, get, list, update and delete (deactivation) tag aliases,
+    with `TagAlias`, `TagAliasCreate`, a tri-state `TagAliasUpdate` and `TagAliasListParams`; and
+    `tags()->listAliases()` for one tag's.
+  - `tags()->resolve($slug, ...)`: resolves a slug to the tag it names, its own or an alias's, as a
+    `TagResolution` (`matchedType`, `matchedAlias`, `tag`), with `type`, `scope` and `include_global`.
+  - `assignments()` (`AssignmentService`): `create()`, with `AssignmentCreate::forTag()`,
+    `forAliasId()` and `forAliasSlug()`, one per way to name the tag; `remove()` (`AssignmentRemove`);
+    and `bulkAssign()` / `bulkRemove()`, which return the server's real summary objects,
+    `BulkAssignResult` and `BulkRemoveResult`, not the list the spec declares. Re-assigning returns
+    the existing assignment.
+  - `resources()` (`ResourceService`): `listTags()` (`ResourceTag` rows, each with its `Tag`),
+    `replaceTags()` (`ResourceTagsReplace`, whose `tagIds` is required so clearing is never a default,
+    returning `ResourceTagsReplaceResult`) and `listAuditLogs()`; and `tags()->listResources()`
+    (`TagResource` rows).
+  - `auditLogs()` (`AuditLogService`): `list()`, and `tags()->listAuditLogs()`, all three taking
+    `AuditLogListParams`. `AuditLog::$changes` keeps each snapshot's objects as `\stdClass`.
+  - The bulk and replace DTOs send their tag ids and alias slugs as JSON lists whatever the array's
+    keys, so an array with gaps from `array_filter()` is not sent as an object.
+  - A model nested in another (a resolution's tag, a bulk result's assignments) is read strictly, and a
+    field it breaks is reported at its path, such as `data.assignments[2].tag_id`.
+  - A 404 on `/tag-aliases/{id}` names the tag alias it asked for.
+- `Internal\Path::of()` builds every request path (#23): each id percent-encoded as one segment, in
+  place of the six inline `rawurlencode()` calls. An empty id, `.` or `..` now throws
+  `InvalidArgumentException` before sending: the empty one used to send a path that names no
+  resource, and a dot segment is removed by the HTTP client or a proxy, which sent the request to
+  another endpoint.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

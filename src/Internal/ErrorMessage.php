@@ -37,7 +37,7 @@ final class ErrorMessage
      * The collections whose "{collection}/{id}" path names a single resource,
      * by the kind a 404 message calls it.
      */
-    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary'];
+    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary', 'tag-aliases' => 'tag alias'];
 
     private function __construct() {}
 
@@ -181,6 +181,28 @@ final class ErrorMessage
             . ' reading the value from a file.',
             $what,
             $header,
+        );
+    }
+
+    /**
+     * The message for a path segment no URL can carry (Path::of()), so nothing
+     * was sent. The segment is quoted: it is empty, "." or "..", none of which
+     * is on Redaction's list.
+     */
+    public static function unaddressable(string $segment): string
+    {
+        if ($segment === '') {
+            return 'octonomy: an id or another path segment is empty, so the request would name no single'
+                . ' resource. Nothing was sent. Fix: pass the id of the resource you mean.';
+        }
+
+        return sprintf(
+            'octonomy: an id or another path segment is "%s", which a URL path cannot carry: an HTTP client or a'
+            . ' proxy removes a dot segment (RFC 3986, section 5.2.4), which would send the request to another'
+            . ' endpoint. Nothing was sent. Fix: pass the id of the resource you mean. A resource whose type or id'
+            . ' is "." or ".." can still be assigned tags through assignments(), which send it in the body, but'
+            . ' no endpoint that names it in the path can reach it.',
+            $segment,
         );
     }
 

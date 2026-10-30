@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy;
 
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Resource\AssignmentService;
+use Octoverse\Octonomy\Resource\AuditLogService;
+use Octoverse\Octonomy\Resource\ResourceService;
+use Octoverse\Octonomy\Resource\TagAliasService;
 use Octoverse\Octonomy\Resource\TagService;
 use Octoverse\Octonomy\Resource\VocabularyService;
 
@@ -36,6 +40,10 @@ final class Client
     private readonly Transport $transport;
     private ?VocabularyService $vocabularies = null;
     private ?TagService $tags = null;
+    private ?TagAliasService $aliases = null;
+    private ?AssignmentService $assignments = null;
+    private ?ResourceService $resources = null;
+    private ?AuditLogService $auditLogs = null;
 
     /**
      * @param array<string, mixed>|Config $config an options array (see Config::fromArray) or a Config
@@ -72,5 +80,38 @@ final class Client
     public function tags(): TagService
     {
         return $this->tags ??= new TagService($this->transport);
+    }
+
+    /**
+     * Aliases manages alternate slugs that resolve to canonical tags.
+     */
+    public function aliases(): TagAliasService
+    {
+        return $this->aliases ??= new TagAliasService($this->transport);
+    }
+
+    /**
+     * Assignments links tags to external resources and unlinks them.
+     */
+    public function assignments(): AssignmentService
+    {
+        return $this->assignments ??= new AssignmentService($this->transport);
+    }
+
+    /**
+     * Resources reads and replaces the tags on one external resource, and
+     * reads its audit log.
+     */
+    public function resources(): ResourceService
+    {
+        return $this->resources ??= new ResourceService($this->transport);
+    }
+
+    /**
+     * AuditLogs reads the tenant's append-only mutation history.
+     */
+    public function auditLogs(): AuditLogService
+    {
+        return $this->auditLogs ??= new AuditLogService($this->transport);
     }
 }

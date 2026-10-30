@@ -7,7 +7,17 @@ namespace Octoverse\Octonomy\Tests\Resource;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
+use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Model\Assignment;
+use Octoverse\Octonomy\Model\AuditLog;
+use Octoverse\Octonomy\Model\BulkAssignResult;
+use Octoverse\Octonomy\Model\BulkRemoveResult;
+use Octoverse\Octonomy\Model\ResourceTag;
+use Octoverse\Octonomy\Model\ResourceTagsReplaceResult;
 use Octoverse\Octonomy\Model\Tag;
+use Octoverse\Octonomy\Model\TagAlias;
+use Octoverse\Octonomy\Model\TagResolution;
+use Octoverse\Octonomy\Model\TagResource;
 use Octoverse\Octonomy\Model\Vocabulary;
 use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use Octoverse\Octonomy\Tests\SdkTestCase;
@@ -25,15 +35,42 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * The declared fields are the model's constructor parameters, read here by
  * reflection rather than restated, so a field added to a model is covered
  * without touching this test. Each field's key is its parameter name in
- * snake_case.
+ * snake_case. Every response model is listed in MODELS, so a model added
+ * without a row there is not covered: add it.
  */
 final class StrictHydrationRegressionTest extends SdkTestCase
 {
     /**
+     * Every response model, with the captured operation whose response sets
+     * every field the model declares, on both api_versions, and where one model
+     * sits in that body: the whole "data" object (one), or the first row of a
+     * list (many).
+     */
+    private const MODELS = [
+        Tag::class => ['tags/get', 'one'],
+        Vocabulary::class => ['vocabularies/get', 'one'],
+        TagAlias::class => ['tag-aliases/get', 'one'],
+        TagResolution::class => ['tag-resolution/alias', 'one'],
+        Assignment::class => ['tag-assignments/create', 'one'],
+        BulkAssignResult::class => ['tag-assignments/bulk-assign', 'one'],
+        BulkRemoveResult::class => ['tag-assignments/bulk-remove', 'one'],
+        ResourceTagsReplaceResult::class => ['resources/replace', 'one'],
+        ResourceTag::class => ['resources/tags', 'many'],
+        TagResource::class => ['tags/resources', 'many'],
+        AuditLog::class => ['audit-logs/list', 'many'],
+    ];
+
+    /**
      * The fields the server omits, rather than sends as null, when they have no
      * value: Tag's two named exceptions to key presence (see Tag::fromArray).
      */
-    private const OMITTED_WHEN_NULL = [Tag::class => ['parent_id', 'vocabulary_id'], Vocabulary::class => []];
+    private const OMITTED_WHEN_NULL = [Tag::class => ['parent_id', 'vocabulary_id']];
+
+    /**
+     * The array fields that hold a JSON list of nested models, rather than a
+     * JSON object of caller-written members, as every other array field does.
+     */
+    private const LIST_FIELDS = [BulkAssignResult::class => ['assignments'], ResourceTagsReplaceResult::class => ['tags']];
 
     /** Declared for api_version v2 only. */
     private const NAMESPACE_PAIR = ['namespace_type', 'namespace_id'];
@@ -112,48 +149,53 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * cover instead: Tag's two fields omitted when null, and the namespace pair
      * on v1, which v1 does not declare.
      *
-     * @param class-string<Tag|Vocabulary> $model
+     * @param class-string $model
      */
     #[DataProvider('requiredFields')]
     public function testEveryRequiredFieldMustBePresent(string $model, string $apiVersion, string $key): void
     {
-        $fixture = self::getFixture($model, $apiVersion);
-        self::assertArrayHasKey($key, self::capturedData($fixture));
-        $transport = $this->transportWith([self::syntheticNegativeFrom($fixture, SyntheticNegative::MISSING_FIELD, static function (array $body) use ($key): array {
-            unset($body['data'][$key]);
+        $fixture = self::fixture($model, $apiVersion);
+        $row = self::row($model, self::capturedData($fixture));
+        self::assertArrayHasKey($key, $row);
+        $transport = $this->transportWith([self::syntheticNegativeFrom($fixture, SyntheticNegative::MISSING_FIELD, static fn(array $body): array => self::editRow($model, $body, static function (array $row) use ($key): array {
+            unset($row[$key]);
 
-            return $body;
-        })], $apiVersion);
+            return $row;
+        }))], $apiVersion);
 
         $this->expectException(MalformedResponseException::class);
-        $this->expectExceptionMessage("(api_version {$apiVersion}): field \"data.{$key}\" is missing");
+        // A model with one field (BulkRemoveResult) is left empty, which the
+        // envelope check refuses before the model reads it.
+        $this->expectExceptionMessage(count($row) === 1
+            ? sprintf('(api_version %s): expected a non-empty JSON object under "data"', $apiVersion)
+            : sprintf('(api_version %s): field "%s.%s" is missing', $apiVersion, self::placeOf($model), $key));
 
-        $transport->one('GET', 'any', self::hydrator($model));
+        self::read($transport, $model);
     }
 
     /**
      * Every declared field, one at a time, set to a value of another JSON type
      * than its declared one, null included where the field is not nullable.
      *
-     * @param class-string<Tag|Vocabulary> $model
+     * @param class-string $model
      */
     #[DataProvider('mistypedFields')]
     public function testEveryDeclaredFieldRejectsAnotherType(string $model, string $key, mixed $value, string $expected): void
     {
         $transport = $this->transportWith([self::syntheticNegativeFrom(
-            self::getFixture($model, ApiVersion::V2),
+            self::fixture($model, ApiVersion::V2),
             SyntheticNegative::WRONG_TYPE,
-            static function (array $body) use ($key, $value): array {
-                $body['data'][$key] = $value;
+            static fn(array $body): array => self::editRow($model, $body, static function (array $row) use ($key, $value): array {
+                $row[$key] = $value;
 
-                return $body;
-            },
+                return $row;
+            }),
         )], ApiVersion::V2);
 
         $this->expectException(MalformedResponseException::class);
-        $this->expectExceptionMessage("field \"data.{$key}\" must be {$expected}");
+        $this->expectExceptionMessage(sprintf('field "%s.%s" must be %s', self::placeOf($model), $key, $expected));
 
-        $transport->one('GET', 'any', self::hydrator($model));
+        self::read($transport, $model);
     }
 
     /**
@@ -245,40 +287,44 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * v2 always sends the pair, null for a global row, so a v2 body without it
      * is drift. (testEveryRequiredFieldMustBePresent removes each half alone.)
      *
-     * @param class-string<Tag|Vocabulary> $model
+     * @param class-string $model
      */
     #[DataProvider('models')]
     public function testAV2ResponseMissingTheNamespacePairRaises(string $model): void
     {
         $transport = $this->transportWith([self::syntheticNegativeFrom(
-            self::getFixture($model, ApiVersion::V2),
+            self::fixture($model, ApiVersion::V2),
             SyntheticNegative::MISSING_FIELD,
-            static function (array $body): array {
-                unset($body['data']['namespace_type'], $body['data']['namespace_id']);
+            static fn(array $body): array => self::editRow($model, $body, static function (array $row): array {
+                unset($row['namespace_type'], $row['namespace_id']);
 
-                return $body;
-            },
+                return $row;
+            }),
         )], ApiVersion::V2);
 
         $this->expectException(MalformedResponseException::class);
-        $this->expectExceptionMessage('octonomy: malformed response from GET /api/v2/any (api_version v2): field "data.namespace_type" is missing');
+        $this->expectExceptionMessage(sprintf(
+            'octonomy: malformed response from GET /api/v2/any (api_version v2): field "%s.namespace_type" is missing',
+            self::placeOf($model),
+        ));
 
-        $transport->one('GET', 'any', self::hydrator($model));
+        self::read($transport, $model);
     }
 
     /**
      * A v1 response without the pair is correct, and the model reads null.
      *
-     * @param class-string<Tag|Vocabulary> $model
+     * @param class-string $model
      */
     #[DataProvider('models')]
     public function testAV1ResponseWithoutTheNamespacePairHydrates(string $model): void
     {
-        $fixture = self::getFixture($model, ApiVersion::V1);
-        self::assertSame([], array_intersect(self::NAMESPACE_PAIR, array_keys(self::capturedData($fixture))));
+        $fixture = self::fixture($model, ApiVersion::V1);
+        self::assertSame([], array_intersect(self::NAMESPACE_PAIR, array_keys(self::row($model, self::capturedData($fixture)))));
 
-        $hydrated = $this->transportWith([self::captured($fixture)], ApiVersion::V1)->one('GET', 'any', self::hydrator($model));
+        $hydrated = self::read($this->transportWith([self::captured($fixture)], ApiVersion::V1), $model);
 
+        self::assertTrue(property_exists($hydrated, 'namespaceType') && property_exists($hydrated, 'namespaceId'));
         self::assertNull($hydrated->namespaceType);
         self::assertNull($hydrated->namespaceId);
     }
@@ -373,27 +419,33 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     }
 
     /**
-     * @return iterable<string, array{class-string<Tag|Vocabulary>}>
+     * Every model that declares the namespace pair.
+     *
+     * @return iterable<string, array{class-string}>
      */
     public static function models(): iterable
     {
-        yield 'Tag' => [Tag::class];
-        yield 'Vocabulary' => [Vocabulary::class];
+        foreach (array_keys(self::MODELS) as $model) {
+            $keys = array_map(static fn(\ReflectionParameter $p): string => self::key($p->getName()), self::parameters($model));
+            if (array_intersect(self::NAMESPACE_PAIR, $keys) !== []) {
+                yield (new \ReflectionClass($model))->getShortName() => [$model];
+            }
+        }
     }
 
     /**
      * Every declared field of each model on each api_version, less the ones a
      * conforming server omits.
      *
-     * @return iterable<string, array{class-string<Tag|Vocabulary>, string, string}>
+     * @return iterable<string, array{class-string, string, string}>
      */
     public static function requiredFields(): iterable
     {
-        foreach ([Tag::class, Vocabulary::class] as $model) {
+        foreach (array_keys(self::MODELS) as $model) {
             foreach ([ApiVersion::V1, ApiVersion::V2] as $apiVersion) {
                 foreach (self::parameters($model) as $parameter) {
                     $key = self::key($parameter->getName());
-                    if (in_array($key, self::OMITTED_WHEN_NULL[$model], true)
+                    if (in_array($key, self::OMITTED_WHEN_NULL[$model] ?? [], true)
                         || ($apiVersion === ApiVersion::V1 && in_array($key, self::NAMESPACE_PAIR, true))) {
                         continue;
                     }
@@ -406,23 +458,28 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     /**
      * For each declared field, a value of another JSON type than the one its
      * parameter declares: one per wrong type, plus null for a field that is not
-     * nullable.
+     * nullable. A nested model is an object, and a list of them a list.
      *
-     * @return iterable<string, array{class-string<Tag|Vocabulary>, string, mixed, string}>
+     * @return iterable<string, array{class-string, string, mixed, string}>
      */
     public static function mistypedFields(): iterable
     {
-        foreach ([Tag::class, Vocabulary::class] as $model) {
+        foreach (array_keys(self::MODELS) as $model) {
             foreach (self::parameters($model) as $parameter) {
                 $type = $parameter->getType();
                 self::assertInstanceOf(\ReflectionNamedType::class, $type);
                 $declared = $type->getName();
+                if ($declared === 'array' && in_array(self::key($parameter->getName()), self::LIST_FIELDS[$model] ?? [], true)) {
+                    $declared = 'list';
+                }
                 [$expected, $wrong] = match ($declared) {
                     'string' => ['a string', [5, true, ['x' => 1]]],
                     'int' => ['an integer', ['5', 5.0, true]],
                     'bool' => ['a boolean', ['true', 1, 0]],
                     'array' => ['an object', [['not-an-object'], [], '{}', 1]],
+                    'list' => ['a list', [['x' => 1], 'x', 1, true]],
                     \DateTimeImmutable::class => ['an RFC 3339 timestamp', [1767225600, true]],
+                    Tag::class, TagAlias::class => ['an object', [['not-an-object'], [], 'x', 1, true]],
                     default => throw new \LogicException("no wrong values for {$declared}: add them here"),
                 };
                 if ($type->allowsNull()) {
@@ -471,20 +528,86 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     }
 
     /**
-     * @param class-string<Tag|Vocabulary> $model
-     *
-     * @return \Closure(array<string, mixed>, string): (Tag|Vocabulary)
+     * The captured response of $model's operation on $apiVersion (MODELS).
      */
-    private static function hydrator(string $model): \Closure
+    private static function fixture(string $model, string $apiVersion): string
     {
-        return $model === Tag::class ? Tag::fromArray(...) : Vocabulary::fromArray(...);
+        return $apiVersion . '/' . self::MODELS[$model][0];
     }
 
     /**
-     * A captured get of $model from $apiVersion, which sets every field.
+     * Where one $model sits in its fixture's body, as a field path starts.
      */
-    private static function getFixture(string $model, string $apiVersion): string
+    private static function placeOf(string $model): string
     {
-        return $apiVersion . ($model === Tag::class ? '/tags/get' : '/vocabularies/get');
+        return self::MODELS[$model][1] === 'one' ? 'data' : 'data[0]';
+    }
+
+    /**
+     * The one $model in a fixture's "data" member, decoded to arrays.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function row(string $model, array $data): array
+    {
+        $row = self::MODELS[$model][1] === 'one' ? $data : $data[0];
+        self::assertIsArray($row);
+
+        return $row;
+    }
+
+    /**
+     * $body with the one $model in it changed by $edit.
+     *
+     * @param array<array-key, mixed>                                     $body
+     * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $edit
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function editRow(string $model, array $body, \Closure $edit): array
+    {
+        if (self::MODELS[$model][1] === 'one') {
+            $body['data'] = $edit($body['data']);
+        } else {
+            $body['data'][0] = $edit($body['data'][0]);
+        }
+
+        return $body;
+    }
+
+    /**
+     * Read the one $model from the response $transport replays, through the
+     * Transport method its shape calls for.
+     *
+     * @param class-string $model
+     */
+    private static function read(Transport $transport, string $model): object
+    {
+        $hydrate = match ($model) {
+            Tag::class => Tag::fromArray(...),
+            Vocabulary::class => Vocabulary::fromArray(...),
+            TagAlias::class => TagAlias::fromArray(...),
+            TagResolution::class => TagResolution::fromArray(...),
+            Assignment::class => Assignment::fromArray(...),
+            BulkAssignResult::class => BulkAssignResult::fromArray(...),
+            BulkRemoveResult::class => BulkRemoveResult::fromArray(...),
+            ResourceTagsReplaceResult::class => ResourceTagsReplaceResult::fromArray(...),
+            ResourceTag::class => ResourceTag::fromArray(...),
+            TagResource::class => TagResource::fromArray(...),
+            AuditLog::class => AuditLog::fromArray(...),
+            default => throw new \LogicException("no hydrator for {$model}: add it here and to MODELS"),
+        };
+        if (self::MODELS[$model][1] === 'one') {
+            $one = $transport->one('GET', 'any', $hydrate);
+            self::assertIsObject($one);
+
+            return $one;
+        }
+        $first = $transport->many('GET', 'any', $hydrate)->data[0];
+        self::assertIsObject($first);
+
+        return $first;
     }
 }
