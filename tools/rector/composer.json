@@ -5,6 +5,7 @@
     "license": "Apache-2.0",
     "require": {
         "php": ">=8.2",
+        "phpstan/phpstan": "2.3.3",
         "rector/rector": "2.7.0"
     },
     "autoload": {
