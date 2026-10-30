@@ -18,7 +18,8 @@ updates:
 
   # The Rector that downgrades main to PHP 7.4 (tools/rector). It is pinned to one exact version
   # because its output ships on the 7.4 line, so every bump arrives as its own PR and is proven by
-  # CI's php74 job before it lands.
+  # CI's php74 job before it lands. The PHPStan it runs on is pinned exactly beside it, since
+  # Rector's own range would float: PHPStan 2.3.4 breaks Rector 2.7.0. Bump the two together.
   - package-ecosystem: "composer"
     directory: "/tools/rector"
     schedule:
