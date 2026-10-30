@@ -86,8 +86,10 @@ the SDK refuses both up front.
 
 ## Scopes
 
-Service tokens carry scopes enforced by the server: `tags:read`, `tags:write`, `audit:read`. Read
-methods need `tags:read`; mutating methods need `tags:write`.
+Service tokens carry scopes enforced by the server: `tags:read`, `tags:write`, `audit:read`. The
+audit-log lists (`auditLogs()->list()`, `tags()->listAuditLogs()`, `resources()->listAuditLogs()`)
+need `audit:read`; every other read method needs `tags:read`, and mutating methods need
+`tags:write`.
 
 ## Implemented
 

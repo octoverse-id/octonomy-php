@@ -365,7 +365,7 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['slug'], $alias->slug, $name);
             // Sent back unchanged, metadata is the JSON the server sent (#48).
             self::assertSame(self::json($members['metadata']), self::json(
-                $alias->metadata === null ? null : (new TagAliasUpdate(metadata: $alias->metadata))->toArray()['metadata'],
+                (new TagAliasUpdate(metadata: $alias->metadata))->toArray()['metadata'],
             ), $name);
             self::assertSame($row['is_active'], $alias->isActive, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $alias->createdAt, $name);
@@ -455,8 +455,8 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['actor_id'], $log->actorId, $name);
             self::assertSame($row['request_id'], $log->requestId, $name);
             self::assertSame($row['operation_id'], $log->operationId, $name);
-            self::assertSame(self::json($members['changes']), self::json($log->changes === null ? null : (object) $log->changes), $name);
-            self::assertSame(self::json($members['metadata']), self::json($log->metadata === null ? null : (object) $log->metadata), $name);
+            self::assertSame(self::json($members['changes']), self::json((object) $log->changes), $name);
+            self::assertSame(self::json($members['metadata']), self::json((object) $log->metadata), $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $log->createdAt, $name);
         }
     }

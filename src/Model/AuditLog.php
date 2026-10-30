@@ -25,8 +25,8 @@ use Octoverse\Octonomy\Internal\Json;
 final class AuditLog
 {
     /**
-     * @param array<array-key, mixed>|null $changes
-     * @param array<array-key, mixed>|null $metadata
+     * @param array<array-key, mixed> $changes  never null: the server stores {} for none
+     * @param array<array-key, mixed> $metadata never null: the server stores {} for none
      */
     public function __construct(
         public readonly string $id,
@@ -43,8 +43,8 @@ final class AuditLog
         public readonly ?string $actorId,
         public readonly ?string $requestId,
         public readonly string $operationId,
-        public readonly ?array $changes,
-        public readonly ?array $metadata,
+        public readonly array $changes,
+        public readonly array $metadata,
         public readonly \DateTimeImmutable $createdAt,
     ) {}
 
@@ -78,8 +78,8 @@ final class AuditLog
             actorId: Json::nullableString($data, 'actor_id'),
             requestId: Json::nullableString($data, 'request_id'),
             operationId: Json::string($data, 'operation_id'),
-            changes: Json::nullableObject($data, 'changes'),
-            metadata: Json::nullableObject($data, 'metadata'),
+            changes: Json::object($data, 'changes'),
+            metadata: Json::object($data, 'metadata'),
             createdAt: Json::dateTime($data, 'created_at'),
         ));
     }

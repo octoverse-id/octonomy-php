@@ -303,7 +303,6 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
         self::assertSame(self::ids($byFilter), self::ids($client->tags()->listAuditLogs($red->id)->data));
 
         $created = array_values(array_filter($byFilter, static fn(AuditLog $l): bool => $l->action === 'tag.created'))[0];
-        self::assertNotNull($created->changes);
         self::assertInstanceOf(\stdClass::class, $created->changes['after']);
         self::assertSame('red', $created->changes['after']->slug);
 

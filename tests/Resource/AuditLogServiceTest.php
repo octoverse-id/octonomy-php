@@ -113,7 +113,6 @@ final class AuditLogServiceTest extends SdkTestCase
         self::assertEquals(new \DateTimeImmutable($row['created_at']), $log->createdAt);
 
         $changes = $log->changes;
-        self::assertNotNull($changes);
         self::assertSame(['after'], array_keys($changes));
         self::assertInstanceOf(\stdClass::class, $changes['after']);
         self::assertSame('discontinued', $changes['after']->slug);

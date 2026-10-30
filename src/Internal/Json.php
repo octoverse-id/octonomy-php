@@ -219,6 +219,29 @@ final class Json
     }
 
     /**
+     * nullableObject() for a JSON object field the server never sends as null,
+     * such as an alias's metadata or an audit entry's changes: the column is a
+     * non-null JSONField defaulting to {} (octonomy/tags/models.py,
+     * octonomy/audit/models.py upstream), so a null is drift. The top level
+     * becomes an array and everything below it keeps its JSON shape, as there.
+     *
+     * @param array<string, mixed> $d
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws MalformedResponseException when the key is absent or not an object
+     */
+    public static function object(array $d, string $key): array
+    {
+        $v = self::present($d, $key);
+        if (!$v instanceof \stdClass) {
+            throw self::wrongType($key, 'an object', $v);
+        }
+
+        return get_object_vars($v);
+    }
+
+    /**
      * Read a resource nested in another, such as a resolution's tag, by running
      * $hydrate over the nested object's members. A field the nested model
      * rejects is reported at its path through this field ("tag.slug").

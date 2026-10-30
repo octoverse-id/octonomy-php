@@ -26,7 +26,7 @@ use Octoverse\Octonomy\Internal\Json;
 final class TagAlias
 {
     /**
-     * @param array<array-key, mixed>|null $metadata
+     * @param array<array-key, mixed> $metadata never null: the server stores {} for none
      */
     public function __construct(
         public readonly string $id,
@@ -37,7 +37,7 @@ final class TagAlias
         public readonly string $tagId,
         public readonly string $name,
         public readonly string $slug,
-        public readonly ?array $metadata,
+        public readonly array $metadata,
         public readonly bool $isActive,
         public readonly \DateTimeImmutable $createdAt,
         public readonly \DateTimeImmutable $updatedAt,
@@ -67,7 +67,7 @@ final class TagAlias
             tagId: Json::string($data, 'tag_id'),
             name: Json::string($data, 'name'),
             slug: Json::string($data, 'slug'),
-            metadata: Json::nullableObject($data, 'metadata'),
+            metadata: Json::object($data, 'metadata'),
             isActive: Json::bool($data, 'is_active'),
             createdAt: Json::dateTime($data, 'created_at'),
             updatedAt: Json::dateTime($data, 'updated_at'),
