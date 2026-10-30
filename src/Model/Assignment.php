@@ -17,6 +17,10 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class Assignment
 {
+    /**
+     * An assignment as fromArray() reads it from a response: each argument is
+     * the field of the same name, in snake_case on the wire.
+     */
     public function __construct(
         public readonly string $id,
         public readonly string $tenantId,

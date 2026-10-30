@@ -123,10 +123,12 @@ need `audit:read`; every other read method needs `tags:read`, and mutating metho
 | `resources()->listAuditLogs()` | GET | `/resources/{type}/{id}/audit-logs` |
 | `auditLogs()->list()` | GET | `/audit-logs` |
 
-Every id and resource type in a path is percent-encoded as one segment, so `a/b` is sent as `a%2Fb`. An
-empty segment, `.` or `..` throws `InvalidArgumentException` before anything is sent: an HTTP client or
-a proxy removes a dot segment, which would send the request to another endpoint. A resource whose type
-or id is `.` or `..` can still be assigned tags, through the body, but not read by its path.
+Every id and resource type in a path is percent-encoded as one segment, so `a/b` is sent as `a%2Fb`. A
+type or id that is exactly `.` or `..`, which the server accepts, is sent as `%2E` or `%2E%2E`: left as
+it is, libcurl would remove it as a dot segment and send the request to another endpoint. A proxy in
+front of the server that decodes and normalizes paths before forwarding them can still remove it. An
+empty id or type throws `InvalidArgumentException` before anything is sent, since the server refuses a
+blank one.
 
 ### List parameters
 

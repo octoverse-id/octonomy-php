@@ -21,7 +21,7 @@ changing the types and paths.
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`, `TagAlias`, `TagResolution`, `Assignment`, `ResourceTag`, `TagResource`, `AuditLog`, and the bulk and replace results) and input DTOs (`*Create`, `*Update`, `*ListParams`, `AssignmentRemove`, `BulkAssign`, `BulkRemove`, `ResourceTagsReplace`). |
 | `Resource\*Service` | One per resource group: methods delegating to `Transport`. |
 | `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion, and nested models (`resource()`, `resources()`) reported at their path; `@internal`. |
-| `Internal\Path` | `Path::of(...$segments)`, every request path below the version prefix: each segment percent-encoded on its own, and an empty or dot segment refused before sending; `@internal`. |
+| `Internal\Path` | `Path::of(...$segments)`, every request path below the version prefix: each segment percent-encoded on its own, a `.` or `..` segment as `%2E`/`%2E%2E` so no HTTP client removes it, and an empty segment refused before sending; `@internal`. |
 | `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
 | `Internal\RequestId` | The check of a caller's `X-Request-ID`, in `RequestOptions` and again in `Transport`: non-blank printable ASCII, no space at either end, so the server records the id the caller logged; `@internal`. |
 | `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), and `scrub()`, which removes the SDK frames' arguments from a trace; `@internal`. |

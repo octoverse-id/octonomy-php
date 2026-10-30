@@ -18,6 +18,9 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class BulkRemoveResult
 {
+    /**
+     * A bulk removal's result as fromArray() reads it from a response.
+     */
     public function __construct(
         public readonly int $removed,
     ) {}

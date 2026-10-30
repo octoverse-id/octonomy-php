@@ -16,6 +16,11 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class ResourceTag
 {
+    /**
+     * A tag on a resource as fromArray() reads it from a response: each
+     * argument is the field of the same name, in snake_case on the wire, and
+     * $tag the nested tag.
+     */
     public function __construct(
         public readonly string $assignmentId,
         public readonly ?string $namespaceType,

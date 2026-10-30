@@ -185,25 +185,16 @@ final class ErrorMessage
     }
 
     /**
-     * The message for a path segment no URL can carry (Path::of()), so nothing
-     * was sent. The segment is quoted: it is empty, "." or "..", none of which
-     * is on Redaction's list.
+     * The message for an empty path segment (Path::of()), which no URL can
+     * carry, so nothing was sent. The server refuses a blank id or resource
+     * type everywhere, so the SDK knows the request could not have named a
+     * resource.
      */
-    public static function unaddressable(string $segment): string
+    public static function emptyPathSegment(): string
     {
-        if ($segment === '') {
-            return 'octonomy: an id or another path segment is empty, so the request would name no single'
-                . ' resource. Nothing was sent. Fix: pass the id of the resource you mean.';
-        }
-
-        return sprintf(
-            'octonomy: an id or another path segment is "%s", which a URL path cannot carry: an HTTP client or a'
-            . ' proxy removes a dot segment (RFC 3986, section 5.2.4), which would send the request to another'
-            . ' endpoint. Nothing was sent. Fix: pass the id of the resource you mean. A resource whose type or id'
-            . ' is "." or ".." can still be assigned tags through assignments(), which send it in the body, but'
-            . ' no endpoint that names it in the path can reach it.',
-            $segment,
-        );
+        return 'octonomy: an id or another path segment is empty, so the request would name no single resource,'
+            . ' and the server refuses a blank id or resource type. Nothing was sent. Fix: pass the id of the'
+            . ' resource you mean.';
     }
 
     /**

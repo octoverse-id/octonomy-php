@@ -40,6 +40,11 @@ final class TagResolution
      */
     public const SCOPE_MERCHANT = 'merchant';
 
+    /**
+     * A resolution as fromArray() reads it from a response. $matchedType is
+     * MATCHED_TAG or MATCHED_ALIAS, and $matchedAlias is null unless it is
+     * MATCHED_ALIAS.
+     */
     public function __construct(
         public readonly string $matchedType,
         public readonly ?TagAlias $matchedAlias,

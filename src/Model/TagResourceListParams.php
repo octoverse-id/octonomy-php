@@ -19,6 +19,10 @@ namespace Octoverse\Octonomy\Model;
  */
 final class TagResourceListParams
 {
+    /**
+     * Every argument is optional and sets the filter of the same name; null
+     * leaves it out of the query string.
+     */
     public function __construct(
         public readonly ?string $applicationId = null,
         public readonly ?string $resourceType = null,

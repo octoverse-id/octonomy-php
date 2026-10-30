@@ -263,6 +263,25 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
     }
 
     /**
+     * A resource whose id is "." or ".." is valid on the server, and the SDK
+     * reaches it: sent as a literal dot segment, libcurl would remove it and
+     * the server would answer resources/tags with a 404. The corpus has no such
+     * resource, so each list is empty.
+     */
+    public function testADotResourceIdIsReachedAsItself(): void
+    {
+        $client = $this->harnessClient(ApiVersion::V2);
+        $app = self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID');
+
+        foreach (['.', '..'] as $id) {
+            $page = $client->resources()->listTags('product', $id, $app);
+            self::assertSame([], $page->data, "product/{$id}");
+            self::assertSame(0, $page->pagination->count, "product/{$id}");
+            self::assertSame([], $client->resources()->listAuditLogs('product', $id)->data, "product/{$id}");
+        }
+    }
+
+    /**
      * Red is on sku-001 directly and on sku-002 through the scarlet alias.
      */
     public function testTheResourcesOfATag(): void

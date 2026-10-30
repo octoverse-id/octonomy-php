@@ -12,6 +12,10 @@ namespace Octoverse\Octonomy\Model;
  */
 final class AssignmentRemove
 {
+    /**
+     * Name the assignment to remove: the tag $tagId on the resource
+     * $resourceType/$resourceId within $applicationId.
+     */
     public function __construct(
         public readonly string $applicationId,
         public readonly string $resourceType,

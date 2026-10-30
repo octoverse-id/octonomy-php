@@ -28,6 +28,10 @@ use Octoverse\Octonomy\RequestOptions;
  */
 final class AssignmentService
 {
+    /**
+     * Built by Client::assignments(), over the client's one Transport; reach
+     * the service there rather than constructing it.
+     */
     public function __construct(private readonly Transport $transport) {}
 
     /**

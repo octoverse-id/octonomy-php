@@ -12,7 +12,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * Path::of() builds every path a service sends below the api_version prefix
  * (#23): each segment percent-encoded, so a value cannot add a segment of its
- * own, and a segment no URL can carry refused before anything is sent.
+ * own, a dot segment encoded so no HTTP client removes it, and an empty
+ * segment refused before anything is sent.
  */
 final class PathTest extends SdkTestCase
 {
@@ -29,34 +30,44 @@ final class PathTest extends SdkTestCase
         self::assertSame('resources/a-b_c.d~e/x', Path::of('resources', 'a-b_c.d~e', 'x'));
         // Dots inside a segment are not a dot segment.
         self::assertSame('resources/product/.../tags', Path::of('resources', 'product', '...', 'tags'));
+        self::assertSame('resources/product/.a./tags', Path::of('resources', 'product', '.a.', 'tags'));
     }
 
     /**
-     * Only an empty segment and a dot segment are refused: no encoding carries
-     * either.
+     * "." and ".." are valid resource types and ids on the server, so they are
+     * sent, encoded whole: libcurl would remove them as dot segments, sending
+     * resources/product/../tags to resources/tags.
      */
-    #[DataProvider('unaddressable')]
-    public function testASegmentNoUrlCanCarryIsRefused(string $segment, string $message): void
+    public function testADotSegmentIsEncodedWhole(): void
+    {
+        self::assertSame('resources/product/%2E/tags', Path::of('resources', 'product', '.', 'tags'));
+        self::assertSame('resources/product/%2E%2E/tags', Path::of('resources', 'product', '..', 'tags'));
+        self::assertSame('resources/%2E%2E/%2E/audit-logs', Path::of('resources', '..', '.', 'audit-logs'));
+    }
+
+    /**
+     * A resource whose id is ".." is addressed as itself, through the SDK's own
+     * request.
+     */
+    public function testADotSegmentReachesTheClientAsOneSegment(): void
+    {
+        $client = $this->clientWith([self::captured('v2/resources/tags')]);
+
+        $client->resources()->listTags('product', '..', 'harness-app');
+
+        self::assertSame('/api/v2/resources/product/%2E%2E/tags', $this->lastRequest()->getUri()->getPath());
+    }
+
+    public function testAnEmptySegmentIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage($message);
+        $this->expectExceptionMessage(
+            'octonomy: an id or another path segment is empty, so the request would name no single resource,'
+            . ' and the server refuses a blank id or resource type. Nothing was sent. Fix: pass the id of the'
+            . ' resource you mean.',
+        );
 
-        Path::of('resources', 'product', $segment, 'tags');
-    }
-
-    /**
-     * @return iterable<string, array{string, string}>
-     */
-    public static function unaddressable(): iterable
-    {
-        yield 'empty' => ['', 'octonomy: an id or another path segment is empty, so the request would name no single'
-            . ' resource. Nothing was sent. Fix: pass the id of the resource you mean.'];
-        $dots = ' which a URL path cannot carry: an HTTP client or a proxy removes a dot segment (RFC 3986, section'
-            . ' 5.2.4), which would send the request to another endpoint. Nothing was sent. Fix: pass the id of the'
-            . ' resource you mean. A resource whose type or id is "." or ".." can still be assigned tags through'
-            . ' assignments(), which send it in the body, but no endpoint that names it in the path can reach it.';
-        yield 'one dot' => ['.', 'octonomy: an id or another path segment is ".",' . $dots];
-        yield 'two dots' => ['..', 'octonomy: an id or another path segment is "..",' . $dots];
+        Path::of('resources', 'product', '', 'tags');
     }
 
     /**
@@ -74,7 +85,7 @@ final class PathTest extends SdkTestCase
             $call($client);
             self::fail('expected an \InvalidArgumentException');
         } catch (\InvalidArgumentException $e) {
-            self::assertStringStartsWith('octonomy: an id or another path segment is ', $e->getMessage());
+            self::assertStringStartsWith('octonomy: an id or another path segment is empty', $e->getMessage());
             $this->assertNothingSent();
             $frames = [];
             foreach ($e->getTrace() as $f) {
@@ -99,15 +110,15 @@ final class PathTest extends SdkTestCase
             },
             'Octoverse\\Octonomy\\Resource\\TagService::update',
         ];
-        yield 'a dot vocabulary id' => [
+        yield 'an empty vocabulary id' => [
             static function (Client $c): void {
-                $c->vocabularies()->get('.');
+                $c->vocabularies()->get('');
             },
             'Octoverse\\Octonomy\\Resource\\VocabularyService::get',
         ];
-        yield 'a dot-dot resource id' => [
+        yield 'an empty resource id' => [
             static function (Client $c): void {
-                $c->resources()->listTags('product', '..', 'cms');
+                $c->resources()->listTags('product', '', 'cms');
             },
             'Octoverse\\Octonomy\\Resource\\ResourceService::listTags',
         ];

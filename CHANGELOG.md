@@ -134,10 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     field it breaks is reported at its path, such as `data.assignments[2].tag_id`.
   - A 404 on `/tag-aliases/{id}` names the tag alias it asked for.
 - `Internal\Path::of()` builds every request path (#23): each id percent-encoded as one segment, in
-  place of the six inline `rawurlencode()` calls. An empty id, `.` or `..` now throws
-  `InvalidArgumentException` before sending: the empty one used to send a path that names no
-  resource, and a dot segment is removed by the HTTP client or a proxy, which sent the request to
-  another endpoint.
+  place of the six inline `rawurlencode()` calls. An id of `.` or `..` is sent as `%2E` or `%2E%2E`,
+  where `rawurlencode()` left it for libcurl to remove as a dot segment, which sent the request to
+  another endpoint. An empty id now throws `InvalidArgumentException` before sending, where it used to
+  send a path that names no resource.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

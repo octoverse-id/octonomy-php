@@ -28,6 +28,10 @@ use Octoverse\Octonomy\ResultList;
  */
 final class ResourceService
 {
+    /**
+     * Built by Client::resources(), over the client's one Transport; reach the
+     * service there rather than constructing it.
+     */
     public function __construct(private readonly Transport $transport) {}
 
     /**
