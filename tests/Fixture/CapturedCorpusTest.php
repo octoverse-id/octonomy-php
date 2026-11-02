@@ -23,7 +23,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * CapturedCorpusTest holds tests/fixtures/captured to what it claims to be: the
  * unedited output of scripts/capture-fixtures.php against the server the harness
  * pins, for both api_versions. It also replays every fixture, v1 and v2, through
- * the transport and the models, so no captured shape sits unread.
+ * the transport and the models, so no captured shape sits unread. The health
+ * probes' fixtures, which call no api_version, are inventoried here and replayed
+ * by HealthTest.
  */
 final class CapturedCorpusTest extends SdkTestCase
 {
@@ -129,6 +131,25 @@ final class CapturedCorpusTest extends SdkTestCase
                 self::assertSame($status, CapturedFixture::load($name)->status, "{$name} was not captured from the call its name says");
             }
         }
+    }
+
+    /**
+     * The probes (#24): each answer the SDK reads, the not-ready 503 included,
+     * which the capture records with the harness database stopped.
+     */
+    public function testHealthCorpusHoldsEveryProbeAnswer(): void
+    {
+        $statuses = [];
+        foreach (CapturedFixture::names('health') as $name) {
+            $statuses[$name] = CapturedFixture::load($name)->status;
+        }
+        ksort($statuses);
+
+        self::assertSame(
+            ['health/live' => 200, 'health/ready' => 200, 'health/ready-unavailable' => 503],
+            $statuses,
+            'the health corpus does not hold exactly the probe answers, each with the status its name says',
+        );
     }
 
     public function testManifestNamesTheServerTheHarnessPins(): void
@@ -268,7 +289,7 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public static function everyFixture(): iterable
     {
-        foreach (CapturedFixture::names() as $name) {
+        foreach (self::apiNames() as $name) {
             yield $name => [$name];
         }
     }
@@ -480,6 +501,17 @@ final class CapturedCorpusTest extends SdkTestCase
     }
 
     /**
+     * Every fixture captured from /api, v1 and v2: all but the health probes,
+     * whose bare bodies Transport does not read.
+     *
+     * @return list<string>
+     */
+    private static function apiNames(): array
+    {
+        return [...CapturedFixture::names('v1'), ...CapturedFixture::names('v2')];
+    }
+
+    /**
      * The api_version a fixture was captured from, which leads its name.
      */
     private static function apiVersion(string $name): string
@@ -510,7 +542,7 @@ final class CapturedCorpusTest extends SdkTestCase
     private static function modelRows(string $label, \Closure $extract): array
     {
         $rows = [];
-        foreach (CapturedFixture::names() as $name) {
+        foreach (self::apiNames() as $name) {
             $captured = CapturedFixture::load($name);
             if ($captured->status >= 300 || $captured->body === '') {
                 continue;

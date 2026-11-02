@@ -101,7 +101,8 @@ final class MalformedResponseException extends OctonomyException
      * The same fault, placed in the response it came from. A model reports a
      * field by its key alone; Transport, which knows the request and where in
      * the body the model's object sat ($at, such as "data" or "data[2]"),
-     * calls this to name both.
+     * calls this to name both. $at is null when the object is the body itself,
+     * as a health probe's is, so the field keeps its own name.
      *
      * A value the message quotes from the body is redacted here, in this
      * report and in the ones it chains, since a server can echo the request
@@ -109,13 +110,13 @@ final class MalformedResponseException extends OctonomyException
      *
      * @internal
      */
-    public function locate(RequestContext $context, string $at, ?Redaction $redaction = null): self
+    public function locate(RequestContext $context, ?string $at, ?Redaction $redaction = null): self
     {
         $redaction ??= Redaction::none();
 
         return new self(
             $this->problem,
-            $this->field === null ? $at : "{$at}.{$this->field}",
+            $at === null || $this->field === null ? $this->field ?? $at : "{$at}.{$this->field}",
             $context,
             null,
             $this->redacted($redaction),

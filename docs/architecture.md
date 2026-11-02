@@ -9,17 +9,21 @@ changing the types and paths.
 
 | File / namespace | Responsibility |
 | ---------------- | -------------- |
-| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()`, `tags()`, `aliases()`, `assignments()`, `resources()`, `auditLogs()` and `apiVersion()`. |
+| `Client` | Entry point; `const VERSION`; validates config; exposes `vocabularies()`, `tags()`, `aliases()`, `assignments()`, `resources()`, `auditLogs()`, `health()` and `apiVersion()`. |
 | `Config` | Validated configuration (base URL, token, tenant, actor, a PSR-18 http client or the timeout of the Guzzle client the SDK builds, user agent, api_version, PSR-17 factories). |
+| `HealthClient`, `HealthConfig` | The health probes without credentials: `HealthConfig` holds `Config`'s connection settings alone (base URL, http client or timeout, user agent, request factory), and `HealthClient` exposes `health()` (#24). |
 | `Http\Transport` | `one()` / `many()` / `none()`: URL building under `/api/{version}`, auth/tenant/namespace/request-id headers, the v2-only guard, JSON, status → exception, the response-envelope check, and running the service's hydrator. No method returns a raw body. |
+| `Http\HealthTransport` | `probe()`: the health probes, which break `Transport`'s contract (outside `/api`, unauthenticated, a bare body, a 503 that is an answer), so they get a transport of their own; `@internal`. |
+| `Http\Sender` | What both transports share about sending: the Guzzle client the SDK builds, handing a request to a client (Guzzle's `send()` with its defaults cancelled, or PSR-18 `sendRequest()`), and the `TransportException` for a client's failure; `@internal`. |
 | `ApiVersion` | `V1` / `V2` string constants, checked by `Config` (no enum, for the PHP 7.4 line). The surface a client calls, and the field set a model hydrates. |
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
 | `RequestOptions` | Per-call headers: actor (`withActor`), namespace, and request id (`withRequestId`). What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`/`FeatureDisabled`/`UnsupportedApiVersion`/`AmbiguousResolution`), mapped by `ApiException::classFor()`; `ConfigurationException`; `TransportException`; `MalformedResponseException`. |
-| `RequestContext` | The api_version, method, path, query and namespace of one request, built by `Transport` before sending and carried by every exception the request ends in. No token, header or body. |
+| `RequestContext` | The api_version (null for a health probe), method, path, query and namespace of one request, built by the transport before sending and carried by every exception the request ends in. No token, header or body. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope. |
-| `Model\*` | Response DTOs (`Vocabulary`, `Tag`, `TagAlias`, `TagResolution`, `Assignment`, `ResourceTag`, `TagResource`, `AuditLog`, and the bulk and replace results) and input DTOs (`*Create`, `*Update`, `*ListParams`, `AssignmentRemove`, `BulkAssign`, `BulkRemove`, `ResourceTagsReplace`). |
-| `Resource\*Service` | One per resource group: methods delegating to `Transport`. |
+| `Model\*` | Response DTOs (`Vocabulary`, `Tag`, `TagAlias`, `TagResolution`, `Assignment`, `ResourceTag`, `TagResource`, `AuditLog`, the bulk and replace results, and `HealthStatus`) and input DTOs (`*Create`, `*Update`, `*ListParams`, `AssignmentRemove`, `BulkAssign`, `BulkRemove`, `ResourceTagsReplace`). |
+| `Resource\*Service` | One per resource group: methods delegating to `Transport`, or to `HealthTransport` for `HealthService`. |
+| `Internal\Options` | The checks and option readers `Config` and `HealthConfig` share, so both refuse a setting in the same words; `@internal`. |
 | `Internal\Json` | Strict readers for decoded JSON: present-or-raise, declared type or raise, no coercion, and nested models (`resource()`, `resources()`) reported at their path; `@internal`. |
 | `Internal\Path` | `Path::of(...$segments)`, every request path below the version prefix: each segment percent-encoded on its own, a `.` or `..` segment as `%2E`/`%2E%2E` so no HTTP client removes it, and an empty segment sent as it is, for the server to answer; `@internal`. |
 | `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
@@ -70,6 +74,13 @@ Caller ─▶ Service::method ─▶ Transport::one / many / none ─▶ PSR-18 
 
 Services never see a raw body. That is deliberate: the server wraps every single-resource response,
 and a service that hydrated the body directly would get a zero-valued model with no error (issue #6).
+
+The health probes take another path (#24). `HealthService` calls `HealthTransport::probe()`, which sends
+`GET base_url + /health/{live|ready}` with only `Accept` and `User-Agent`, through the same `Sender`.
+It reads a 2xx as strictly as `Transport` reads a resource, a JSON object with a string `status`, and
+reads the probe's own 503 `{"status": ...}` as a `HealthStatus` with `ok` false; every other non-2xx
+is an `ApiException`, as on `/api`. `Transport` itself gains nothing, so its envelope check stays the
+only way a 2xx from `/api` is read.
 
 ## Strict hydration
 
@@ -132,4 +143,4 @@ To add a resource, follow `Resource/TagService.php`:
 4. Add `MockHandler`-based tests that replay captured fixtures, list the model in
    `StrictHydrationRegressionTest::MODELS`, and add a CHANGELOG entry.
 
-See [roadmap.md](roadmap.md) for what is still queued.
+Every endpoint of the server's contract is implemented; [roadmap.md](roadmap.md) keeps the recipe.

@@ -137,6 +137,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place of the six inline `rawurlencode()` calls. An id of `.` or `..` is sent as `%2E` or `%2E%2E`,
   where `rawurlencode()` left it for libcurl to remove as a dot segment, which sent the request to
   another endpoint. An empty id is still sent as it is, and the server's 404 throws `NotFoundException`.
+- The health probes (#24): `health()->live()` and `health()->ready()` (`HealthService`), returning a
+  `HealthStatus` with `ok` and the server's `status` word. They are sent to `base_url` itself, outside
+  `/api/{version}`, with no token, tenant, actor, namespace or request id header, by a
+  `HealthTransport` of their own, so `Transport` keeps reading every 2xx through its envelope check.
+  - `Client::health()` for a caller with a `Client`, and `HealthClient` (with `HealthConfig`) for one
+    without credentials, built from `base_url` alone; a `Client`'s options build one too.
+  - The 503 `/health/ready` answers when the server cannot reach its database returns a `HealthStatus`
+    with `ok` false rather than throwing. A 503 without the probe's `{"status": ...}` body, and every
+    other non-2xx, throws `ApiException`; no response throws `TransportException`.
+  - A 2xx is read strictly: a body that is not a JSON object with a string `status` throws
+    `MalformedResponseException`.
+  - `RequestContext::$apiVersion` is null for a probe, which calls no api_version.
+  - `make fixtures` captures the probes, the 503 with the harness database stopped
+    (`scripts/octonomy-harness.sh stop-db`).
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).

@@ -114,6 +114,7 @@ tests/fixtures/captured/
   v1/tags/get.json               {"request": {...}, "response": {"status", "headers", "body"}}
   v1/errors/not-found.json
   v2/vocabularies/list-include-global.json
+  health/ready-unavailable.json  a health probe: no api_version, outside /api
   ...
 ```
 
@@ -129,7 +130,9 @@ an empty list and a middle page with both links; and one error envelope per code
 (`not_found`, `conflict`, `validation_error`, `authentication_required`, `forbidden`,
 `tenant_mismatch`, `inactive_tag`, plus v1's `application_mismatch` and `namespace_not_supported`).
 v2 also reads the global partition and an `include_global` list, so its corpus holds populated and
-null namespace pairs side by side; v1's holds no namespace fields at all.
+null namespace pairs side by side; v1's holds no namespace fields at all. `health/` holds the probes,
+sent with no credentials: `/health/live` and `/health/ready` answering 200, and `/health/ready`
+answering 503 with the harness database stopped.
 
 Some of what the server really sends differs from what you might assume. This is why the fixtures
 exist:
@@ -140,6 +143,9 @@ exist:
   `description` are sent as `null`.
 - `metadata` read back from the database comes in Postgres `jsonb` key order, which can differ from
   the order it was written in.
+- `/health/ready` keeps answering 200 for up to a minute after the database stops. The server keeps
+  each database connection for 60 seconds and checks readiness by opening a cursor on it, which needs
+  no round trip, so only a request served on a new connection sees the database gone.
 
 ### Refreshing
 
@@ -152,6 +158,11 @@ removes it afterwards. It needs Docker, curl and PHP. `scripts/capture-fixtures.
 server over raw HTTP, never through the SDK, for the reason the harness seeds with curl. Each request
 must return the status a conforming server gives, so a changed contract stops the capture rather
 than being recorded as the new truth.
+
+The health probes are captured last, because the not-ready answer needs the database gone: the
+capture runs `scripts/octonomy-harness.sh stop-db` and re-sends `/health/ready` every two seconds, for
+up to two minutes, until it answers 503. That adds about a minute to `make fixtures` (see the
+readiness note above), and leaves the harness serving nothing until it is removed.
 
 Two captures of the same server produce byte-identical files. Volatile values are replaced with stable
 stand-ins of the same format: each UUID becomes `00000000-0000-4000-8000-<n>` and each request id

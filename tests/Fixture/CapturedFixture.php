@@ -121,11 +121,14 @@ final class CapturedFixture
 
     /**
      * The api_version the exchange was captured from, which leads its name:
-     * 'v1' for 'v1/tags/get'.
+     * 'v1' for 'v1/tags/get'. Null for a health probe ('health/ready'), which
+     * the server serves outside /api, so it calls no api_version (#24).
      */
-    public function apiVersion(): string
+    public function apiVersion(): ?string
     {
-        return explode('/', $this->name, 2)[0];
+        $version = explode('/', $this->name, 2)[0];
+
+        return in_array($version, ['v1', 'v2'], true) ? $version : null;
     }
 
     /**

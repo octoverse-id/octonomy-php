@@ -1,9 +1,9 @@
 # Roadmap
 
 The foundation (transport, auth, exceptions, pagination) and every resource group are implemented:
-vocabularies, tags, tag aliases, tag resolution, tag assignments, resource tags and audit logs (#23).
-The health probes below are queued (#24). Each item is a self-contained unit that follows the
-established pattern.
+vocabularies, tags, tag aliases, tag resolution, tag assignments, resource tags and audit logs (#23),
+and the health probes (#24), which have a transport of their own. No resource is queued. The recipe
+below is for an endpoint a later server release adds.
 
 ## How to add a resource (the recipe)
 
@@ -27,13 +27,3 @@ template, then:
    re-running `make fixtures` if they are not captured yet. List each response model in
    `StrictHydrationRegressionTest::MODELS`, add a `## [Unreleased]` CHANGELOG entry, and update
    [`api.md`](api.md).
-
-The item below is tracked as its own GitHub issue (`feature/<n>-<slug>`).
-
-## Health
-
-Unauthenticated liveness/readiness probes. These live **outside** `/api/v1`, so they need a small
-transport variant (or a dedicated method) that skips the prefix and auth headers.
-
-- `health()->live()` → GET `/health/live`
-- `health()->ready()` → GET `/health/ready`

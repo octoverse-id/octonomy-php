@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Http;
 
-use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\ClientInterface as GuzzleClientInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Config;
@@ -23,10 +21,7 @@ use Octoverse\Octonomy\RequestContext;
 use Octoverse\Octonomy\RequestOptions;
 use Octoverse\Octonomy\ResultList;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Client\NetworkExceptionInterface;
-use Psr\Http\Client\RequestExceptionInterface;
 use Psr\Http\Message\RequestFactoryInterface;
-use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 
@@ -48,13 +43,14 @@ use Psr\Http\Message\StreamFactoryInterface;
  * field set depends on, so a field the model rejects is reported with the
  * request and the place in the body it came from.
  *
+ * The health probes are not sent from here: they sit outside /api, take no
+ * credentials and answer with a bare body, so HealthTransport sends them, and
+ * this class keeps every 2xx behind its envelope check (#24).
+ *
  * @internal
  */
 final class Transport
 {
-    /** Seconds, for the client the SDK builds when none is injected. */
-    private const DEFAULT_TIMEOUT = 30.0;
-
     private readonly ClientInterface $http;
     private readonly RequestFactoryInterface $requests;
     private readonly StreamFactoryInterface $streams;
@@ -93,8 +89,8 @@ final class Transport
         $this->token = $config->token;
         $this->actorId = $config->actorId;
         $this->baseUrl = rtrim($config->baseUrl, '/');
-        $this->origin = self::origin($config->baseUrl);
-        $this->http = $config->httpClient ?? new GuzzleClient(['timeout' => $config->timeout ?? self::DEFAULT_TIMEOUT]);
+        $this->origin = Sender::origin($config->baseUrl);
+        $this->http = Sender::client($config->httpClient, $config->timeout);
         $this->requests = $config->requestFactory ?? new HttpFactory();
         $this->streams = $config->streamFactory ?? new HttpFactory();
         $this->defaultHeaders = [
@@ -322,25 +318,9 @@ final class Transport
             }
             // The request is the SDK's alone, so $context and $redaction
             // describe what goes out, up to what the client does to it.
-            $response = $this->dispatch($request, $context->query);
+            $response = Sender::send($this->http, $request, $context->query);
         } catch (\Throwable $e) {
-            // Anything the client, a handler or middleware throws, not only a
-            // GuzzleException: none may leave with this request's frames
-            // unscrubbed. Quoted in the message, not chained as getPrevious():
-            // Guzzle's exception holds the request it failed to send,
-            // Authorization header and body included (Redaction). That request,
-            // as middleware left it, is redacted too.
-            $sent = $e instanceof RequestExceptionInterface || $e instanceof NetworkExceptionInterface ? $e->getRequest() : null;
-            throw new TransportException(
-                ErrorMessage::forClientFailure(
-                    $context,
-                    $this->origin,
-                    $e,
-                    self::statusOf($e),
-                    $sent === null ? $redaction : $redaction->andSent($sent),
-                ),
-                $context,
-            );
+            throw Sender::failure($context, $this->origin, $e, $redaction);
         }
 
         $status = $response->getStatusCode();
@@ -355,45 +335,6 @@ final class Transport
         }
 
         return [$response, $redaction];
-    }
-
-    /**
-     * Send $request through the client, as the SDK built it.
-     *
-     * A Guzzle client goes through send(), not its PSR-18 sendRequest(), since
-     * only send() takes the options that keep the client's own defaults off the
-     * request. Guzzle's sendRequest() puts its default auth, query and body in
-     * place of the SDK's (a Basic Authorization header for a Bearer one), adds
-     * its default headers, and does not follow redirects (#18). Through send(),
-     * Guzzle merges the client's defaults under these options and then drops a
-     * null one, so a null headers, body or json cancels that default, the query,
-     * the request's own, replaces a default one, and auth false disables a
-     * default one, leaving the SDK's Authorization header. Guzzle's declared
-     * option types allow no such cancelling of form_params or multipart, so a
-     * client passed to the SDK must not set them (README). Its transport options
-     * and its middleware still apply, redirects as it configures them included.
-     *
-     * Any other client gets sendRequest(), which takes no options: what it does
-     * to the request on the way out, defaults and middleware included, is that
-     * client's (README). PSR-18 has it return a 4xx or 5xx rather than throw.
-     *
-     * @param array<string, string> $query the query $request's URI already carries, which
-     *                                     Guzzle's query option sets in place of a default one
-     */
-    private function dispatch(RequestInterface $request, array $query): ResponseInterface
-    {
-        if (!$this->http instanceof GuzzleClientInterface) {
-            return $this->http->sendRequest($request);
-        }
-
-        return $this->http->send($request, [
-            'http_errors' => false,
-            'headers' => null,
-            'query' => $query,
-            'body' => null,
-            'json' => null,
-            'auth' => false,
-        ]);
     }
 
     /**
@@ -536,29 +477,6 @@ final class Transport
     }
 
     /**
-     * The status of the response a client's exception holds, or null when it
-     * holds none. Guzzle 7 puts getResponse() on RequestException, where it
-     * may return null, and Guzzle 8 only on ResponseException; any client may
-     * offer one. Best effort, since it runs while another failure is being
-     * reported: a getResponse() that cannot be called, or that throws, counts
-     * as no response rather than replacing that failure with its own.
-     */
-    private static function statusOf(object $e): ?int
-    {
-        $getResponse = [$e, 'getResponse'];
-        if (!is_callable($getResponse)) {
-            return null;
-        }
-        try {
-            $response = $getResponse();
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return $response instanceof ResponseInterface ? $response->getStatusCode() : null;
-    }
-
-    /**
      * The URL $context describes: the base URL, the path, and the query as
      * sent, encoded as Guzzle's query option encodes one.
      */
@@ -578,23 +496,6 @@ final class Transport
         $actor = $options->actorId ?? $this->actorId;
 
         return $actor === '' ? null : $actor;
-    }
-
-    /**
-     * The scheme, host and port of $baseUrl, such as "https://octonomy.example.com:8443".
-     * Any user name or password in it is left out, so a message can name the
-     * server it could not reach.
-     */
-    private static function origin(string $baseUrl): string
-    {
-        $parts = parse_url($baseUrl);
-        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
-            // Config refuses such a URL. Only the PHP 7.4 line, where Config is
-            // mutable, can get here; name the setting rather than echo it.
-            return 'base_url';
-        }
-
-        return $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
     /**

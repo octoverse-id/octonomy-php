@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy;
 
 use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Internal\ErrorMessage;
+use Octoverse\Octonomy\Internal\Options;
 use Octoverse\Octonomy\Internal\Redaction;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
@@ -32,15 +33,13 @@ use Psr\Http\Message\StreamFactoryInterface;
  * readonly, lets a checked value be changed afterwards. Guzzle would otherwise
  * refuse it, with an error that quotes it, thrown from frames that hold the
  * token and the body.
+ *
+ * The health probes need none of the credentials, so a HealthClient takes a
+ * HealthConfig instead, which holds the connection settings alone and checks
+ * them as this class does.
  */
 final class Config
 {
-    /** The option keys fromArray() reads. */
-    private const OPTIONS = [
-        'base_url', 'token', 'tenant_id', 'actor_id', 'http_client', 'timeout', 'user_agent', 'api_version',
-        'request_factory', 'stream_factory',
-    ];
-
     /**
      * @param float|null $timeout    seconds, for the client the SDK builds when $httpClient is null
      * @param string     $apiVersion an ApiVersion constant
@@ -62,12 +61,7 @@ final class Config
         public readonly ?RequestFactoryInterface $requestFactory = null,
         public readonly ?StreamFactoryInterface $streamFactory = null,
     ) {
-        if (trim($baseUrl) === '') {
-            throw new ConfigurationException(
-                'octonomy: base_url is missing or blank. It is the address of the Octonomy server, such as'
-                . ' "https://octonomy.example.com". Fix: pass it as the \'base_url\' option.',
-            );
-        }
+        Options::checkBaseUrl($baseUrl);
         if (trim($token) === '') {
             throw new ConfigurationException(
                 'octonomy: token is missing or blank. Every request sends it as "Authorization: Bearer <token>".'
@@ -92,32 +86,9 @@ final class Config
         if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
             throw new ConfigurationException(ErrorMessage::unsendable('actor_id', 'X-Actor-ID'));
         }
-        if ($userAgent !== null && !Redaction::isHeaderSafe($userAgent)) {
-            throw new ConfigurationException(ErrorMessage::unsendable('user_agent', 'User-Agent'));
-        }
-
-        $parsed = parse_url($baseUrl);
-        if ($parsed === false || !isset($parsed['scheme'], $parsed['host'])) {
-            throw new ConfigurationException(sprintf(
-                'octonomy: base_url must be an absolute URL, got "%s", which %s. Fix: write it out in full, with'
-                . ' "https://" or "http://", such as "https://octonomy.example.com".',
-                $baseUrl,
-                match (true) {
-                    $parsed === false => 'cannot be parsed as a URL',
-                    !isset($parsed['scheme']) => 'has no scheme',
-                    default => 'has no host',
-                },
-            ));
-        }
-
+        Options::checkUserAgent($userAgent);
         ApiVersion::check($apiVersion);
-
-        // The SDK sets a timeout only on the client it builds. It does not
-        // change one it was given, which PSR-18 offers no way to do per request
-        // either.
-        if ($httpClient !== null && $timeout !== null) {
-            throw new ConfigurationException(ErrorMessage::timeoutWithHttpClient($timeout));
-        }
+        Options::checkTimeout($httpClient, $timeout);
     }
 
     /**
@@ -142,15 +113,7 @@ final class Config
         try {
             return self::build($options);
         } catch (ConfigurationException $e) {
-            $unread = array_diff(array_map('strval', array_keys($options)), self::OPTIONS);
-            if ($unread === []) {
-                throw $e;
-            }
-            throw new ConfigurationException(sprintf(
-                '%s The options also hold %s, which this SDK does not read.',
-                $e->getMessage(),
-                implode(', ', array_map(static fn(string $key): string => "'{$key}'", $unread)),
-            ), 0, $e);
+            throw Options::namingUnread($e, $options);
         }
     }
 
@@ -159,23 +122,9 @@ final class Config
      */
     private static function build(array $options): self
     {
-        $httpClient = $options['http_client'] ?? null;
-        if ($httpClient !== null && !$httpClient instanceof ClientInterface) {
-            throw new ConfigurationException(sprintf(
-                'octonomy: http_client must implement Psr\\Http\\Client\\ClientInterface (PSR-18), got %s. Fix:'
-                . ' pass a PSR-18 client, such as a GuzzleHttp\\Client configured with any middleware you need, or'
-                . ' leave http_client out to use a default one.',
-                self::typeOf($httpClient),
-            ));
-        }
-        $requestFactory = $options['request_factory'] ?? null;
-        if ($requestFactory !== null && !$requestFactory instanceof RequestFactoryInterface) {
-            throw self::notAFactory('request_factory', RequestFactoryInterface::class, $requestFactory);
-        }
-        $streamFactory = $options['stream_factory'] ?? null;
-        if ($streamFactory !== null && !$streamFactory instanceof StreamFactoryInterface) {
-            throw self::notAFactory('stream_factory', StreamFactoryInterface::class, $streamFactory);
-        }
+        $httpClient = Options::httpClient($options);
+        $requestFactory = Options::requestFactory($options);
+        $streamFactory = Options::streamFactory($options);
         if (array_key_exists('api_version', $options) && $options['api_version'] === null) {
             throw new ConfigurationException(
                 'octonomy: api_version must be "v1" or "v2", got null. Fix: leave api_version out for "v2", the'
@@ -184,78 +133,16 @@ final class Config
         }
 
         return new self(
-            baseUrl: self::stringOption($options, 'base_url') ?? '',
-            token: self::stringOption($options, 'token') ?? '',
-            tenantId: self::stringOption($options, 'tenant_id') ?? '',
-            actorId: self::stringOption($options, 'actor_id'),
+            baseUrl: Options::string($options, 'base_url') ?? '',
+            token: Options::string($options, 'token') ?? '',
+            tenantId: Options::string($options, 'tenant_id') ?? '',
+            actorId: Options::string($options, 'actor_id'),
             httpClient: $httpClient,
-            timeout: self::floatOption($options, 'timeout'),
-            userAgent: self::stringOption($options, 'user_agent'),
-            apiVersion: self::stringOption($options, 'api_version') ?? ApiVersion::V2,
+            timeout: Options::float($options, 'timeout'),
+            userAgent: Options::string($options, 'user_agent'),
+            apiVersion: Options::string($options, 'api_version') ?? ApiVersion::V2,
             requestFactory: $requestFactory,
             streamFactory: $streamFactory,
         );
-    }
-
-    private static function notAFactory(string $key, string $interface, mixed $value): ConfigurationException
-    {
-        return new ConfigurationException(sprintf(
-            'octonomy: %s must implement %s (PSR-17), got %s. Fix: pass a PSR-17 factory, such as the one your'
-            . ' PSR-7 library provides, or leave %s out to use the default one.',
-            $key,
-            $interface,
-            self::typeOf($value),
-            $key,
-        ));
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private static function stringOption(array $options, string $key): ?string
-    {
-        $value = $options[$key] ?? null;
-        if ($value === null) {
-            return null;
-        }
-        if (!is_string($value)) {
-            // The type alone: the value may be the token.
-            throw new ConfigurationException(sprintf(
-                'octonomy: %s must be a string, got %s. Fix: pass %s as a string.',
-                $key,
-                self::typeOf($value),
-                $key,
-            ));
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private static function floatOption(array $options, string $key): ?float
-    {
-        $value = $options[$key] ?? null;
-        if ($value === null) {
-            return null;
-        }
-        if (!is_int($value) && !is_float($value)) {
-            throw new ConfigurationException(sprintf(
-                'octonomy: %s must be an int or a float, got %s. Fix: pass a number, such as 30 or 2.5.',
-                $key,
-                self::typeOf($value),
-            ));
-        }
-
-        return (float) $value;
-    }
-
-    /**
-     * The type of $value as a message names it: its class, or its PHP type.
-     */
-    private static function typeOf(mixed $value): string
-    {
-        return is_object($value) ? $value::class : gettype($value);
     }
 }

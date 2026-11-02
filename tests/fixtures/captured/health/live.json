@@ -1,0 +1,20 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/health/live",
+        "query": {},
+        "credential": "none",
+        "headers": {},
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000005c"
+        },
+        "body": {
+            "status": "ok"
+        }
+    }
+}

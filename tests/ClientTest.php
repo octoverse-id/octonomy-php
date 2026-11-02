@@ -57,6 +57,7 @@ final class ClientTest extends SdkTestCase
         self::assertSame($client->assignments(), $client->assignments());
         self::assertSame($client->resources(), $client->resources());
         self::assertSame($client->auditLogs(), $client->auditLogs());
+        self::assertSame($client->health(), $client->health());
     }
 
     public function testSendsAuthAndTenantHeaders(): void

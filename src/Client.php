@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy;
 
+use Octoverse\Octonomy\Http\HealthTransport;
 use Octoverse\Octonomy\Http\Transport;
 use Octoverse\Octonomy\Resource\AssignmentService;
 use Octoverse\Octonomy\Resource\AuditLogService;
+use Octoverse\Octonomy\Resource\HealthService;
 use Octoverse\Octonomy\Resource\ResourceService;
 use Octoverse\Octonomy\Resource\TagAliasService;
 use Octoverse\Octonomy\Resource\TagService;
@@ -38,12 +40,17 @@ final class Client
     public const VERSION = '0.1.0';
 
     private readonly Transport $transport;
+
+    /** The connection settings of the Config, as read at construction, for health(). */
+    private readonly HealthConfig $healthConfig;
+
     private ?VocabularyService $vocabularies = null;
     private ?TagService $tags = null;
     private ?TagAliasService $aliases = null;
     private ?AssignmentService $assignments = null;
     private ?ResourceService $resources = null;
     private ?AuditLogService $auditLogs = null;
+    private ?HealthService $health = null;
 
     /**
      * @param array<string, mixed>|Config $config an options array (see Config::fromArray) or a Config
@@ -55,6 +62,13 @@ final class Client
     {
         $resolved = $config instanceof Config ? $config : Config::fromArray($config);
         $this->transport = new Transport($resolved, self::VERSION);
+        $this->healthConfig = new HealthConfig(
+            baseUrl: $resolved->baseUrl,
+            httpClient: $resolved->httpClient,
+            timeout: $resolved->timeout,
+            userAgent: $resolved->userAgent,
+            requestFactory: $resolved->requestFactory,
+        );
     }
 
     /**
@@ -113,5 +127,16 @@ final class Client
     public function auditLogs(): AuditLogService
     {
         return $this->auditLogs ??= new AuditLogService($this->transport);
+    }
+
+    /**
+     * Health probes the server's liveness and readiness. The probes are
+     * unauthenticated and unversioned, so they are sent without this client's
+     * token, tenant or api_version prefix; HealthClient sends the same request
+     * for a caller with no credentials.
+     */
+    public function health(): HealthService
+    {
+        return $this->health ??= new HealthService(new HealthTransport($this->healthConfig, self::VERSION));
     }
 }

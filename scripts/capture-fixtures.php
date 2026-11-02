@@ -13,7 +13,9 @@ declare(strict_types=1);
  * It reads the credentials scripts/octonomy-harness.sh writes, drives every
  * resource group on /api/v1 and /api/v2, and writes one JSON file per exchange to
  * tests/fixtures/captured/<api_version>/<group>/<operation>.json plus a
- * manifest.json naming the server image and each file's hash.
+ * manifest.json naming the server image and each file's hash. The health probes,
+ * which sit outside /api and call no api_version, go to
+ * tests/fixtures/captured/health/.
  *
  * WHY THIS EXISTS. Every unit test once replayed a body written by hand from the
  * OpenAPI spec, which omits both response envelopes, so the suite agreed with the
@@ -28,6 +30,8 @@ declare(strict_types=1);
  *
  * It WRITES (creates, updates, deactivates), so it must run against a harness
  * that is torn down afterwards: the integration suite reads exact row counts.
+ * Last of all it STOPS THE HARNESS DATABASE, to capture /health/ready's 503, so
+ * the harness serves nothing afterwards; `make fixtures` removes it.
  *
  * NORMALIZATION. A fresh database mints new ids and timestamps on every run, which
  * would turn a refresh into a diff of every line. Volatile values are replaced
@@ -104,6 +108,7 @@ final class FixtureCapture
             $capture = new self(self::environment());
             $capture->captureV1();
             $capture->captureV2();
+            $capture->captureHealth();
             $capture->write($output);
         } catch (CaptureFailed $e) {
             fwrite(STDERR, 'capture-fixtures: ' . $e->getMessage() . "\n");
@@ -232,6 +237,30 @@ final class FixtureCapture
         $this->call('vocabularies/update-numeric-metadata', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
             'metadata' => (object) ['a', 'b'],
         ]);
+    }
+
+    /**
+     * The health probes (#24): GET at the server's root, as a deploy script or
+     * an orchestrator sends them, with no token, tenant or api_version.
+     *
+     * Last, because the not-ready answer needs the database gone: the harness
+     * database is stopped, and /health/ready re-sent until it answers 503. That
+     * takes up to a minute at server 3.2.1, which keeps each database connection
+     * for 60 seconds (CONN_MAX_AGE) and checks readiness by opening a cursor on
+     * it, which needs no round trip: until the connection a request is served
+     * on expires, the probe still answers 200.
+     */
+    private function captureHealth(): void
+    {
+        $this->probe('health/live', 200, 'health/live');
+        $this->probe('health/ready', 200, 'health/ready');
+
+        $harness = escapeshellarg(__DIR__ . '/octonomy-harness.sh');
+        exec("{$harness} stop-db 2>&1", $output, $code);
+        if ($code !== 0) {
+            throw new CaptureFailed('could not stop the harness database: ' . implode("\n", $output));
+        }
+        $this->probe('health/ready-unavailable', 503, 'health/ready', 120);
     }
 
     /**
@@ -488,6 +517,60 @@ final class FixtureCapture
         }
 
         return $decoded;
+    }
+
+    /**
+     * Send GET to $path at the server's root with no credentials, and record
+     * the exchange as $name. With $within, the probe is re-sent every two
+     * seconds until it answers $expect or $within seconds pass, and the
+     * response recorded is the one that answered $expect: a server can take a
+     * while to reach the state a fixture shows.
+     */
+    private function probe(string $name, int $expect, string $path, int $within = 0): void
+    {
+        $target = "/{$path}";
+        $url = rtrim($this->env['OCTONOMY_TEST_BASE_URL'], '/') . $target;
+        $deadline = time() + $within;
+        while (true) {
+            [$status, $responseHeaders, $raw] = $this->send('GET', $url, [], null);
+            if ($status === $expect) {
+                break;
+            }
+            if (time() >= $deadline) {
+                $after = $within > 0 ? " after {$within}s" : '';
+                throw new CaptureFailed("GET {$target} ({$name}) returned HTTP {$status}{$after}, want {$expect}: {$raw}");
+            }
+            sleep(2);
+        }
+        try {
+            $decoded = json_decode($raw, false, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+        } catch (\JsonException $e) {
+            throw new CaptureFailed("GET {$target} ({$name}) returned a body that is not JSON ({$e->getMessage()}): {$raw}");
+        }
+
+        $kept = [];
+        foreach (['Content-Type', 'X-Request-ID'] as $header) {
+            if (isset($responseHeaders[strtolower($header)])) {
+                $kept[$header] = $responseHeaders[strtolower($header)];
+            }
+        }
+        $this->exchanges[] = [
+            'name' => $name,
+            'request' => [
+                'method' => 'GET',
+                'path' => $target,
+                'query' => new \stdClass(),
+                // A probe is unauthenticated: no token is sent.
+                'credential' => 'none',
+                'headers' => new \stdClass(),
+                'body' => null,
+            ],
+            'response' => [
+                'status' => $status,
+                'headers' => (object) $kept,
+                'body' => $decoded,
+            ],
+        ];
     }
 
     /**
