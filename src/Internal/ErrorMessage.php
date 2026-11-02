@@ -37,7 +37,7 @@ final class ErrorMessage
      * The collections whose "{collection}/{id}" path names a single resource,
      * by the kind a 404 message calls it.
      */
-    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary'];
+    private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary', 'tag-aliases' => 'tag alias'];
 
     private function __construct() {}
 

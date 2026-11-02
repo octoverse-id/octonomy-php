@@ -10,8 +10,8 @@ request.
 
 > **Status:** unreleased and early. No version has been tagged or published to Packagist yet, so the
 > install command below works once the first release ships. The transport, auth, error, and pagination
-> foundation plus the **Vocabularies** and **Tags** resources are implemented. The remaining resources
-> are tracked in [`docs/roadmap.md`](docs/roadmap.md).
+> foundation and every resource group are implemented; the health probes are tracked in
+> [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Install
 
@@ -238,13 +238,42 @@ $page = $client->tags()->list(new TagListParams(type: 'label', limit: 50));
 printf("%d of %d\n", count($page->data), $page->pagination->count);
 ```
 
+## Tagging resources
+
+An assignment links a tag to one of your own resources, named by a type and an id, within an
+application. Name the tag by id, by alias id or by alias slug, each with its own constructor. Assigning a
+tag the resource already has returns the existing assignment instead of failing:
+
+```php
+use Octoverse\Octonomy\Model\AssignmentCreate;
+use Octoverse\Octonomy\Model\BulkAssign;
+use Octoverse\Octonomy\Model\ResourceTagsReplace;
+
+$client->assignments()->create(AssignmentCreate::forAliasSlug('cms', 'product', 'sku-1', 'promo'));
+$client->assignments()->bulkAssign(new BulkAssign('cms', 'product', 'sku-1', tagIds: [$saleId, $redId]));
+
+foreach ($client->resources()->listTags('product', 'sku-1', 'cms')->data as $row) {
+    echo $row->tag->slug, PHP_EOL;
+}
+
+// Exactly these tags afterwards; [] removes every tag the resource has in the application.
+$client->resources()->replaceTags('product', 'sku-1', new ResourceTagsReplace('cms', [$saleId]));
+```
+
+`tags()->resolve($slug)` turns a slug into the tag it names, its own or an alias's, and says which
+matched (`TagResolution::$matchedType`).
+
 ## Implemented resources
 
 | Resource | Status |
 | -------- | ------ |
 | Vocabularies (`$client->vocabularies()`) | ✅ create / get / list / update / delete |
-| Tags (`$client->tags()`) | ✅ create / get / list / update / delete |
-| Tag aliases, resolution, assignments (+bulk), resource tags, audit logs, health | 🚧 see [`docs/roadmap.md`](docs/roadmap.md) |
+| Tags (`$client->tags()`) | ✅ create / get / list / update / delete, `resolve()`, and a tag's `listAliases()` / `listResources()` / `listAuditLogs()` |
+| Tag aliases (`$client->aliases()`) | ✅ create / get / list / update / delete |
+| Tag assignments (`$client->assignments()`) | ✅ create / remove / bulkAssign / bulkRemove |
+| Resource tags (`$client->resources()`) | ✅ listTags / replaceTags / listAuditLogs |
+| Audit logs (`$client->auditLogs()`) | ✅ list |
+| Health | 🚧 see [`docs/roadmap.md`](docs/roadmap.md) |
 
 ## Common commands
 
@@ -261,7 +290,7 @@ make help    # list all targets
 - [Development](docs/development.md) — setup, quality gates, testing.
 - [Versioning](docs/versioning.md) — SemVer policy and which server contract this SDK targets.
 - [Release](docs/release.md) — the release runbook.
-- [Roadmap](docs/roadmap.md) — the backlog of remaining resources.
+- [Roadmap](docs/roadmap.md) — what is still queued.
 - [CHANGELOG](CHANGELOG.md)
 
 ## Contributing & security

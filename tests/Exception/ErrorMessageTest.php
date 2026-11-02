@@ -126,6 +126,21 @@ final class ErrorMessageTest extends TestCase
             'octonomy: vocabulary "voc_1" was not found (not_found, HTTP 404). Request: DELETE /api/v1/vocabularies/voc_1.'
             . self::NOT_FOUND_TAIL,
         ];
+        yield 'a v2 tag alias update' => [
+            new RequestContext(ApiVersion::V2, 'PATCH', '/api/v2/tag-aliases/alias_1', ['application_id' => 'commerce']),
+            'octonomy: tag alias "alias_1" was not found (not_found, HTTP 404).'
+            . ' Request: PATCH /api/v2/tag-aliases/alias_1?application_id=commerce.'
+            . self::NOT_FOUND_TAIL,
+        ];
+        // The 404 of a tag's sub-list is about the tag, but the path is not one
+        // resource's, so the message does not guess which.
+        yield 'a tag\'s aliases' => [
+            new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1/aliases'),
+            'octonomy: the resource was not found (not_found, HTTP 404). Request: GET /api/v2/tags/tag_1/aliases.'
+            . ' The server does not say why, so the SDK cannot either.'
+            . ' Fix: check that the request above is the one you meant to send.'
+            . ' Server said: "Resource not found." Detail: "Tag was not found." Request ID: req_1.',
+        ];
         yield 'a path that is not one resource' => [
             new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags'),
             'octonomy: the resource was not found (not_found, HTTP 404). Request: GET /api/v2/tags.'
