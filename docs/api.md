@@ -127,8 +127,8 @@ Every id and resource type in a path is percent-encoded as one segment, so `a/b`
 type or id that is exactly `.` or `..`, which the server accepts, is sent as `%2E` or `%2E%2E`: left as
 it is, libcurl would remove it as a dot segment and send the request to another endpoint. A proxy in
 front of the server that decodes and normalizes paths before forwarding them can still remove it. An
-empty id or type throws `InvalidArgumentException` before anything is sent, since the server refuses a
-blank one.
+empty id or type is sent as it is: no route of the server matches it, so the server answers with a 404
+and the call throws `NotFoundException`.
 
 ### List parameters
 

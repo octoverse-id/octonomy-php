@@ -185,19 +185,6 @@ final class ErrorMessage
     }
 
     /**
-     * The message for an empty path segment (Path::of()), which no URL can
-     * carry, so nothing was sent. The server refuses a blank id or resource
-     * type everywhere, so the SDK knows the request could not have named a
-     * resource.
-     */
-    public static function emptyPathSegment(): string
-    {
-        return 'octonomy: an id or another path segment is empty, so the request would name no single resource,'
-            . ' and the server refuses a blank id or resource type. Nothing was sent. Fix: pass the id of the'
-            . ' resource you mean.';
-    }
-
-    /**
      * The message for a timeout given together with an HTTP client. The SDK
      * sets a timeout only on the client it builds, so this one would be
      * dropped without a word, as it was before #18.

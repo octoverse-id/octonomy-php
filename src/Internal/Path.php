@@ -11,17 +11,17 @@ namespace Octoverse\Octonomy\Internal;
  * here, so the encoding lives in one place (#23).
  *
  * A segment that is exactly "." or ".." is sent as %2E or %2E%2E. Both are
- * valid resource types and ids on the server, which refuses only a blank one,
- * but rawurlencode() leaves dots alone, and a literal dot segment is removed by
- * the URL resolution an HTTP client applies (RFC 3986, section 5.2.4): libcurl,
- * which Guzzle sends through, turns resources/product/../tags into
- * resources/tags, another endpoint. Encoded, it reaches the server as the one
- * segment it is, which the server decodes back to "." or "..". A proxy in front
- * of the server that decodes and normalizes the path before forwarding it can
- * still remove it.
+ * valid resource types and ids on the server, but rawurlencode() leaves dots
+ * alone, and a literal dot segment is removed by the URL resolution an HTTP
+ * client applies (RFC 3986, section 5.2.4): libcurl, which Guzzle sends
+ * through, turns resources/product/../tags into resources/tags, another
+ * endpoint. Encoded, it reaches the server as the one segment it is, which the
+ * server decodes back to "." or "..". A proxy in front of the server that
+ * decodes and normalizes the path before forwarding it can still remove it.
  *
- * An empty segment is refused before anything is sent: no encoding carries
- * one, and the path it leaves names no single resource.
+ * An empty segment is sent as it is, and whether it names anything is the
+ * server's call (AGENTS.md, Product Rules). No route of the server matches
+ * one, so it answers with a 404, which becomes a NotFoundException.
  *
  * @internal
  */
@@ -31,18 +31,11 @@ final class Path
 
     /**
      * The segments, each percent-encoded (RFC 3986), joined by "/".
-     *
-     * @throws \InvalidArgumentException when a segment is empty; nothing is sent
      */
     public static function of(string ...$segments): string
     {
         $encoded = [];
         foreach ($segments as $segment) {
-            if ($segment === '') {
-                // Scrubbed like an OctonomyException: the service frames below
-                // this one hold the request body and the RequestOptions.
-                throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::emptyPathSegment()));
-            }
             $encoded[] = match ($segment) {
                 '.' => '%2E',
                 '..' => '%2E%2E',
