@@ -6,10 +6,12 @@ namespace Octoverse\Octonomy\Tests;
 
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
+use Octoverse\Octonomy\Exception\ApiException;
 use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\HealthClient;
 use Octoverse\Octonomy\HealthConfig;
 use Octoverse\Octonomy\Tests\Fixture\ReplayingClient;
+use Octoverse\Octonomy\Tests\Fixture\SyntheticNegative;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -49,6 +51,28 @@ final class HealthClientTest extends SdkTestCase
         self::assertSame('https://octonomy.example.com', $config->baseUrl);
         self::assertSame(2.0, $config->timeout);
         self::assertSame('deploy-check/1.0', $config->userAgent);
+    }
+
+    /**
+     * The token and actor id in a Client's options are not sent, and not
+     * quoted either: a client error that echoes them is redacted.
+     */
+    public function testTheCredentialsInAClientsOptionsAreRedacted(): void
+    {
+        $token = 'svc_secret_1234567890';
+        $probe = $this->healthClientWith(
+            [self::syntheticNegative(SyntheticNegative::GATEWAY, 502, "<html>proxy saw {$token}</html>", ['Content-Type' => "text/html; token={$token}"])],
+            ['token' => $token, 'tenant_id' => 'acme', 'actor_id' => 'actor-secret-42'],
+        );
+
+        try {
+            $probe->health()->live();
+            self::fail('expected an ApiException');
+        } catch (ApiException $e) {
+            self::assertStringNotContainsString($token, $e->getMessage());
+            self::assertStringContainsString('token=[redacted]', $e->getMessage());
+            self::assertFalse($this->lastRequest()->hasHeader('Authorization'));
+        }
     }
 
     public function testAHealthConfigBuildsAHealthClient(): void

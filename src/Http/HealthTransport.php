@@ -62,9 +62,13 @@ final class HealthTransport
     private readonly array $headers;
 
     /**
+     * @param Redaction $redaction the values no message about a probe may quote: none for a HealthClient,
+     *                             and for Client::health() the client's token and actor id, which a
+     *                             probe never sends but an HTTP client or factory given them can echo
+     *
      * @throws ConfigurationException when $config carries both an HTTP client and a timeout
      */
-    public function __construct(HealthConfig $config, string $sdkVersion)
+    public function __construct(HealthConfig $config, string $sdkVersion, private readonly Redaction $redaction)
     {
         // Checked again, not trusted from HealthConfig: the PHP 7.4 line loses
         // readonly in the downgrade, so a HealthConfig can be given a client
@@ -100,10 +104,10 @@ final class HealthTransport
                 throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::unsendable("the {$name} value", $name)));
             }
         }
-        // A probe sends no token, no actor id and no body, so there is nothing
-        // of the SDK's to redact; Sender::failure() still adds what a client's
-        // middleware put on the request.
-        $redaction = Redaction::none();
+        // A probe sends no token, no actor id and no body, but the client that
+        // built this transport may hold them; Sender::failure() also adds what
+        // a client's middleware put on the request.
+        $redaction = $this->redaction;
 
         try {
             $request = $this->requests->createRequest($context->method, $this->baseUrl . $context->path);

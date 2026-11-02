@@ -180,6 +180,31 @@ final class HealthServiceTest extends SdkTestCase
     }
 
     /**
+     * A Client's probe sends neither its token nor its actor id, but an HTTP
+     * client given them can still quote them in its error, and no message
+     * may carry either (Redaction).
+     */
+    public function testAClientsProbeRedactsItsCredentialsFromAClientError(): void
+    {
+        $token = 'svc_secret_1234567890';
+        $actor = 'actor-secret-42';
+        $client = $this->clientWhoseHttpClientThrows(
+            ['token' => $token, 'actor_id' => $actor],
+            static fn(): \RuntimeException => new \RuntimeException("client configured with {$token} for {$actor}"),
+        );
+
+        try {
+            $client->health()->live();
+            self::fail('expected a TransportException');
+        } catch (TransportException $e) {
+            self::assertStringNotContainsString($token, $e->getMessage());
+            self::assertStringNotContainsString($actor, $e->getMessage());
+            self::assertStringContainsString('"client configured with [redacted] for [redacted]"', $e->getMessage());
+            self::assertFalse($this->lastRequest()->hasHeader('Authorization'));
+        }
+    }
+
+    /**
      * Only the probe's own 503 is an answer. One without its {"status": ...}
      * body came from something in front of the server, and stays an
      * ApiException, as any other non-2xx does.

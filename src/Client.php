@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy;
 
 use Octoverse\Octonomy\Http\HealthTransport;
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\Resource\AssignmentService;
 use Octoverse\Octonomy\Resource\AuditLogService;
 use Octoverse\Octonomy\Resource\HealthService;
@@ -44,6 +45,12 @@ final class Client
     /** The connection settings of the Config, as read at construction, for health(). */
     private readonly HealthConfig $healthConfig;
 
+    /**
+     * The token and actor id of the Config, as read at construction: a probe
+     * sends neither, but no message about one may quote them either.
+     */
+    private readonly Redaction $healthRedaction;
+
     private ?VocabularyService $vocabularies = null;
     private ?TagService $tags = null;
     private ?TagAliasService $aliases = null;
@@ -69,6 +76,7 @@ final class Client
             userAgent: $resolved->userAgent,
             requestFactory: $resolved->requestFactory,
         );
+        $this->healthRedaction = Redaction::of($resolved->token, $resolved->actorId, null);
     }
 
     /**
@@ -137,6 +145,8 @@ final class Client
      */
     public function health(): HealthService
     {
-        return $this->health ??= new HealthService(new HealthTransport($this->healthConfig, self::VERSION));
+        return $this->health ??= new HealthService(
+            new HealthTransport($this->healthConfig, self::VERSION, $this->healthRedaction),
+        );
     }
 }
