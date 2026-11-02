@@ -56,7 +56,7 @@ final class HealthService
      */
     public function live(): HealthStatus
     {
-        return $this->transport->probe('health/live');
+        return $this->transport->probe('health/live', false);
     }
 
     /**
@@ -76,6 +76,6 @@ final class HealthService
      */
     public function ready(): HealthStatus
     {
-        return $this->transport->probe('health/ready');
+        return $this->transport->probe('health/ready', true);
     }
 }

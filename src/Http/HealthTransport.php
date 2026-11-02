@@ -38,10 +38,11 @@ use Psr\Http\Message\ResponseInterface;
  *   is read as HealthStatus with $ok false instead of becoming an
  *   ApiException.
  *
- * Only a 503 is read that way, and only when its body is the probe's own
- * {"status": "..."}: a 503 without one came from something in front of the
- * server, such as a proxy or a load balancer, and stays an ApiException, as
- * any other non-2xx does. A request that gets no response raises
+ * Only the readiness probe's 503 is read that way, and only when its body is
+ * the probe's own {"status": "..."}. /health/live answers 200 whenever the
+ * server answers at all, so a 503 there, like a 503 without that body, came
+ * from something in front of the server, such as a proxy or a load balancer,
+ * and stays an ApiException, as any other non-2xx does. A request that gets no response raises
  * TransportException, as on Transport, through the same Sender.
  *
  * @internal
@@ -87,14 +88,16 @@ final class HealthTransport
     /**
      * Send GET {base_url}/$path and read the probe's answer.
      *
-     * @param string $path the probe's path below the server's root, such as 'health/ready'
+     * @param string $path      the probe's path below the server's root, such as 'health/ready'
+     * @param bool   $readiness whether this is the readiness probe, whose 503 {"status": ...} is an
+     *                          answer rather than a failure
      *
-     * @throws ApiException               when the server answers with a non-2xx status other than a probe's
-     *                                    own 503
+     * @throws ApiException               when the server answers with a non-2xx status other than the
+     *                                    readiness probe's own 503
      * @throws MalformedResponseException when a 2xx body is not a JSON object with a string "status"
      * @throws TransportException         when no response arrives or a 2xx body is not JSON
      */
-    public function probe(string $path): HealthStatus
+    public function probe(string $path, bool $readiness): HealthStatus
     {
         $context = new RequestContext(null, 'GET', '/' . ltrim($path, '/'));
         // Checked again here, not trusted from HealthConfig, for the PHP 7.4
@@ -124,7 +127,7 @@ final class HealthTransport
             return $this->read($context, $response, $redaction);
         }
         $raw = (string) $response->getBody();
-        if ($status === self::NOT_READY) {
+        if ($readiness && $status === self::NOT_READY) {
             $answer = self::answer($raw);
             if ($answer !== null) {
                 return HealthStatus::fromArray($answer, false);

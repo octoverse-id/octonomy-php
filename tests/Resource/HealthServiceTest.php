@@ -243,6 +243,25 @@ final class HealthServiceTest extends SdkTestCase
     }
 
     /**
+     * /health/live answers 200 whenever the server answers at all, so even the
+     * readiness probe's own 503 body is no answer from it: something in front
+     * of the server sent it.
+     */
+    public function testA503FromTheLivenessProbeRaises(): void
+    {
+        $client = $this->healthClientWith([self::captured('health/ready-unavailable')]);
+
+        try {
+            $client->health()->live();
+            self::fail('expected an ApiException');
+        } catch (ApiException $e) {
+            self::assertSame(ApiException::class, $e::class);
+            self::assertSame(503, $e->statusCode);
+            self::assertSame('/health/live', $e->context->path);
+        }
+    }
+
+    /**
      * A 503 whose body is JSON but not the probe's word is not the probe's
      * answer either.
      */

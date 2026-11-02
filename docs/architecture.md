@@ -78,7 +78,7 @@ and a service that hydrated the body directly would get a zero-valued model with
 The health probes take another path (#24). `HealthService` calls `HealthTransport::probe()`, which sends
 `GET base_url + /health/{live|ready}` with only `Accept` and `User-Agent`, through the same `Sender`.
 It reads a 2xx as strictly as `Transport` reads a resource, a JSON object with a string `status`, and
-reads the probe's own 503 `{"status": ...}` as a `HealthStatus` with `ok` false; every other non-2xx
+reads `/health/ready`'s own 503 `{"status": ...}` as a `HealthStatus` with `ok` false; every other non-2xx
 is an `ApiException`, as on `/api`. `Transport` itself gains nothing, so its envelope check stays the
 only way a 2xx from `/api` is read.
 

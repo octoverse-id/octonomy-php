@@ -50,7 +50,7 @@ stays a faithful, ergonomic client.
   answer with a bare `{"status": ...}` body, and answer 503 as a readiness report, so `HealthService`
   reads through `Http\HealthTransport::probe()`, reached from `Client::health()` and from
   `HealthClient`, which needs no credentials. A probe sends no credential header and takes no
-  `RequestOptions`; a 2xx is read as strictly as `Transport` reads one, and only the probe's own 503
+  `RequestOptions`; a 2xx is read as strictly as `Transport` reads one, and only `/health/ready`'s own 503
   body becomes `HealthStatus` with `ok` false (`HealthStatus::fromArray($data, $ok)`, since a probe has
   no api_version). Never send an `/api` endpoint through it, and never give `Transport` a bare-body
   reader.
