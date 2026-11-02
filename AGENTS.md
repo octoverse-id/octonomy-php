@@ -37,15 +37,23 @@ stays a faithful, ergonomic client.
 - One file per resource service (`Resource/TagService.php`, …), reached from an accessor on `Client`.
 - Methods take required inputs first and an optional `?RequestOptions $options = null` last.
 - List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
-- `http_client` is any PSR-18 client, and no adapter class wraps one (#18). `Transport` sends a Guzzle
-  client through `send()` with its own default headers, query, body, `json` and `auth` cancelled, never
-  through its PSR-18 `sendRequest()`, which applies every one of them over the SDK's request; any other
-  client gets `sendRequest()`. `timeout` sets only the client the SDK builds, and with `http_client`
+- `http_client` is any PSR-18 client, and no adapter class wraps one (#18). Both transports send
+  through `Http\Sender`, which hands a Guzzle client the request through `send()` with its own default
+  headers, query, body, `json` and `auth` cancelled, never through its PSR-18 `sendRequest()`, which
+  applies every one of them over the SDK's request; any other client gets `sendRequest()`. `timeout` sets only the client the SDK builds, and with `http_client`
   it is refused, not dropped.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
   `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
   `MalformedResponseException` rather than hydrating an empty model. `one()`/`many()` run the model's
   `fromArray(...)` themselves, so a rejected field is reported with its endpoint and api_version.
+- **The health probes are the one exception (#24).** They sit outside `/api`, are unauthenticated,
+  answer with a bare `{"status": ...}` body, and answer 503 as a readiness report, so `HealthService`
+  reads through `Http\HealthTransport::probe()`, reached from `Client::health()` and from
+  `HealthClient`, which needs no credentials. A probe sends no credential header and takes no
+  `RequestOptions`; a 2xx is read as strictly as `Transport` reads one, and only `/health/ready`'s own 503
+  body becomes `HealthStatus` with `ok` false (`HealthStatus::fromArray($data, $ok)`, since a probe has
+  no api_version). Never send an `/api` endpoint through it, and never give `Transport` a bare-body
+  reader.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.

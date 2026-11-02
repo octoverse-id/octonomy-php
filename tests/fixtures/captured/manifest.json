@@ -5,6 +5,9 @@
     },
     "generator": "scripts/capture-fixtures.php",
     "fixtures": {
+        "health/live.json": "sha256:9109f939dfdec78d06c35d5ad8733bc94dbde5055bd8f10175fd84b8fc2b6276",
+        "health/ready-unavailable.json": "sha256:984b5057bd86068e335b5a254f3faa5104e477c1c8a2ef84b6b87a78fb95d0a4",
+        "health/ready.json": "sha256:b865cfa6cf59a56970fe5ac469e40d4d5ff5d8da3126adbf4ebdc3233d8cf4a8",
         "v1/audit-logs/list.json": "sha256:51df7832330902459e1a533b5f293f77fc2313cee45a8152b540286fcba1b656",
         "v1/errors/application-mismatch.json": "sha256:1d3b404167b06c5f8dd054e5e56542aec9c10a639da5ae600d6943dbdb462f64",
         "v1/errors/authentication-required.json": "sha256:94cf0125ca6004725b5291570490d96ac7d9400d6d3152cecff8178c9478b51c",

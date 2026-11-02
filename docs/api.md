@@ -9,7 +9,8 @@ note at the top of each before trusting a response shape in them. This page is t
 The client targets `base_url + /api/v2`, or `base_url + /api/v1` when constructed with
 `'api_version' => 'v1'` (`ApiVersion::V1`). The two surfaces carry the same paths; v2 adds the
 namespace axis below. The version is read once, at construction, and cannot change afterwards or per
-request. Any other value throws `ConfigurationException` when the client is built.
+request. Any other value throws `ConfigurationException` when the client is built. The health probes
+are the exception: they sit at `base_url` itself, outside `/api` (see [Health probes](#health-probes)).
 
 ## Headers
 
@@ -122,6 +123,8 @@ need `audit:read`; every other read method needs `tags:read`, and mutating metho
 | `resources()->replaceTags()` | POST | `/resources/{type}/{id}/tags` |
 | `resources()->listAuditLogs()` | GET | `/resources/{type}/{id}/audit-logs` |
 | `auditLogs()->list()` | GET | `/audit-logs` |
+| `health()->live()` | GET | `/health/live`, at `base_url`, outside `/api/{version}` |
+| `health()->ready()` | GET | `/health/ready`, at `base_url`, outside `/api/{version}` |
 
 Every id and resource type in a path is percent-encoded as one segment, so `a/b` is sent as `a%2Fb`. A
 type or id that is exactly `.` or `..`, which the server accepts, is sent as `%2E` or `%2E%2E`: left as
@@ -233,6 +236,40 @@ first to keep the model as it was read.
 - **List:** `ResultList<T>` = `{ data: T[], pagination: {limit, offset, count, next, previous} }`.
 - **Delete:** no body (deactivation on the server).
 - **Errors:** `{ error: {code, message, details, request_id} }` → a typed `ApiException` subclass.
+- **Health probe:** `HealthStatus` = `{ok, status}`, read from the bare `{ status: "..." }` body; see
+  [Health probes](#health-probes).
+
+## Health probes
+
+`GET /health/live` and `GET /health/ready` are served at the server's root, unauthenticated, with a bare
+`{"status": "..."}` body and no `data` envelope (#24). They are reached through `Client::health()`, or
+through a `HealthClient` built from `base_url` alone when there are no credentials:
+
+```php
+$status = (new HealthClient(['base_url' => 'https://octonomy.example.com', 'timeout' => 2]))->health()->ready();
+```
+
+Both send the same request: `Accept` and `User-Agent` only, with no `Authorization`, `X-Tenant-ID`,
+`X-Actor-ID`, namespace or request id header, and no `/api/{version}` prefix. A path on `base_url` is
+kept, so `https://gw.example.com/octonomy` is probed at `/octonomy/health/ready`. The methods take no
+`RequestOptions`, since nothing in one applies to a route with no tenant.
+
+| Response | Result |
+| -------- | ------ |
+| 2xx `{"status": "ok"}` | `HealthStatus(ok: true, status: 'ok')` |
+| 503 `{"status": "unavailable"}`, the server unable to reach its database (`ready()` only) | `HealthStatus(ok: false, status: 'unavailable')`, not an exception |
+| 2xx that is not a JSON object with a string `status` | `MalformedResponseException` (`TransportException` when it is not JSON) |
+| any other non-2xx, a 503 without the probe's body included | `ApiException` (`NotFoundException` for a 404), as on `/api` |
+| no response | `TransportException` |
+
+`ok` comes from the HTTP status, and `status` is the server's word as sent, so a word a newer server adds
+is passed on rather than refused (`HealthStatus::STATUS_OK`, `STATUS_UNAVAILABLE`). A `HealthClient` takes
+`base_url`, `http_client`, `timeout`, `user_agent` and `request_factory`, refused as `Config` refuses
+them, and ignores the other keys a `Client` takes, so one options array builds either.
+
+At server 3.2.1, `/health/ready` opens a cursor on a database connection the server keeps for up to 60
+seconds, which needs no round trip, so it can still answer 200 for up to a minute after the database
+goes away.
 
 ## Error codes → exceptions
 
@@ -267,7 +304,7 @@ only record of the call:
 
 | Field | Example |
 | ----- | ------- |
-| `apiVersion` | `v2` |
+| `apiVersion` | `v2`, or `null` for a health probe, which calls no api_version |
 | `method` | `GET` |
 | `path` | `/api/v2/tags/7d1c...` (as sent, ids URL-encoded) |
 | `query` | `['application_id' => 'commerce', 'include_global' => 'false']` |
@@ -367,4 +404,4 @@ Two failures are not HTTP errors and do not extend `ApiException`:
 
 ## Not yet implemented
 
-Health — see [roadmap.md](roadmap.md).
+Nothing: every endpoint of the server's contract is implemented.

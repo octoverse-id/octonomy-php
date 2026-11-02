@@ -15,6 +15,8 @@
 #   scripts/octonomy-harness.sh down    # tear down containers, network, env file
 #   scripts/octonomy-harness.sh logs    # dump container logs
 #   scripts/octonomy-harness.sh env     # print the env file path
+#   scripts/octonomy-harness.sh stop-db # stop the database, leaving Octonomy up
+#                                       # but not ready (fixture capture only)
 #
 # POSIX sh on purpose: the PHP 8.2+ line on main and the PHP 7.4 compat line
 # both invoke this, as do the test suite and (#13) the developer-facing
@@ -803,6 +805,14 @@ cmd_down() {
     log "torn down"
 }
 
+# Stops the database and leaves the Octonomy container running, so
+# /health/ready can be captured answering 503 (scripts/capture-fixtures.php).
+# The harness serves nothing useful afterwards: `down` removes it.
+cmd_stop_db() {
+    docker stop "$DB" >/dev/null || fail "could not stop the database container ${DB}"
+    log "database stopped; Octonomy is up but not ready"
+}
+
 cmd_up() {
     require_safe_config
     require_docker
@@ -913,5 +923,6 @@ case "${1:-up}" in
     down) cmd_down ;;
     logs) dump_logs ;;
     env) printf '%s\n' "$ENV_FILE" ;;
-    *) fail "unknown command '${1}' (expected: up, down, logs, env)" ;;
+    stop-db) cmd_stop_db ;;
+    *) fail "unknown command '${1}' (expected: up, down, logs, env, stop-db)" ;;
 esac

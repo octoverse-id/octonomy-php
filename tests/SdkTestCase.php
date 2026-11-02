@@ -19,7 +19,10 @@ use GuzzleHttp\Psr7\Utils;
 use Octoverse\Octonomy\ApiVersion;
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Config;
+use Octoverse\Octonomy\HealthClient;
+use Octoverse\Octonomy\Http\HealthTransport;
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Resource\HealthService;
 use Octoverse\Octonomy\Tests\Fixture\CapturedFixture;
 use Octoverse\Octonomy\Tests\Fixture\RecordingFactory;
 use Octoverse\Octonomy\Tests\Fixture\ReplayingClient;
@@ -74,6 +77,39 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
+     * Build a HealthClient whose probes are answered, in order, by $responses,
+     * as clientWith() builds a Client. A probe's answer replays here and
+     * nothing captured from /api does: a resource's body is no probe's answer.
+     * With $psr18, its http_client is a PSR-18 client that is not Guzzle's
+     * (ReplayingClient), as psr18ClientWith() builds one.
+     *
+     * @param list<CapturedFixture|SyntheticNegative> $responses
+     * @param array<string, mixed>                    $config    overrides of the default options
+     */
+    protected function healthClientWith(array $responses, array $config = [], bool $psr18 = false): HealthClient
+    {
+        if (array_key_exists('http_client', $config)) {
+            throw new \LogicException('healthClientWith() owns the HTTP client; pass captured() or syntheticNegative() responses instead');
+        }
+        foreach ($responses as $response) {
+            if ($response->apiVersion() !== null) {
+                throw new \LogicException(sprintf(
+                    'a response captured from api_version %s is not a health probe\'s answer; pick a health/ fixture',
+                    $response->apiVersion(),
+                ));
+            }
+        }
+        if ($psr18) {
+            self::refuseAnythingButFixtures($responses);
+            $http = $this->replaying = new ReplayingClient($responses);
+        } else {
+            $http = $this->mockedHttpClient($responses);
+        }
+
+        return new HealthClient(array_merge(['base_url' => 'https://octonomy.test', 'http_client' => $http], $config));
+    }
+
+    /**
      * Build a Client whose http_client is a PSR-18 client that is not Guzzle's
      * (ReplayingClient), answering its requests, in order, with $responses.
      * The SDK can only call sendRequest() on it. lastRequest() and the helpers
@@ -119,14 +155,20 @@ abstract class SdkTestCase extends TestCase
 
     /**
      * The timeout of the Guzzle client the SDK built for $client, when it was
-     * given no http_client of its own.
+     * given no http_client of its own. For a HealthService, the client its
+     * probes are sent through.
      */
-    protected static function timeoutOfTheClientBuiltFor(Client $client): mixed
+    protected static function timeoutOfTheClientBuiltFor(Client|HealthService $client): mixed
     {
         // Read from the private properties that hold it, by a closure bound to
         // each class: no accessor exposes the client, and none should.
-        $transport = \Closure::bind(fn(): Transport => $this->transport, $client, Client::class)();
-        $http = \Closure::bind(fn(): object => $this->http, $transport, Transport::class)();
+        if ($client instanceof HealthService) {
+            $transport = \Closure::bind(fn(): HealthTransport => $this->transport, $client, HealthService::class)();
+            $http = \Closure::bind(fn(): object => $this->http, $transport, HealthTransport::class)();
+        } else {
+            $transport = \Closure::bind(fn(): Transport => $this->transport, $client, Client::class)();
+            $http = \Closure::bind(fn(): object => $this->http, $transport, Transport::class)();
+        }
         if (!$http instanceof GuzzleClient) {
             throw new \LogicException('the client was not built by the SDK: it was given an http_client');
         }

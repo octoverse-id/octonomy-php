@@ -10,8 +10,7 @@ request.
 
 > **Status:** unreleased and early. No version has been tagged or published to Packagist yet, so the
 > install command below works once the first release ships. The transport, auth, error, and pagination
-> foundation and every resource group are implemented; the health probes are tracked in
-> [`docs/roadmap.md`](docs/roadmap.md).
+> foundation, every resource group and the health probes are implemented.
 
 ## Install
 
@@ -263,6 +262,29 @@ $client->resources()->replaceTags('product', 'sku-1', new ResourceTagsReplace('c
 `tags()->resolve($slug)` turns a slug into the tag it names, its own or an alias's, and says which
 matched (`TagResolution::$matchedType`).
 
+## Health probes
+
+The server's liveness and readiness probes are unauthenticated and sit outside `/api`, so a
+`HealthClient` needs only the base URL. A short timeout suits a probe:
+
+```php
+use Octoverse\Octonomy\HealthClient;
+
+$probe = new HealthClient(['base_url' => 'https://octonomy.example.com', 'timeout' => 2]);
+
+$status = $probe->health()->ready();
+if (!$status->ok) {
+    // The server answered, but cannot serve traffic ($status->status is "unavailable"): retry later.
+}
+```
+
+A `Client` reaches the same probes through `$client->health()`, sending neither its token nor its
+tenant. A not-ready server (`/health/ready` answering 503) returns a `HealthStatus` with `ok` false;
+it is not an exception. A server that cannot be reached throws `TransportException`, and anything else
+that answers in its place, such as a proxy's 502, throws `ApiException`. At server 3.2.1, `ready()`
+can still pass for up to a minute after the server loses its database, since the server checks a
+database connection it keeps open for 60 seconds.
+
 ## Implemented resources
 
 | Resource | Status |
@@ -273,7 +295,7 @@ matched (`TagResolution::$matchedType`).
 | Tag assignments (`$client->assignments()`) | ✅ create / remove / bulkAssign / bulkRemove |
 | Resource tags (`$client->resources()`) | ✅ listTags / replaceTags / listAuditLogs |
 | Audit logs (`$client->auditLogs()`) | ✅ list |
-| Health | 🚧 see [`docs/roadmap.md`](docs/roadmap.md) |
+| Health (`$client->health()`, or `HealthClient` without credentials) | ✅ live / ready |
 
 ## Common commands
 
@@ -290,7 +312,7 @@ make help    # list all targets
 - [Development](docs/development.md) — setup, quality gates, testing.
 - [Versioning](docs/versioning.md) — SemVer policy and which server contract this SDK targets.
 - [Release](docs/release.md) — the release runbook.
-- [Roadmap](docs/roadmap.md) — what is still queued.
+- [Roadmap](docs/roadmap.md) — the recipe for adding an endpoint.
 - [CHANGELOG](CHANGELOG.md)
 
 ## Contributing & security

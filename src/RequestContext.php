@@ -8,7 +8,9 @@ namespace Octoverse\Octonomy;
  * RequestContext describes the request an exception came from: the api_version
  * it called, its method, its path, its query parameters and the namespace it
  * was sent in. Every ApiException and TransportException carries one, and so
- * does a MalformedResponseException raised while reading a response.
+ * does a MalformedResponseException raised while reading a response. A health
+ * probe calls no api_version: the server serves /health/live and /health/ready
+ * outside /api, so its context has none (#24).
  *
  * The SDK never logs, so the exception is the only record of a failed call.
  * Once namespaces exist a bare 404 has three causes that look the same from
@@ -42,16 +44,18 @@ namespace Octoverse\Octonomy;
 final class RequestContext
 {
     /**
-     * @param string                $apiVersion the api_version the request called, an ApiVersion constant
+     * @param string|null           $apiVersion the api_version the request called, an ApiVersion constant,
+     *                                          or null for a health probe, which calls none
      * @param string                $method     the HTTP method, such as 'GET'
      * @param string                $path       the path as sent, under the api_version prefix, such as
-     *                                          '/api/v2/tags/7d1c...'; ids are already URL-encoded
+     *                                          '/api/v2/tags/7d1c...', or '/health/ready' for a probe; ids
+     *                                          are already URL-encoded
      * @param array<string, string> $query      the query parameters as sent, empty when there were none
      * @param NamespaceScope|null   $namespace  the namespace the request was sent in, or null for the
      *                                          global (tenant-shared) partition
      */
     public function __construct(
-        public readonly string $apiVersion,
+        public readonly ?string $apiVersion,
         public readonly string $method,
         public readonly string $path,
         public readonly array $query = [],
