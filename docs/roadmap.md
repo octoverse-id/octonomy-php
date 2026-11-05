@@ -19,7 +19,8 @@ template, then:
 3. Add `Resource/<Resource>Service.php`, building every path with `Internal\Path::of()`, with methods
    that take inputs first and `?RequestOptions $options = null` last, delegating to
    `Transport::one()` (single resource), `many()` (list) or `none()` (204), passing the model's
-   `fromArray(...)` to the first two. There is no raw-body method, by design. A model nested in another
+   `fromArray(...)` to the first two. Give each list method a `walk*()` beside it that hands the same
+   path, hydrator and query to `Http\Walker::walk()`, with the params' offset. There is no raw-body method, by design. A model nested in another
    is read with `Json::resource()` or `Json::resources()`, which report its fields at their path.
 4. Wire an accessor onto `Client`.
 5. Add `MockHandler`-based tests (assert method/path/headers/query/body; cover the error envelope)

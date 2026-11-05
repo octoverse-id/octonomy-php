@@ -11,8 +11,10 @@ use Octoverse\Octonomy\Exception\ConfigurationException;
 use Octoverse\Octonomy\Exception\ConflictException;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\TransportException;
+use Octoverse\Octonomy\Exception\WalkInterruptedException;
 use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\Model\TagCreate;
+use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\TagUpdate;
 use Octoverse\Octonomy\NamespaceScope;
 use Octoverse\Octonomy\RequestOptions;
@@ -126,6 +128,35 @@ final class RedactionTest extends SdkTestCase
                 '"refused, Authorization: [redacted], X-Actor-ID: [redacted], body: [redacted]"',
                 $e->getMessage(),
             );
+        }
+    }
+
+    /**
+     * A walk's failed page (#25): WalkInterruptedException quotes the page's
+     * own exception and chains it, and the walker's frames hold the
+     * RequestOptions, actor id included.
+     */
+    public function testAnInterruptedWalkCarriesNoneOfThem(): void
+    {
+        $client = $this->clientThatCannotConnect(
+            self::config(),
+            static fn(RequestInterface $request): string => sprintf(
+                'refused, Authorization: %s, X-Actor-ID: %s',
+                $request->getHeaderLine('Authorization'),
+                $request->getHeaderLine('X-Actor-ID'),
+            ),
+        );
+
+        try {
+            iterator_to_array($client->tags()->walk(new TagListParams(applicationId: 'harness-app'), self::options()));
+            self::fail('expected a WalkInterruptedException');
+        } catch (WalkInterruptedException $e) {
+            $request = $this->lastRequest();
+            self::assertSame('Bearer ' . self::TOKEN, $request->getHeaderLine('Authorization'));
+            self::assertSame('actor-from-the-call', $request->getHeaderLine('X-Actor-ID'));
+            self::assertInstanceOf(TransportException::class, $e->getPrevious());
+            self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Http\\Walker::walk');
+            self::assertStringContainsString('"refused, Authorization: [redacted], X-Actor-ID: [redacted]"', $e->getMessage());
         }
     }
 

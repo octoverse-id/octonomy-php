@@ -19,15 +19,25 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * GuzzleHttp namespace, so outside the three helpers that own the stack, no test
  * may name it at all. The other is a PSR-18 client of a test's own, which can
  * return a captured response with its body replaced without naming Guzzle, so
- * ReplayingClient is the only one a test may write.
+ * ReplayingClient is the only one a unit test may write.
+ *
+ * The integration suite's InterruptingClient is the one exception to both: it
+ * sends each request to the real harness server through a Guzzle client and
+ * returns what the server sent, or fails a request without any response, so it
+ * has no body of its own to hand over.
  */
 final class NoHandWrittenResponseBodiesTest extends SdkTestCase
 {
-    /** The files that own the mocked HTTP stack. */
-    private const OWNERS = ['SdkTestCase.php', 'Fixture/CapturedFixture.php', 'Fixture/SyntheticNegative.php'];
+    /** The files that own the mocked HTTP stack, and the client that forwards to the real server. */
+    private const OWNERS = [
+        'SdkTestCase.php',
+        'Fixture/CapturedFixture.php',
+        'Fixture/SyntheticNegative.php',
+        'Integration/InterruptingClient.php',
+    ];
 
-    /** The one PSR-18 client in the tests. */
-    private const PSR18_CLIENT = 'Fixture/ReplayingClient.php';
+    /** The PSR-18 clients in the tests: the replaying one, and the one that forwards to the real server. */
+    private const PSR18_CLIENTS = ['Fixture/ReplayingClient.php', 'Integration/InterruptingClient.php'];
 
     public function testOnlyTheFixtureHelpersTouchTheHttpStack(): void
     {
@@ -46,7 +56,7 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         // the string form write it.
         self::assertSame(
             [],
-            self::filesMatching('/\bPsr\\\\{1,2}Http\\\\{1,2}Client\\\\{1,2}ClientInterface\b/', [self::PSR18_CLIENT]),
+            self::filesMatching('/\bPsr\\\\{1,2}Http\\\\{1,2}Client\\\\{1,2}ClientInterface\b/', self::PSR18_CLIENTS),
             'only ReplayingClient may be an http_client of a test\'s own: use psr18ClientWith(), which replays captured() or syntheticNegative() responses',
         );
     }

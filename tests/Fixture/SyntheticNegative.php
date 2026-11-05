@@ -45,6 +45,13 @@ final class SyntheticNegative
      */
     public const UNDECLARED_FIELD = 'undeclared field';
 
+    /**
+     * A list page from an offset other than the one asked for. The server
+     * serves the offset it is asked for and echoes it in "pagination", so only
+     * something between it and the SDK that dropped the offset sends one.
+     */
+    public const OTHER_PAGE = 'a page other than the one asked for';
+
     private const KINDS = [
         self::MISSING_ENVELOPE,
         self::MISSING_FIELD,
@@ -54,6 +61,7 @@ final class SyntheticNegative
         self::STRAY_BODY,
         self::EXCLUSIVE_FLAGS,
         self::UNDECLARED_FIELD,
+        self::OTHER_PAGE,
     ];
 
     /**

@@ -185,6 +185,27 @@ final class ErrorMessage
     }
 
     /**
+     * The message for a walk that stopped because the request for one of its
+     * pages failed. $cause is that failure's own message, already written to
+     * this formula and redacted; it is quoted as the why, without its
+     * "octonomy: " prefix.
+     */
+    public static function walkInterrupted(int $reachedOffset, string $cause): string
+    {
+        $prefix = 'octonomy: ';
+
+        return sprintf(
+            'octonomy: a walk stopped at offset %d, the offset the page whose request failed was asked for; it'
+            . ' yielded the items from where it started up to there, and none from that page on. The request'
+            . ' failed: %s Fix: act on that failure (getPrevious() holds it), then walk again with the same params'
+            . ' and offset %d to resume.',
+            $reachedOffset,
+            str_starts_with($cause, $prefix) ? substr($cause, strlen($prefix)) : $cause,
+            $reachedOffset,
+        );
+    }
+
+    /**
      * The message for a timeout given together with an HTTP client. The SDK
      * sets a timeout only on the client it builds, so this one would be
      * dropped without a word, as it was before #18.

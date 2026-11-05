@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Resource;
 
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Http\Walker;
 use Octoverse\Octonomy\Internal\Path;
 use Octoverse\Octonomy\Internal\ScopeQuery;
 use Octoverse\Octonomy\Model\AuditLog;
@@ -78,6 +79,52 @@ final class TagService
             Tag::fromArray(...),
             $params?->toQuery() ?? [],
             null,
+            $options,
+        );
+    }
+
+    /**
+     * Walk every tag $params selects (GET /tags), yielding each Tag keyed by
+     * its offset in the list. From server 3.2.1 tags are sorted by name, slug
+     * and id.
+     *
+     * IT SENDS ONE REQUEST PER PAGE, in sequence: it is the loop over list()
+     * you did not have to write, not a bulk fetch. A page holds up to
+     * $params->limit tags, or 200, the server's maximum, when that is null, so
+     * 10,000 tags take 50 requests. Nothing is sent until the walk is iterated,
+     * and each page only once the one before it is used up. $params->offset
+     * starts the walk part of the way in.
+     *
+     * A failed page request throws WalkInterruptedException, whose
+     * reachedOffset is where that page starts: walk again with the same params
+     * and that offset to resume.
+     *
+     * It is not a snapshot. The server pages by offset and has no cursor, so a
+     * tag created, or deactivated (which removes it from a list of active
+     * tags), that sorts before the walk's position while the walk runs moves
+     * every tag after it by one: the walk then yields one twice, or never
+     * yields one, and a resume drifts the same way. Narrow the walk with
+     * filters nothing changes while it runs, de-duplicate on id, or walk while
+     * nothing writes.
+     *
+     * AGAINST SERVER 3.2.0 OR OLDER, A TAG WALK OF MORE THAN ONE PAGE IS
+     * BEST-EFFORT EVEN WHEN NOTHING WRITES. Before 3.2.1 (octonomy#162) GET
+     * /tags had no ORDER BY, so the database could answer each page's query in
+     * a different order, and a walk could yield a tag twice and never yield
+     * another. The SDK cannot tell which server it talks to. There, only a set
+     * narrowed to fit one page is complete; raise $params->limit up to 200 or
+     * filter until it does.
+     *
+     * @return \Generator<int, Tag, mixed, void>
+     */
+    public function walk(?TagListParams $params = null, ?RequestOptions $options = null): \Generator
+    {
+        return Walker::walk(
+            $this->transport,
+            'tags',
+            Tag::fromArray(...),
+            $params?->toQuery() ?? [],
+            $params?->offset,
             $options,
         );
     }
@@ -178,6 +225,38 @@ final class TagService
     }
 
     /**
+     * Walk every alias of a tag (GET /tags/{id}/aliases), yielding each
+     * TagAlias keyed by its offset in the list. Aliases are sorted by name,
+     * slug and id.
+     *
+     * IT SENDS ONE REQUEST PER PAGE, in sequence, of up to $params->limit
+     * aliases, or 200 when that is null: not a bulk fetch. Nothing is sent
+     * until the walk is iterated. $params->offset starts it part of the way
+     * in. A failed page request throws WalkInterruptedException, whose
+     * reachedOffset is where to resume with the same params.
+     *
+     * It is not a snapshot: the server pages by offset, so an alias created or
+     * deactivated before the walk's position while it runs makes the walk
+     * yield one twice or never yield one (see walk()).
+     *
+     * @return \Generator<int, TagAlias, mixed, void>
+     */
+    public function walkAliases(
+        string $id,
+        ?TagAliasListParams $params = null,
+        ?RequestOptions $options = null,
+    ): \Generator {
+        return Walker::walk(
+            $this->transport,
+            Path::of('tags', $id, 'aliases'),
+            TagAlias::fromArray(...),
+            $params?->toQuery() ?? [],
+            $params?->offset,
+            $options,
+        );
+    }
+
+    /**
      * List a page of the resources a tag is assigned to
      * (GET /tags/{id}/resources), newest assignment first. A tag the request
      * cannot see is a 404.
@@ -200,6 +279,39 @@ final class TagService
     }
 
     /**
+     * Walk every resource a tag is assigned to (GET /tags/{id}/resources),
+     * yielding each TagResource keyed by its offset in the list, newest
+     * assignment first.
+     *
+     * IT SENDS ONE REQUEST PER PAGE, in sequence, of up to $params->limit
+     * resources, or 200 when that is null: not a bulk fetch. Nothing is sent
+     * until the walk is iterated. $params->offset starts it part of the way
+     * in. A failed page request throws WalkInterruptedException, whose
+     * reachedOffset is where to resume with the same params.
+     *
+     * It is not a snapshot: the server pages by offset, so a resource the tag
+     * is assigned to while the walk runs, which lists first, makes the walk
+     * yield one resource twice, and an assignment removed before the walk's
+     * position makes it never yield one (see walk()).
+     *
+     * @return \Generator<int, TagResource, mixed, void>
+     */
+    public function walkResources(
+        string $id,
+        ?TagResourceListParams $params = null,
+        ?RequestOptions $options = null,
+    ): \Generator {
+        return Walker::walk(
+            $this->transport,
+            Path::of('tags', $id, 'resources'),
+            TagResource::fromArray(...),
+            $params?->toQuery() ?? [],
+            $params?->offset,
+            $options,
+        );
+    }
+
+    /**
      * List a page of the audit log entries about a tag
      * (GET /tags/{id}/audit-logs), newest first: its own changes, and those of
      * its aliases and assignments. Needs a token with the audit:read scope.
@@ -217,6 +329,39 @@ final class TagService
             AuditLog::fromArray(...),
             $params?->toQuery() ?? [],
             null,
+            $options,
+        );
+    }
+
+    /**
+     * Walk every audit log entry about a tag (GET /tags/{id}/audit-logs),
+     * yielding each AuditLog keyed by its offset in the list, newest first.
+     * Needs a token with the audit:read scope.
+     *
+     * IT SENDS ONE REQUEST PER PAGE, in sequence, of up to $params->limit
+     * entries, or 200 when that is null: not a bulk fetch. Nothing is sent
+     * until the walk is iterated. $params->offset starts it part of the way
+     * in. A failed page request throws WalkInterruptedException, whose
+     * reachedOffset is where to resume with the same params.
+     *
+     * It is not a snapshot: the server pages by offset, newest first, so each
+     * change to the tag, its aliases or its assignments while the walk runs
+     * logs an entry at the front of the list and makes the walk yield one
+     * entry twice (see walk()).
+     *
+     * @return \Generator<int, AuditLog, mixed, void>
+     */
+    public function walkAuditLogs(
+        string $id,
+        ?AuditLogListParams $params = null,
+        ?RequestOptions $options = null,
+    ): \Generator {
+        return Walker::walk(
+            $this->transport,
+            Path::of('tags', $id, 'audit-logs'),
+            AuditLog::fromArray(...),
+            $params?->toQuery() ?? [],
+            $params?->offset,
             $options,
         );
     }
