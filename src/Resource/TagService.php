@@ -85,7 +85,8 @@ final class TagService
 
     /**
      * Walk every tag $params selects (GET /tags), yielding each Tag keyed by
-     * its offset in the list. Tags are sorted by name, slug and id.
+     * its offset in the list. From server 3.2.1 tags are sorted by name, slug
+     * and id.
      *
      * IT SENDS ONE REQUEST PER PAGE, in sequence: it is the loop over list()
      * you did not have to write, not a bulk fetch. A page holds up to
@@ -106,9 +107,15 @@ final class TagService
      * filters nothing changes while it runs, de-duplicate on id, or walk while
      * nothing writes.
      *
-     * @return \Generator<int, Tag, mixed, void>
+     * AGAINST SERVER 3.2.0 OR OLDER, A TAG WALK OF MORE THAN ONE PAGE IS
+     * BEST-EFFORT EVEN WHEN NOTHING WRITES. Before 3.2.1 (octonomy#162) GET
+     * /tags had no ORDER BY, so the database could answer each page's query in
+     * a different order, and a walk could yield a tag twice and never yield
+     * another. The SDK cannot tell which server it talks to. There, only a set
+     * narrowed to fit one page is complete; raise $params->limit up to 200 or
+     * filter until it does.
      *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
+     * @return \Generator<int, Tag, mixed, void>
      */
     public function walk(?TagListParams $params = null, ?RequestOptions $options = null): \Generator
     {
@@ -233,8 +240,6 @@ final class TagService
      * yield one twice or never yield one (see walk()).
      *
      * @return \Generator<int, TagAlias, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walkAliases(
         string $id,
@@ -290,8 +295,6 @@ final class TagService
      * position makes it never yield one (see walk()).
      *
      * @return \Generator<int, TagResource, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walkResources(
         string $id,
@@ -347,8 +350,6 @@ final class TagService
      * entry twice (see walk()).
      *
      * @return \Generator<int, AuditLog, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walkAuditLogs(
         string $id,

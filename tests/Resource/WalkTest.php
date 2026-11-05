@@ -125,7 +125,7 @@ final class WalkTest extends SdkTestCase
         self::assertInstanceOf(ForbiddenException::class, $cause);
         self::assertSame('/api/v2/tags', $cause->context->path);
         self::assertSame(['limit' => '3', 'offset' => '3'], $cause->context->query, 'the failed page\'s own request');
-        self::assertStringContainsString('a walk stopped at offset 3', $e->getMessage());
+        self::assertStringContainsString('a walk stopped at offset 3, the offset the page whose request failed was asked for', $e->getMessage());
         self::assertStringContainsString(substr($cause->getMessage(), strlen('octonomy: ')), $e->getMessage());
         self::assertStringContainsString('walk again with the same params and offset 3', $e->getMessage());
         self::assertStringNotContainsString('test-token', $e->getMessage());
@@ -224,6 +224,7 @@ final class WalkTest extends SdkTestCase
         [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3), self::merchantA()));
 
         self::assertSame(self::slugs('v2/tags/walk-first'), self::slugsOf($walked), 'no tag twice');
+        self::assertCount(2, $this->sentRequests(), 'and no third request for the same page');
         self::assertSame(3, $e->reachedOffset);
         $cause = $e->getPrevious();
         self::assertInstanceOf(MalformedResponseException::class, $cause);
@@ -234,19 +235,28 @@ final class WalkTest extends SdkTestCase
         self::assertStringContainsString('"pagination.offset" is not 3, the offset the walk asked for, got "0"', $cause->getMessage());
     }
 
-    public function testANegativeOffsetIsRefusedWhenTheWalkIsCalled(): void
+    /**
+     * The offset is sent as it is, and the walk counts from where the server
+     * says the first page starts: it serves a negative offset from 0.
+     */
+    public function testAWalkCountsFromWhereTheServerSaysItsFirstPageStarts(): void
     {
-        $client = $this->clientWith([]);
+        $client = $this->clientWith([self::captured('v2/tags/walk-negative-offset'), self::captured('v2/tags/walk-last')]);
 
-        try {
-            // Not iterated: the walk refuses it at the call, not at the first page.
-            $client->tags()->walk(new TagListParams(offset: -1));
-            self::fail('expected the walk to refuse a negative offset');
-        } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('a walk cannot start at offset -1', $e->getMessage());
-            self::assertStringContainsString('Nothing was sent', $e->getMessage());
-        }
-        $this->assertNothingSent();
+        $walked = iterator_to_array($client->tags()->walk(new TagListParams(limit: 3, offset: -1), self::merchantA()));
+
+        self::assertSame([['limit' => '3', 'offset' => '-1'], ['limit' => '3', 'offset' => '3']], $this->sentQueries());
+        self::assertSame([0, 1, 2, 3], array_keys($walked));
+        self::assertSame(self::slugs('v2/tags/walk-limit-200'), self::slugsOf($walked));
+    }
+
+    public function testAFailedFirstPageReachesTheOffsetItWasAskedFor(): void
+    {
+        $client = $this->clientWith([self::captured('v2/errors/forbidden')]);
+
+        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(offset: -1)));
+
+        self::assertSame(-1, $e->reachedOffset, 'nothing was served, so the walk got no further than it asked');
     }
 
     public function testAMistakeInTheCallIsThrownAsItIsNotAsAnInterruption(): void

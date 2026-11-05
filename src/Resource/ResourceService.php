@@ -78,8 +78,6 @@ final class ResourceService
      * position makes it never yield one; a resume drifts the same way.
      *
      * @return \Generator<int, ResourceTag, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walkTags(
         string $resourceType,
@@ -162,8 +160,6 @@ final class ResourceService
      * entry twice; a resume drifts the same way.
      *
      * @return \Generator<int, AuditLog, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walkAuditLogs(
         string $resourceType,

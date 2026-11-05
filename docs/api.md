@@ -175,27 +175,32 @@ a `\Generator` that reads the list page by page and yields every item, keyed by 
   are 50 requests. A limit in the params wins. The server clamps a limit above its maximum, and serves
   50 for one below 1, rather than refusing either, so a walk advances by the items it was served, never
   by the limit it asked for.
-- **Where it starts and stops.** `offset` in the params starts the walk part of the way in; a negative
-  one throws `InvalidArgumentException` when the walk method is called. Each page is asked for at the
+- **Where it starts and stops.** `offset` in the params starts the walk part of the way in. It is sent
+  as it is, and the walk counts from the offset the server says its first page starts at, so a negative
+  one, which the server serves from 0, keys the first item 0. Each later page is asked for at the
   offset the page before it ended on. The walk ends at a page without a `next` link, or at an empty
   page.
 - **Failure.** A page request that fails throws `WalkInterruptedException`. Its `reachedOffset` is the
-  offset of the first item the walk did not yield, which is where the failed page starts, and
+  offset the failed page was asked for, that of the first item the walk did not yield, and
   `getPrevious()` is the failure itself: an `ApiException`, a `TransportException` or a
   `MalformedResponseException` carrying that page's `RequestContext`. Walk again with the same params
   and `offset: $e->reachedOffset` to resume. A page the server serves from an offset other than the one
   asked for, which only something between the SDK and the server that dropped the offset can cause,
-  ends the walk the same way, with a `MalformedResponseException` on `pagination.offset`, rather than
-  fetch that page for ever. A mistake in the call, such as `include_global` on a v1 client, is thrown
+  after the first ends the walk the same way, with a `MalformedResponseException` on
+  `pagination.offset`, rather than fetch that page for ever. A mistake in the call, such as `include_global` on a v1 client, is thrown
   as the `LogicException` it is.
 - **Offset drift.** The server pages by limit and offset and offers no cursor, so a walk is not a
   snapshot. A row added or removed while the walk runs, at a place in the list's order before the
   walk's position, moves every row after it by one: the walk yields one twice, or never yields one, and
-  a resume from `reachedOffset` drifts the same way. Tags, vocabularies and aliases sort by name, slug
-  and id, and deactivating one removes it from a list of active rows; audit logs sort newest first, so
+  a resume from `reachedOffset` drifts the same way. Tags (from server 3.2.1), vocabularies and aliases
+  sort by name, slug and id, and deactivating one removes it from a list of active rows; audit logs sort newest first, so
   every write made during a walk of them repeats an entry; a resource's tags and a tag's resources sort
   newest assignment first. No client can fix this. Narrow the walk with filters that do not change while
   it runs, de-duplicate on id, or walk while nothing writes.
+- **Tags before server 3.2.1.** Until 3.2.1 (octonomy#162) `GET /tags` had no `ORDER BY`, so the
+  database could order each page's query differently, and a tag walk of more than one page could
+  repeat or miss tags with nothing writing at all. The SDK cannot tell which server it talks to; against
+  3.2.0 or older only a set narrowed to fit one page is complete.
 
 ### Assignment bodies
 

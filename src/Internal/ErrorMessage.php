@@ -200,25 +200,12 @@ final class ErrorMessage
         $prefix = 'octonomy: ';
 
         return sprintf(
-            'octonomy: a walk stopped at offset %d, where the page whose request failed starts; every item before'
-            . ' it was yielded, and none from there on. The request failed: %s Fix: act on that failure'
-            . ' (getPrevious() holds it), then walk again with the same params and offset %d to resume.',
+            'octonomy: a walk stopped at offset %d, the offset the page whose request failed was asked for; every'
+            . ' item before it was yielded, and none from there on. The request failed: %s Fix: act on that'
+            . ' failure (getPrevious() holds it), then walk again with the same params and offset %d to resume.',
             $reachedOffset,
             str_starts_with($cause, $prefix) ? substr($cause, strlen($prefix)) : $cause,
             $reachedOffset,
-        );
-    }
-
-    /**
-     * The message for a walk asked to start before the first item of a list.
-     */
-    public static function negativeWalkOffset(int $offset): string
-    {
-        return sprintf(
-            'octonomy: a walk cannot start at offset %d: an offset counts the items before the first one a walk'
-            . ' yields, so it is 0 or more. Nothing was sent. Fix: leave offset null to start at the beginning,'
-            . ' or pass the reachedOffset of the WalkInterruptedException that stopped an earlier walk.',
-            $offset,
         );
     }
 

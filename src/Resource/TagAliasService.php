@@ -107,8 +107,6 @@ final class TagAliasService
      * on id, or walk while nothing writes.
      *
      * @return \Generator<int, TagAlias, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walk(?TagAliasListParams $params = null, ?RequestOptions $options = null): \Generator
     {

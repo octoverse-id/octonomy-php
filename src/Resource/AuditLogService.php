@@ -70,8 +70,6 @@ final class AuditLogService
      * de-duplicate on id, or walk while nothing writes.
      *
      * @return \Generator<int, AuditLog, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $params->offset is negative (nothing is sent)
      */
     public function walk(?AuditLogListParams $params = null, ?RequestOptions $options = null): \Generator
     {

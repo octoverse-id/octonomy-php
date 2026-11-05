@@ -7,8 +7,6 @@ namespace Octoverse\Octonomy\Http;
 use Octoverse\Octonomy\Exception\MalformedResponseException;
 use Octoverse\Octonomy\Exception\OctonomyException;
 use Octoverse\Octonomy\Exception\WalkInterruptedException;
-use Octoverse\Octonomy\Internal\ErrorMessage;
-use Octoverse\Octonomy\Internal\Redaction;
 use Octoverse\Octonomy\RequestOptions;
 
 /**
@@ -40,18 +38,17 @@ final class Walker
     /**
      * Walk GET $path from $offset, sending $query, the list's own params, on
      * every page with the page's limit and offset. Nothing is sent until the
-     * walk is iterated; a negative $offset is refused here, at the call.
+     * walk is iterated.
      *
      * @template T
      *
      * @param \Closure(array<string, mixed>, string): T $hydrate builds one item, as for Transport::many()
      * @param array<string, string>                      $query   the params' toQuery(); its limit, when set,
      *                                                            is the caller's and wins
-     * @param int|null                                   $offset  where the walk starts; null for the beginning
+     * @param int|null                                   $offset  where the walk starts, sent as it is; null for
+     *                                                            the beginning
      *
      * @return \Generator<int, T, mixed, void>
-     *
-     * @throws \InvalidArgumentException when $offset is negative (nothing is sent)
      */
     public static function walk(
         Transport $transport,
@@ -61,38 +58,10 @@ final class Walker
         ?int $offset,
         ?RequestOptions $options,
     ): \Generator {
-        // Refused rather than sent: the server reads a negative offset as 0
-        // without saying so, and every offset the walk then reported, its
-        // keys and a WalkInterruptedException's reachedOffset, would be
-        // wrong by the difference.
-        if ($offset !== null && $offset < 0) {
-            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::negativeWalkOffset($offset)));
-        }
         $query['limit'] ??= (string) self::DEFAULT_LIMIT;
+        $offset ??= 0;
+        $first = true;
 
-        return self::pages($transport, $path, $hydrate, $query, $offset ?? 0, $options);
-    }
-
-    /**
-     * The generator walk() returns, kept apart so that walk() checks its
-     * arguments when it is called: a generator function runs none of its body
-     * until it is first iterated.
-     *
-     * @template T
-     *
-     * @param \Closure(array<string, mixed>, string): T $hydrate
-     * @param array<string, string>                      $query
-     *
-     * @return \Generator<int, T, mixed, void>
-     */
-    private static function pages(
-        Transport $transport,
-        string $path,
-        \Closure $hydrate,
-        array $query,
-        int $offset,
-        ?RequestOptions $options,
-    ): \Generator {
         while (true) {
             $query['offset'] = (string) $offset;
             try {
@@ -105,12 +74,18 @@ final class Walker
                 throw new WalkInterruptedException($offset, $e);
             }
 
-            // The server echoes the offset it served, and serves the one it
-            // was asked for. A page from anywhere else means something between
-            // the SDK and the server dropped the offset, and the walk would
-            // ask for that same page again forever.
+            // The server echoes the offset it served. The first page starts
+            // wherever the server says it does, since an offset it cannot
+            // serve is its to read (it serves a negative one from 0), and the
+            // walk counts its keys from there. Every later page must start
+            // where the walk asked: a page from anywhere else means something
+            // between the SDK and the server dropped the offset, and the walk
+            // would ask for that same page again for ever.
             $served = $page->pagination->offset;
-            if ($served !== $offset) {
+            if ($first) {
+                $offset = $served;
+                $first = false;
+            } elseif ($served !== $offset) {
                 throw new WalkInterruptedException($offset, new MalformedResponseException(
                     "is not {$offset}, the offset the walk asked for",
                     'pagination.offset',

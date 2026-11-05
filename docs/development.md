@@ -132,7 +132,7 @@ an empty list and a middle page with both links; and one error envelope per code
 v2 also reads the global partition and an `include_global` list, so its corpus holds populated and
 null namespace pairs side by side, and walks merchant A's tags as `walk()` does (#25): at limit 3 a
 full page and then a short last one, asked for at the offset the first ended on, an empty page past
-the end, and the walk's own limit of 200; v1's holds no namespace fields at all. `health/` holds the probes,
+the end, the walk's own limit of 200, and a negative offset, which the server serves from 0; v1's holds no namespace fields at all. `health/` holds the probes,
 sent with no credentials: `/health/live` and `/health/ready` answering 200, and `/health/ready`
 answering 503 with the harness database stopped.
 

@@ -243,11 +243,14 @@ final class FixtureCapture
         // reads a full first page and a short last one, asked for at the offset
         // the first page ended on; a walk resumed at the end of the list reads
         // an empty page; and at the walk's own limit of 200 all four fit on
-        // one page. Each asks with the limit and offset a walk sends.
+        // one page. A walk started at a negative offset gets the first page,
+        // which says it starts at 0. Each asks with the limit and offset a
+        // walk sends.
         $this->call('tags/walk-first', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '0']);
         $this->call('tags/walk-last', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '3']);
         $this->call('tags/walk-end', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '4']);
         $this->call('tags/walk-limit-200', 200, 'GET', 'tags', ['limit' => '200', 'offset' => '0']);
+        $this->call('tags/walk-negative-offset', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '-1']);
     }
 
     /**

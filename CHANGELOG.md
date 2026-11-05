@@ -13,10 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `walkAuditLogs()`), taking the same arguments and returning a lazy `\Generator` over every page,
   keyed by each item's offset in the list. It sends one request per page, in sequence, at limit 200,
   the server's maximum, unless the params set one, rather than the server's default of 50. A failed
-  page throws `WalkInterruptedException`, whose `reachedOffset` is where that page starts and whose
-  `getPrevious()` is the failure, so the walk can resume from there; a negative start offset throws
-  `InvalidArgumentException` when the method is called. Offset drift under concurrent writes is
-  documented, not solved: the server has no cursor (#25).
+  page throws `WalkInterruptedException`, whose `reachedOffset` is the offset that page was asked for
+  and whose `getPrevious()` is the failure, so the walk can resume from there. Offset drift under
+  concurrent writes is documented, not solved: the server has no cursor, and before server 3.2.1 the
+  tags list had no order at all (#25).
 - Client foundation targeting the Octonomy REST API: `Client` with
   options-array/`Config` construction and validation, a Guzzle-backed `Transport` that sets
   `Authorization`, `X-Tenant-ID`, optional `X-Actor-ID`, `Accept`, and `User-Agent`, and an

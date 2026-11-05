@@ -155,7 +155,7 @@ final class RedactionTest extends SdkTestCase
             self::assertSame('Bearer ' . self::TOKEN, $request->getHeaderLine('Authorization'));
             self::assertSame('actor-from-the-call', $request->getHeaderLine('X-Actor-ID'));
             self::assertInstanceOf(TransportException::class, $e->getPrevious());
-            self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Http\\Walker::pages');
+            self::assertCarriesNone($e, 'Octoverse\\Octonomy\\Http\\Walker::walk');
             self::assertStringContainsString('"refused, Authorization: [redacted], X-Actor-ID: [redacted]"', $e->getMessage());
         }
     }

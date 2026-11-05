@@ -104,6 +104,7 @@ final class CapturedCorpusTest extends SdkTestCase
             'tags/walk-first',
             'tags/walk-last',
             'tags/walk-limit-200',
+            'tags/walk-negative-offset',
         ],
     ];
 

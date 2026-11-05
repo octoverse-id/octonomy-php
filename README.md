@@ -262,7 +262,9 @@ A walk is not a snapshot. The server pages by offset and has no cursor, so a row
 (for tags, vocabularies and aliases, deactivated) at a place before the walk's position while it runs
 moves every row after it: the walk yields one twice or never yields one, and so can a resume. Audit
 logs list newest first, so every write made during a walk of them repeats an entry. Narrow the walk
-with filters, de-duplicate on id, or walk while nothing writes.
+with filters, de-duplicate on id, or walk while nothing writes. Against a server older than 3.2.1 the
+tags list has no order at all, so a tag walk of more than one page can repeat or miss tags even when
+nothing writes.
 
 ## Tagging resources
 
