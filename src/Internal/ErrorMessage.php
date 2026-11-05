@@ -185,11 +185,6 @@ final class ErrorMessage
     }
 
     /**
-     * The message for a timeout given together with an HTTP client. The SDK
-     * sets a timeout only on the client it builds, so this one would be
-     * dropped without a word, as it was before #18.
-     */
-    /**
      * The message for a walk that stopped because the request for one of its
      * pages failed. $cause is that failure's own message, already written to
      * this formula and redacted; it is quoted as the why, without its
@@ -210,6 +205,11 @@ final class ErrorMessage
         );
     }
 
+    /**
+     * The message for a timeout given together with an HTTP client. The SDK
+     * sets a timeout only on the client it builds, so this one would be
+     * dropped without a word, as it was before #18.
+     */
     public static function timeoutWithHttpClient(float $timeout): string
     {
         return sprintf(
