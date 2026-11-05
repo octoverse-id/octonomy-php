@@ -36,14 +36,17 @@ stays a faithful, ergonomic client.
 
 - One file per resource service (`Resource/TagService.php`, …), reached from an accessor on `Client`.
 - Methods take required inputs first and an optional `?RequestOptions $options = null` last.
-- List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope.
+- List methods return `ResultList<T>` decoded from the `{data, pagination}` envelope. Each has a
+  `walk*()` beside it (#25) returning a lazy `\Generator` over every page, at limit 200 unless the
+  params set one, that throws `WalkInterruptedException` with the `reachedOffset` to resume from.
 - `http_client` is any PSR-18 client, and no adapter class wraps one (#18). Both transports send
   through `Http\Sender`, which hands a Guzzle client the request through `send()` with its own default
   headers, query, body, `json` and `auth` cancelled, never through its PSR-18 `sendRequest()`, which
   applies every one of them over the SDK's request; any other client gets `sendRequest()`. `timeout` sets only the client the SDK builds, and with `http_client`
   it is refused, not dropped.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
-  `none()` (204). `Transport` exposes no raw-body method; a 2xx missing its envelope raises
+  `none()` (204). A `walk*()` method reads its list through `Http\Walker`, which calls `many()` for
+  each page. `Transport` exposes no raw-body method; a 2xx missing its envelope raises
   `MalformedResponseException` rather than hydrating an empty model. `one()`/`many()` run the model's
   `fromArray(...)` themselves, so a rejected field is reported with its endpoint and api_version.
 - **The health probes are the one exception (#24).** They sit outside `/api`, are unauthenticated,
@@ -106,11 +109,12 @@ stays a faithful, ergonomic client.
   written from the spec agrees with its author rather than the server (#6 shipped green that way).
   **Carve-out:** negative fixtures (missing envelope, missing field, wrong type, invalid JSON, gateway
   HTML, a body on a no-content response, mutually exclusive flag states, a field the api_version does
-  not declare) are synthetic, since a conforming server cannot produce them; build them only with
+  not declare, a list page from an offset other than the one asked for) are synthetic, since a conforming server cannot produce them; build them only with
   `SdkTestCase::syntheticNegative()` or `syntheticNegativeFrom()`, naming the `SyntheticNegative`
   kind that applies. A body captured from one api_version is not a capture of the other's response.
   `clientWith()`/`transportWith()`/`psr18ClientWith()` accept nothing else, and no test outside the
-  fixture helpers may reference `GuzzleHttp\`. Request-side assertions stay hand-written: they test SDK
+  fixture helpers may reference `GuzzleHttp\`, except the integration suite's `InterruptingClient`,
+  which forwards to the real server and only ever returns what it sent. Request-side assertions stay hand-written: they test SDK
   behavior, not server shape.
 - Fixtures are written only by `make fixtures` (`scripts/capture-fixtures.php` against the harness's
   pinned server) and never edited by hand; the manifest records each file's hash and the unit suite

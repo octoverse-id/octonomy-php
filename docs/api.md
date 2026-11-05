@@ -99,20 +99,26 @@ need `audit:read`; every other read method needs `tags:read`, and mutating metho
 | `vocabularies()->create()` | POST | `/vocabularies` |
 | `vocabularies()->get()` | GET | `/vocabularies/{id}` (`?application_id`, `?include_global`) |
 | `vocabularies()->list()` | GET | `/vocabularies` |
+| `vocabularies()->walk()` | GET, one per page | `/vocabularies` |
 | `vocabularies()->update()` | PATCH | `/vocabularies/{id}` (`?application_id`) |
 | `vocabularies()->delete()` | DELETE | `/vocabularies/{id}` (`?application_id`) |
 | `tags()->create()` | POST | `/tags` |
 | `tags()->get()` | GET | `/tags/{id}` (`?application_id`, `?include_global`) |
 | `tags()->list()` | GET | `/tags` |
+| `tags()->walk()` | GET, one per page | `/tags` |
 | `tags()->update()` | PATCH | `/tags/{id}` (`?application_id`) |
 | `tags()->delete()` | DELETE | `/tags/{id}` (`?application_id`) |
 | `tags()->resolve()` | GET | `/tag-resolution?slug` (`?application_id`, `?type`, `?scope`, `?include_global`) |
 | `tags()->listAliases()` | GET | `/tags/{id}/aliases` |
+| `tags()->walkAliases()` | GET, one per page | `/tags/{id}/aliases` |
 | `tags()->listResources()` | GET | `/tags/{id}/resources` |
+| `tags()->walkResources()` | GET, one per page | `/tags/{id}/resources` |
 | `tags()->listAuditLogs()` | GET | `/tags/{id}/audit-logs` |
+| `tags()->walkAuditLogs()` | GET, one per page | `/tags/{id}/audit-logs` |
 | `aliases()->create()` | POST | `/tag-aliases` |
 | `aliases()->get()` | GET | `/tag-aliases/{id}` (`?application_id`, `?include_global`) |
 | `aliases()->list()` | GET | `/tag-aliases` |
+| `aliases()->walk()` | GET, one per page | `/tag-aliases` |
 | `aliases()->update()` | PATCH | `/tag-aliases/{id}` (`?application_id`) |
 | `aliases()->delete()` | DELETE | `/tag-aliases/{id}` (`?application_id`) |
 | `assignments()->create()` | POST | `/tag-assignments` |
@@ -120,9 +126,12 @@ need `audit:read`; every other read method needs `tags:read`, and mutating metho
 | `assignments()->bulkAssign()` | POST | `/tag-assignments/bulk-assign` |
 | `assignments()->bulkRemove()` | POST | `/tag-assignments/bulk-remove` |
 | `resources()->listTags()` | GET | `/resources/{type}/{id}/tags?application_id` |
+| `resources()->walkTags()` | GET, one per page | `/resources/{type}/{id}/tags?application_id` |
 | `resources()->replaceTags()` | POST | `/resources/{type}/{id}/tags` |
 | `resources()->listAuditLogs()` | GET | `/resources/{type}/{id}/audit-logs` |
+| `resources()->walkAuditLogs()` | GET, one per page | `/resources/{type}/{id}/audit-logs` |
 | `auditLogs()->list()` | GET | `/audit-logs` |
+| `auditLogs()->walk()` | GET, one per page | `/audit-logs` |
 | `health()->live()` | GET | `/health/live`, at `base_url`, outside `/api/{version}` |
 | `health()->ready()` | GET | `/health/ready`, at `base_url`, outside `/api/{version}` |
 
@@ -150,6 +159,43 @@ paging, and, on v2, `include_global`. Boolean params are serialized as `"true"`/
 The server applies every `AuditLogListParams` filter on all three audit lists, so on the tag's or the
 resource's list the matching filters narrow further. A list of aliases or of a resource's tags shows
 active rows only unless `is_active` or `include_inactive` says otherwise.
+
+### Walking a list
+
+Each list method has a walk method beside it, taking the same arguments: `walk()` for `list()`, and
+`walkAliases()`, `walkResources()`, `walkTags()` and `walkAuditLogs()` for the nested lists. It returns
+a `\Generator` that reads the list page by page and yields every item, keyed by its offset in the list
+(#25).
+
+- **One request per page, in sequence.** It is the loop over `list()` you did not have to write, not a
+  bulk endpoint. Nothing is sent until the generator is iterated, and each page only once the one
+  before it is used up; leaving the loop early sends nothing more.
+- **Limit 200 by default.** Without `limit` in the params a walk asks for 200, the server's maximum,
+  rather than taking the server's default of 50, which would cost four times the requests: 10,000 tags
+  are 50 requests. A limit in the params wins. The server clamps a limit above its maximum, and serves
+  50 for one below 1, rather than refusing either, so a walk advances by the items it was served, never
+  by the limit it asked for.
+- **Where it starts and stops.** `offset` in the params starts the walk part of the way in; a negative
+  one throws `InvalidArgumentException` when the walk method is called. Each page is asked for at the
+  offset the page before it ended on. The walk ends at a page without a `next` link, or at an empty
+  page.
+- **Failure.** A page request that fails throws `WalkInterruptedException`. Its `reachedOffset` is the
+  offset of the first item the walk did not yield, which is where the failed page starts, and
+  `getPrevious()` is the failure itself: an `ApiException`, a `TransportException` or a
+  `MalformedResponseException` carrying that page's `RequestContext`. Walk again with the same params
+  and `offset: $e->reachedOffset` to resume. A page the server serves from an offset other than the one
+  asked for, which only something between the SDK and the server that dropped the offset can cause,
+  ends the walk the same way, with a `MalformedResponseException` on `pagination.offset`, rather than
+  fetch that page for ever. A mistake in the call, such as `include_global` on a v1 client, is thrown
+  as the `LogicException` it is.
+- **Offset drift.** The server pages by limit and offset and offers no cursor, so a walk is not a
+  snapshot. A row added or removed while the walk runs, at a place in the list's order before the
+  walk's position, moves every row after it by one: the walk yields one twice, or never yields one, and
+  a resume from `reachedOffset` drifts the same way. Tags, vocabularies and aliases sort by name, slug
+  and id, and deactivating one removes it from a list of active rows; audit logs sort newest first, so
+  every write made during a walk of them repeats an entry; a resource's tags and a tag's resources sort
+  newest assignment first. No client can fix this. Narrow the walk with filters that do not change while
+  it runs, de-duplicate on id, or walk while nothing writes.
 
 ### Assignment bodies
 
@@ -234,6 +280,7 @@ first to keep the model as it was read.
   model nested in another (a resolution's `tag`, a bulk result's `assignments`) hydrates as its own
   model does, and a field it breaks is reported at its path, such as `data.assignments[2].tag_id`.
 - **List:** `ResultList<T>` = `{ data: T[], pagination: {limit, offset, count, next, previous} }`.
+- **Walk:** `\Generator<int, T>` over every page, keyed by offset; see [Walking a list](#walking-a-list).
 - **Delete:** no body (deactivation on the server).
 - **Errors:** `{ error: {code, message, details, request_id} }` → a typed `ApiException` subclass.
 - **Health probe:** `HealthStatus` = `{ok, status}`, read from the bare `{ status: "..." }` body; see

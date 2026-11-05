@@ -237,6 +237,17 @@ final class FixtureCapture
         $this->call('vocabularies/update-numeric-metadata', 200, 'PATCH', "vocabularies/{$created['labels']}", [], [
             'metadata' => (object) ['a', 'b'],
         ]);
+
+        // The pages of a walk (#25), after everything above for the same
+        // reason. Merchant A has four active tags by now. At limit 3 the walk
+        // reads a full first page and a short last one, asked for at the offset
+        // the first page ended on; a walk resumed at the end of the list reads
+        // an empty page; and at the walk's own limit of 200 all four fit on
+        // one page. Each asks with the limit and offset a walk sends.
+        $this->call('tags/walk-first', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '0']);
+        $this->call('tags/walk-last', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '3']);
+        $this->call('tags/walk-end', 200, 'GET', 'tags', ['limit' => '3', 'offset' => '4']);
+        $this->call('tags/walk-limit-200', 200, 'GET', 'tags', ['limit' => '200', 'offset' => '0']);
     }
 
     /**

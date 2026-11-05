@@ -227,7 +227,7 @@ retry. A configured value a header cannot carry throws `ConfigurationException`.
 
 ## Pagination
 
-List methods return a `ResultList<T>` with `->data` (a list of models) and `->pagination`
+List methods return one page, a `ResultList<T>` with `->data` (a list of models) and `->pagination`
 (limit, offset, count, next, previous):
 
 ```php
@@ -236,6 +236,33 @@ use Octoverse\Octonomy\Model\TagListParams;
 $page = $client->tags()->list(new TagListParams(type: 'label', limit: 50));
 printf("%d of %d\n", count($page->data), $page->pagination->count);
 ```
+
+Each list method has a `walk*()` beside it (`walk()`, `walkAliases()`, `walkTags()`, …) that returns a
+lazy `\Generator` over every page, keyed by each item's offset in the list. It is one request per page
+in sequence, not a bulk fetch: it asks for 200 a page, the server's maximum, unless the params set a
+limit (the server's own default is 50), and sends nothing until you iterate it. A failed page throws
+`WalkInterruptedException`, whose `reachedOffset` is where that page starts, so the walk can resume
+from there:
+
+```php
+use Octoverse\Octonomy\Exception\WalkInterruptedException;
+
+$params = new TagListParams(type: 'label');
+try {
+    foreach ($client->tags()->walk($params) as $offset => $tag) {
+        echo $offset, ' ', $tag->slug, PHP_EOL;
+    }
+} catch (WalkInterruptedException $e) {
+    $e->getPrevious();       // what failed, such as the ApiException for a 503
+    $resume = new TagListParams(type: 'label', offset: $e->reachedOffset);
+}
+```
+
+A walk is not a snapshot. The server pages by offset and has no cursor, so a row created or removed
+(for tags, vocabularies and aliases, deactivated) at a place before the walk's position while it runs
+moves every row after it: the walk yields one twice or never yields one, and so can a resume. Audit
+logs list newest first, so every write made during a walk of them repeats an entry. Narrow the walk
+with filters, de-duplicate on id, or walk while nothing writes.
 
 ## Tagging resources
 

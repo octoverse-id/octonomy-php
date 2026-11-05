@@ -214,6 +214,26 @@ final class TagAliasServiceTest extends SdkTestCase
         self::assertSame('', $this->lastRequest()->getUri()->getQuery());
     }
 
+    public function testWalk(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tag-aliases/list')]);
+        $rows = self::capturedData('v2/tag-aliases/list');
+
+        $walked = iterator_to_array($client->aliases()->walk(
+            new TagAliasListParams(applicationId: 'harness-app', isActive: true),
+            self::merchantA(),
+        ));
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame('/api/v2/tag-aliases', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(
+            [['application_id' => 'harness-app', 'is_active' => 'true', 'limit' => '200', 'offset' => '0']],
+            $this->sentQueries(),
+        );
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn(TagAlias $a): string => $a->id, $walked));
+    }
+
     public function testUpdate(): void
     {
         $client = $this->clientWith([self::captured('v2/tag-aliases/update')]);
@@ -345,6 +365,24 @@ final class TagAliasServiceTest extends SdkTestCase
         $client->tags()->listAliases('tag_1');
 
         self::assertSame('', $this->lastRequest()->getUri()->getQuery());
+    }
+
+    public function testTagsWalkAliases(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/aliases')]);
+        $rows = self::capturedData('v2/tags/aliases');
+
+        $walked = iterator_to_array($client->tags()->walkAliases(
+            'tag_1',
+            new TagAliasListParams(applicationId: 'harness-app', limit: 25),
+            self::merchantA(),
+        ));
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame('/api/v2/tags/tag_1/aliases', $this->lastRequest()->getUri()->getPath());
+        self::assertSame([['application_id' => 'harness-app', 'limit' => '25', 'offset' => '0']], $this->sentQueries());
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn(TagAlias $a): string => $a->id, $walked));
     }
 
     /**

@@ -189,6 +189,39 @@ final class ErrorMessage
      * sets a timeout only on the client it builds, so this one would be
      * dropped without a word, as it was before #18.
      */
+    /**
+     * The message for a walk that stopped because the request for one of its
+     * pages failed. $cause is that failure's own message, already written to
+     * this formula and redacted; it is quoted as the why, without its
+     * "octonomy: " prefix.
+     */
+    public static function walkInterrupted(int $reachedOffset, string $cause): string
+    {
+        $prefix = 'octonomy: ';
+
+        return sprintf(
+            'octonomy: a walk stopped at offset %d, where the page whose request failed starts; every item before'
+            . ' it was yielded, and none from there on. The request failed: %s Fix: act on that failure'
+            . ' (getPrevious() holds it), then walk again with the same params and offset %d to resume.',
+            $reachedOffset,
+            str_starts_with($cause, $prefix) ? substr($cause, strlen($prefix)) : $cause,
+            $reachedOffset,
+        );
+    }
+
+    /**
+     * The message for a walk asked to start before the first item of a list.
+     */
+    public static function negativeWalkOffset(int $offset): string
+    {
+        return sprintf(
+            'octonomy: a walk cannot start at offset %d: an offset counts the items before the first one a walk'
+            . ' yields, so it is 0 or more. Nothing was sent. Fix: leave offset null to start at the beginning,'
+            . ' or pass the reachedOffset of the WalkInterruptedException that stopped an earlier walk.',
+            $offset,
+        );
+    }
+
     public static function timeoutWithHttpClient(float $timeout): string
     {
         return sprintf(
