@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Octoverse\Octonomy\Resource;
 
 use Octoverse\Octonomy\Http\Transport;
+use Octoverse\Octonomy\Http\Walker;
 use Octoverse\Octonomy\Internal\Path;
 use Octoverse\Octonomy\Internal\ScopeQuery;
 use Octoverse\Octonomy\Model\TagAlias;
@@ -77,6 +78,44 @@ final class TagAliasService
             TagAlias::fromArray(...),
             $params?->toQuery() ?? [],
             null,
+            $options,
+        );
+    }
+
+    /**
+     * Walk every alias $params selects (GET /tag-aliases), yielding each
+     * TagAlias keyed by its offset in the list. Aliases are sorted by name,
+     * slug and id; without TagAliasListParams::$isActive the server lists
+     * active aliases only.
+     *
+     * IT SENDS ONE REQUEST PER PAGE, in sequence: it is the loop over list()
+     * you did not have to write, not a bulk fetch. A page holds up to
+     * $params->limit aliases, or 200, the server's maximum, when that is null.
+     * Nothing is sent until the walk is iterated, and each page only once the
+     * one before it is used up. $params->offset starts the walk part of the
+     * way in.
+     *
+     * A failed page request throws WalkInterruptedException, whose
+     * reachedOffset is where that page starts: walk again with the same params
+     * and that offset to resume.
+     *
+     * It is not a snapshot. The server pages by offset and has no cursor, so an
+     * alias created, or deactivated, that sorts before the walk's position
+     * while the walk runs moves every one after it by one: the walk then
+     * yields one twice, or never yields one, and a resume drifts the same way.
+     * Narrow the walk with filters nothing changes while it runs, de-duplicate
+     * on id, or walk while nothing writes.
+     *
+     * @return \Generator<int, TagAlias, mixed, void>
+     */
+    public function walk(?TagAliasListParams $params = null, ?RequestOptions $options = null): \Generator
+    {
+        return Walker::walk(
+            $this->transport,
+            'tag-aliases',
+            TagAlias::fromArray(...),
+            $params?->toQuery() ?? [],
+            $params?->offset,
             $options,
         );
     }

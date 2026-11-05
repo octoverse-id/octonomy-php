@@ -84,8 +84,9 @@ final class CapturedCorpusTest extends SdkTestCase
      * application-bound grant without its application; v2 lists the global
      * partition and include_global beside a namespace, and records the PATCH
      * that clears nullable fields with an explicit null (#20), the ones that
-     * send an empty JSON object (#46), and the ones that store metadata an
-     * array cannot hold without losing its shape (#48).
+     * send an empty JSON object (#46), the ones that store metadata an
+     * array cannot hold without losing its shape (#48), and the pages of a
+     * walk, each asked for at the offset the one before it ended on (#25).
      */
     private const REQUIRED_ONLY_IN = [
         'v1' => ['errors/application-mismatch', 'errors/namespace-not-supported'],
@@ -99,6 +100,11 @@ final class CapturedCorpusTest extends SdkTestCase
             'vocabularies/update-clear',
             'vocabularies/update-empty-metadata',
             'vocabularies/update-numeric-metadata',
+            'tags/walk-end',
+            'tags/walk-first',
+            'tags/walk-last',
+            'tags/walk-limit-200',
+            'tags/walk-negative-offset',
         ],
     ];
 
@@ -302,7 +308,8 @@ final class CapturedCorpusTest extends SdkTestCase
     {
         $rows = self::modelRows('tags', static fn(string $operation, mixed $data): array => match (true) {
             in_array($operation, ['tags/create', 'tags/get', 'tags/list', 'tags/list-page'], true),
-            str_starts_with($operation, 'tags/update') => self::oneOrMany($data),
+            str_starts_with($operation, 'tags/update'),
+            str_starts_with($operation, 'tags/walk-') => self::oneOrMany($data),
             str_starts_with($operation, 'tag-resolution/') => [$data->tag],
             $operation === 'resources/replace' => $data->tags,
             $operation === 'resources/tags' => array_column($data, 'tag'),

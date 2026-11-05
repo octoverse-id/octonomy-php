@@ -41,6 +41,16 @@ final class ReplayingClient implements ClientInterface
     }
 
     /**
+     * Every request the SDK handed over, in order.
+     *
+     * @return list<RequestInterface>
+     */
+    public function sent(): array
+    {
+        return $this->sent;
+    }
+
+    /**
      * The request the SDK handed over last, or null when it handed over none.
      */
     public function lastRequest(): ?RequestInterface

@@ -10,6 +10,7 @@ use Octoverse\Octonomy\Exception\ConflictException;
 use Octoverse\Octonomy\Exception\ForbiddenException;
 use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Exception\ValidationException;
+use Octoverse\Octonomy\Exception\WalkInterruptedException;
 use Octoverse\Octonomy\Model\AuditLog;
 use Octoverse\Octonomy\Model\AuditLogListParams;
 use Octoverse\Octonomy\NamespaceScope;
@@ -173,6 +174,77 @@ final class AuditLogServiceTest extends SdkTestCase
             static fn(Client $c): ResultList => $c->resources()->listAuditLogs('product', 'sku-004'),
             '/api/v2/resources/product/sku-004/audit-logs',
             [],
+        ];
+    }
+
+    /**
+     * The captured page is the first 3 of 26 entries, so the walk asks for the
+     * next page, which fails here: the walk yields the 3 and stops at offset 3.
+     */
+    public function testWalk(): void
+    {
+        $client = $this->clientWith([self::captured('v2/audit-logs/list'), self::captured('v2/errors/forbidden')]);
+        $rows = self::capturedData('v2/audit-logs/list');
+
+        $walked = [];
+        try {
+            foreach ($client->auditLogs()->walk(new AuditLogListParams(applicationId: 'harness-app', limit: 3), self::merchantA()) as $offset => $log) {
+                $walked[$offset] = $log;
+            }
+            self::fail('expected the second page to fail');
+        } catch (WalkInterruptedException $e) {
+            self::assertSame(3, $e->reachedOffset);
+            self::assertInstanceOf(ForbiddenException::class, $e->getPrevious());
+        }
+
+        self::assertSame('/api/v2/audit-logs', $this->lastRequest()->getUri()->getPath());
+        self::assertSame([
+            ['application_id' => 'harness-app', 'limit' => '3', 'offset' => '0'],
+            ['application_id' => 'harness-app', 'limit' => '3', 'offset' => '3'],
+        ], $this->sentQueries());
+        self::assertSame([0, 1, 2], array_keys($walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn(AuditLog $l): string => $l->id, $walked));
+    }
+
+    /**
+     * @param \Closure(Client): array<int, AuditLog> $call
+     */
+    #[DataProvider('scopedWalks')]
+    public function testTheScopedWalksSendTheirPathAndParams(string $fixture, \Closure $call, string $path): void
+    {
+        $client = $this->clientWith([self::captured($fixture)]);
+        $rows = self::capturedData($fixture);
+
+        $walked = $call($client);
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame($path, $this->lastRequest()->getUri()->getPath());
+        self::assertSame(
+            [['application_id' => 'harness-app', 'action' => 'assignment.created', 'limit' => '200', 'offset' => '0']],
+            $this->sentQueries(),
+        );
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn(AuditLog $l): string => $l->id, $walked));
+    }
+
+    /**
+     * @return iterable<string, array{string, \Closure(Client): array<int, AuditLog>, string}>
+     */
+    public static function scopedWalks(): iterable
+    {
+        $params = new AuditLogListParams(applicationId: 'harness-app', action: 'assignment.created');
+
+        yield 'a tag\'s entries' => [
+            'v2/tags/audit-logs',
+            static fn(Client $c): array => iterator_to_array($c->tags()->walkAuditLogs('tag_1', $params, self::merchantA())),
+            '/api/v2/tags/tag_1/audit-logs',
+        ];
+        yield 'a resource\'s entries' => [
+            'v2/resources/audit-logs',
+            static fn(Client $c): array => iterator_to_array(
+                $c->resources()->walkAuditLogs('product', 'sku-004', $params, self::merchantA()),
+            ),
+            '/api/v2/resources/product/sku-004/audit-logs',
         ];
     }
 

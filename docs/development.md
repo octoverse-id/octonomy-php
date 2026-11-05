@@ -130,7 +130,9 @@ an empty list and a middle page with both links; and one error envelope per code
 (`not_found`, `conflict`, `validation_error`, `authentication_required`, `forbidden`,
 `tenant_mismatch`, `inactive_tag`, plus v1's `application_mismatch` and `namespace_not_supported`).
 v2 also reads the global partition and an `include_global` list, so its corpus holds populated and
-null namespace pairs side by side; v1's holds no namespace fields at all. `health/` holds the probes,
+null namespace pairs side by side, and walks merchant A's tags as `walk()` does (#25): at limit 3 a
+full page and then a short last one, asked for at the offset the first ended on, an empty page past
+the end, the walk's own limit of 200, and a negative offset, which the server serves from 0; v1's holds no namespace fields at all. `health/` holds the probes,
 sent with no credentials: `/health/live` and `/health/ready` answering 200, and `/health/ready`
 answering 503 with the harness database stopped.
 
@@ -164,7 +166,9 @@ capture runs `scripts/octonomy-harness.sh stop-db` and re-sends `/health/ready` 
 up to two minutes, until it answers 503. That adds about a minute to `make fixtures` (see the
 readiness note above), and leaves the harness serving nothing until it is removed.
 
-Two captures of the same server produce byte-identical files. Volatile values are replaced with stable
+Two captures of the same server produce byte-identical files. A new capture goes after every existing
+one of its version, so the ids and timestamps captured before it keep their stand-ins. Request ids are
+numbered across the whole capture, though, so one added to v2 renumbers the health probes' (#25). Volatile values are replaced with stable
 stand-ins of the same format: each UUID becomes `00000000-0000-4000-8000-<n>` and each request id
 `req_<n>`, both numbered by first appearance; each timestamp becomes `2026-01-01T00:00:00` plus its
 chronological rank in seconds, keeping its fraction length and zone suffix; and the harness base URL

@@ -59,6 +59,32 @@ final class ResourceServiceTest extends SdkTestCase
         }
     }
 
+    public function testWalkTags(): void
+    {
+        $client = $this->clientWith([self::captured('v2/resources/tags')]);
+        $rows = self::capturedData('v2/resources/tags');
+
+        $walked = iterator_to_array($client->resources()->walkTags(
+            'product',
+            'sku-001',
+            'harness-app',
+            new ResourceTagListParams(type: 'label'),
+            self::merchantA(),
+        ));
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame('/api/v2/resources/product/sku-001/tags', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(
+            [['application_id' => 'harness-app', 'type' => 'label', 'limit' => '200', 'offset' => '0']],
+            $this->sentQueries(),
+        );
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(
+            array_column($rows, 'assignment_id'),
+            array_map(static fn(ResourceTag $t): string => $t->assignmentId, $walked),
+        );
+    }
+
     public function testListTagsSendsAllParams(): void
     {
         $client = $this->clientWith([self::captured('v2/resources/tags')]);
@@ -252,6 +278,30 @@ final class ResourceServiceTest extends SdkTestCase
         self::assertSame($rows[0]['resource_id'], $resource->resourceId);
         self::assertSame($rows[0]['assigned_by'], $resource->assignedBy);
         self::assertEquals(new \DateTimeImmutable($rows[0]['assigned_at']), $resource->assignedAt);
+    }
+
+    public function testTagsWalkResources(): void
+    {
+        $client = $this->clientWith([self::captured('v2/tags/resources')]);
+        $rows = self::capturedData('v2/tags/resources');
+
+        $walked = iterator_to_array($client->tags()->walkResources(
+            'tag_1',
+            new TagResourceListParams(applicationId: 'harness-app', resourceType: 'product'),
+            self::merchantA(),
+        ));
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame('/api/v2/tags/tag_1/resources', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(
+            [['application_id' => 'harness-app', 'resource_type' => 'product', 'limit' => '200', 'offset' => '0']],
+            $this->sentQueries(),
+        );
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(
+            array_column($rows, 'resource_id'),
+            array_map(static fn(TagResource $r): string => $r->resourceId, $walked),
+        );
     }
 
     public function testTagsListResourcesWithoutParams(): void

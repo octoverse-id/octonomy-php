@@ -45,6 +45,13 @@ abstract class SdkTestCase extends TestCase
 
     protected MockHandler $mock;
 
+    /**
+     * Every request the mocked client sent, in order.
+     *
+     * @var list<RequestInterface>
+     */
+    private array $mockedRequests = [];
+
     /** The client psr18ClientWith() built, when it built the Client under test. */
     private ?ReplayingClient $replaying = null;
 
@@ -261,7 +268,9 @@ abstract class SdkTestCase extends TestCase
         // Throwable a queued callable returns, as a real handler does.
         $this->mock = new MockHandler([$throw]);
         $this->replaying = null;
+        $this->mockedRequests = [];
         $stack = HandlerStack::create($this->mock);
+        $stack->push($this->recorder());
         if ($middleware !== null) {
             $stack->push(Middleware::mapRequest($middleware));
         }
@@ -340,6 +349,36 @@ abstract class SdkTestCase extends TestCase
         }
 
         return $members;
+    }
+
+    /**
+     * Every request that reached the HTTP stack, in order: as many as the
+     * calls under test sent, such as one per page of a walk.
+     *
+     * @return list<RequestInterface>
+     */
+    protected function sentRequests(): array
+    {
+        if ($this->replaying !== null) {
+            return $this->replaying->sent();
+        }
+
+        return $this->mockedRequests;
+    }
+
+    /**
+     * The query of each request sentRequests() returns, parsed into an array.
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    protected function sentQueries(): array
+    {
+        return array_map(static function (RequestInterface $request): array {
+            $query = [];
+            parse_str($request->getUri()->getQuery(), $query);
+
+            return $query;
+        }, $this->sentRequests());
     }
 
     protected function lastRequest(): RequestInterface
@@ -541,6 +580,19 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
+     * Middleware that records each request a mocked client sends, for
+     * sentRequests().
+     */
+    private function recorder(): callable
+    {
+        return Middleware::mapRequest(function (RequestInterface $request): RequestInterface {
+            $this->mockedRequests[] = $request;
+
+            return $request;
+        });
+    }
+
+    /**
      * @param list<CapturedFixture|SyntheticNegative> $responses
      */
     private function mockedHttpClient(array $responses): GuzzleClient
@@ -552,7 +604,10 @@ abstract class SdkTestCase extends TestCase
             static fn(CapturedFixture|SyntheticNegative $response): Response => $response->response(),
             $responses,
         ));
+        $this->mockedRequests = [];
+        $stack = HandlerStack::create($this->mock);
+        $stack->push($this->recorder());
 
-        return new GuzzleClient(['handler' => HandlerStack::create($this->mock)]);
+        return new GuzzleClient(['handler' => $stack]);
     }
 }

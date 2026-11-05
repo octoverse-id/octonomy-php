@@ -1,0 +1,35 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/v2/tags",
+        "query": {
+            "application_id": "harness-app",
+            "limit": "3",
+            "offset": "4"
+        },
+        "credential": "wildcard",
+        "headers": {
+            "X-Tenant-ID": "harness-tenant",
+            "X-Namespace-Type": "merchant",
+            "X-Namespace-ID": "harness-merchant-a"
+        },
+        "body": null
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "X-Request-ID": "req_0000000000000000000000000000005e"
+        },
+        "body": {
+            "data": [],
+            "pagination": {
+                "limit": 3,
+                "offset": 4,
+                "count": 4,
+                "next": null,
+                "previous": "http://127.0.0.1:8000/api/v2/tags?application_id=harness-app&limit=3&offset=1"
+            }
+        }
+    }
+}

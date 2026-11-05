@@ -62,11 +62,16 @@ abstract class IntegrationTestCase extends TestCase
      * $tokenVariable (the wildcard token unless a test names an exact merchant
      * grant's), or skip the test when no harness is running.
      *
-     * @param string $apiVersion an ApiVersion constant, named by every caller so a suite says
-     *                           which surface it reads
+     * @param string                  $apiVersion an ApiVersion constant, named by every caller so a suite
+     *                                              says which surface it reads
+     * @param InterruptingClient|null $http       the HTTP client to send through, to fail one request on
+     *                                              purpose; null for the one the SDK builds
      */
-    protected function harnessClient(string $apiVersion, string $tokenVariable = 'OCTONOMY_TEST_TOKEN'): Client
-    {
+    protected function harnessClient(
+        string $apiVersion,
+        string $tokenVariable = 'OCTONOMY_TEST_TOKEN',
+        ?InterruptingClient $http = null,
+    ): Client {
         $baseUrl = self::harnessBaseUrl();
         $token = self::harnessEnv($tokenVariable);
         $tenantId = self::harnessEnv('OCTONOMY_TEST_TENANT_ID');
@@ -83,6 +88,6 @@ abstract class IntegrationTestCase extends TestCase
             'tenant_id' => $tenantId,
             'actor_id' => 'octonomy-php-integration',
             'api_version' => $apiVersion,
-        ]);
+        ] + ($http === null ? [] : ['http_client' => $http]));
     }
 }

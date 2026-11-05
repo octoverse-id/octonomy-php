@@ -87,6 +87,26 @@ final class VocabularyServiceTest extends SdkTestCase
         self::assertNull($page->pagination->next);
     }
 
+    public function testWalk(): void
+    {
+        $client = $this->clientWith([self::captured('v2/vocabularies/list')]);
+        $rows = self::capturedData('v2/vocabularies/list');
+
+        $walked = iterator_to_array($client->vocabularies()->walk(
+            new VocabularyListParams(applicationId: 'harness-app', includeShared: false),
+            self::merchantA(),
+        ));
+
+        self::assertSame('GET', $this->lastRequest()->getMethod());
+        self::assertSame('/api/v2/vocabularies', $this->lastRequest()->getUri()->getPath());
+        self::assertSame(
+            [['application_id' => 'harness-app', 'include_shared' => 'false', 'limit' => '200', 'offset' => '0']],
+            $this->sentQueries(),
+        );
+        self::assertSame(array_keys($rows), array_keys($walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn(Vocabulary $v): string => $v->id, $walked));
+    }
+
     public function testListIncludeGlobalWithinANamespace(): void
     {
         $client = $this->clientWith([self::captured('v2/vocabularies/list-include-global')]);

@@ -234,6 +234,8 @@ final class Transport
     /**
      * Describe a request before it is sent, for every exception it may end in.
      * The path is placed under this client's api_version prefix, as sent.
+     * Public for Walker, which reports a page that is not the one it asked
+     * for against the request that asked.
      *
      * The namespace is a copy, and send() builds the headers from it, so the
      * context records what was sent even if the caller's NamespaceScope
@@ -241,7 +243,7 @@ final class Transport
      *
      * @param array<string, string> $query
      */
-    private function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
+    public function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
     {
         $namespace = $options?->namespace;
 
