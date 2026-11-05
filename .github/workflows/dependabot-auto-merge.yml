@@ -4,6 +4,10 @@ name: Dependabot auto-merge
 # status checks pass. Major updates are intentionally left for manual review.
 # Requires repo settings: "Allow auto-merge" enabled, and branch protection on
 # the default branch requiring the CI checks (so auto-merge waits for green).
+#
+# Updates to tools/rector are left for manual review too. Only CI's php74 job
+# proves one, and it is not a required check, so auto-merge would not wait for
+# it: #56 merged a PHPStan bump that broke the 7.4 line with php74 red.
 
 on: pull_request
 
@@ -20,7 +24,7 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v3
       - name: Enable auto-merge for minor and patch updates
-        if: ${{ steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch' }}
+        if: ${{ steps.metadata.outputs.directory != '/tools/rector' && (steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch') }}
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
