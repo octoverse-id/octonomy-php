@@ -125,7 +125,11 @@ final class WalkTest extends SdkTestCase
         self::assertInstanceOf(ForbiddenException::class, $cause);
         self::assertSame('/api/v2/tags', $cause->context->path);
         self::assertSame(['limit' => '3', 'offset' => '3'], $cause->context->query, 'the failed page\'s own request');
-        self::assertStringContainsString('a walk stopped at offset 3, the offset the page whose request failed was asked for', $e->getMessage());
+        self::assertStringContainsString(
+            'a walk stopped at offset 3, the offset the page whose request failed was asked for; it yielded the items'
+            . ' from where it started up to there, and none from that page on.',
+            $e->getMessage(),
+        );
         self::assertStringContainsString(substr($cause->getMessage(), strlen('octonomy: ')), $e->getMessage());
         self::assertStringContainsString('walk again with the same params and offset 3', $e->getMessage());
         self::assertStringNotContainsString('test-token', $e->getMessage());

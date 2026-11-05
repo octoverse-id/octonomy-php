@@ -181,14 +181,15 @@ a `\Generator` that reads the list page by page and yields every item, keyed by 
   offset the page before it ended on. The walk ends at a page without a `next` link, or at an empty
   page.
 - **Failure.** A page request that fails throws `WalkInterruptedException`. Its `reachedOffset` is the
-  offset the failed page was asked for, that of the first item the walk did not yield, and
-  `getPrevious()` is the failure itself: an `ApiException`, a `TransportException` or a
-  `MalformedResponseException` carrying that page's `RequestContext`. Walk again with the same params
-  and `offset: $e->reachedOffset` to resume. A page the server serves from an offset other than the one
-  asked for, which only something between the SDK and the server that dropped the offset can cause,
-  after the first ends the walk the same way, with a `MalformedResponseException` on
-  `pagination.offset`, rather than fetch that page for ever. A mistake in the call, such as `include_global` on a v1 client, is thrown
-  as the `LogicException` it is.
+  offset the failed page was asked for: the walk yielded the items from where it started up to that
+  offset, none when its first page failed, and nothing from that page on. `getPrevious()` is the failure
+  itself: an `ApiException`, a `TransportException` or a `MalformedResponseException` carrying that
+  page's `RequestContext`. Walk again with the same params and `offset: $e->reachedOffset` to resume. A
+  page after the first that the server serves from an offset other than the one asked for, which only
+  something between the SDK and the server that dropped the offset can cause, ends the walk the same
+  way, with a `MalformedResponseException` on `pagination.offset`, rather than fetch that page for ever.
+  A mistake in the call, such as `include_global` on a v1 client, is thrown as the `LogicException` it
+  is.
 - **Offset drift.** The server pages by limit and offset and offers no cursor, so a walk is not a
   snapshot. A row added or removed while the walk runs, at a place in the list's order before the
   walk's position, moves every row after it by one: the walk yields one twice, or never yields one, and

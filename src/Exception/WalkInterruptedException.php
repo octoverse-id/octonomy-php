@@ -11,9 +11,10 @@ use Octoverse\Octonomy\Internal\ErrorMessage;
  * list: the request for one of its pages failed. It is how the walk hands back
  * how far it got, since a \Generator that throws can return nothing.
  *
- * $reachedOffset is the offset the failed page was asked for, which is the
- * offset of the first item the walk did not yield: every item before it was
- * yielded, and none after. getPrevious() is the failure itself, always an
+ * $reachedOffset is the offset the failed page was asked for. The walk yielded
+ * every item from where it started up to that offset, which is none when its
+ * first page failed, and nothing from there on. getPrevious() is the failure
+ * itself, always an
  * OctonomyException (an ApiException, a TransportException or a
  * MalformedResponseException) whose RequestContext is the failed page's
  * request.
@@ -38,8 +39,8 @@ use Octoverse\Octonomy\Internal\ErrorMessage;
 final class WalkInterruptedException extends OctonomyException
 {
     /**
-     * @param int               $reachedOffset the offset the failed page was asked for: that of the first item
-     *                                         the walk did not yield
+     * @param int               $reachedOffset the offset the failed page was asked for, where the walk's
+     *                                         yielded items end
      * @param OctonomyException $previous      why the request for that page failed
      */
     public function __construct(

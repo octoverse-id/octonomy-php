@@ -200,9 +200,10 @@ final class ErrorMessage
         $prefix = 'octonomy: ';
 
         return sprintf(
-            'octonomy: a walk stopped at offset %d, the offset the page whose request failed was asked for; every'
-            . ' item before it was yielded, and none from there on. The request failed: %s Fix: act on that'
-            . ' failure (getPrevious() holds it), then walk again with the same params and offset %d to resume.',
+            'octonomy: a walk stopped at offset %d, the offset the page whose request failed was asked for; it'
+            . ' yielded the items from where it started up to there, and none from that page on. The request'
+            . ' failed: %s Fix: act on that failure (getPrevious() holds it), then walk again with the same params'
+            . ' and offset %d to resume.',
             $reachedOffset,
             str_starts_with($cause, $prefix) ? substr($cause, strlen($prefix)) : $cause,
             $reachedOffset,
