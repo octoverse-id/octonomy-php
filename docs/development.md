@@ -103,6 +103,28 @@ table in step with it.
 **Provenance.** The script is a port of `octonomy-go/scripts/octonomy-harness.sh`. Its header lists what
 is deliberately different here; offer changes to the shared parts upstream.
 
+### The dev server
+
+`scripts/octonomy-dev-server` is the package's Composer bin (`vendor/bin/octonomy-dev-server` in a
+project that requires the SDK; the README documents it for users). It runs this same harness under
+names of its own: containers prefixed `octonomy-php-dev-server` and the env file
+`.octonomy-dev-server.env` in the package directory, which here is the repository root. A script run
+through it writes, and the integration suite needs the corpus exactly as seeded, so the two never
+share a server, and `up` on one never removes the other. Both default to port 8000, so run them side
+by side with `OCTONOMY_HARNESS_PORT` set for one.
+
+```bash
+scripts/octonomy-dev-server run examples/quickstart.php   # or: composer exec octonomy-dev-server run ...
+scripts/octonomy-dev-server down
+```
+
+Composer links a package's bin only into projects that require it, so in a checkout it is
+`scripts/octonomy-dev-server`, or `composer exec octonomy-dev-server`, which finds it in both. `run`
+checks `octonomy-harness.sh status` to decide whether to boot, then hands the script each
+`OCTONOMY_TEST_<NAME>` from the env file as `OCTONOMY_<NAME>`: the file itself keeps the names the
+integration suite reads, and the script never sees those, so a test suite it runs stays skipped.
+`tests/DevServerTest.php` covers it with a fake `docker` on `PATH`, without booting anything.
+
 ## Captured response fixtures
 
 Every response body the unit suite replays was sent by a real Octonomy. `tests/fixtures/captured/`
@@ -198,7 +220,7 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
 | ----- | ---------- |
 | `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. The PHPStan Rector runs on is pinned exactly too: Rector's own range (`^2.3.0` for 2.7.0) would float to a PHPStan it was not released with, and PHPStan 2.3.4 makes Rector 2.7.0 and 2.8.1 fail on every file. Bump the two together, in a PR of their own; Dependabot opens one for the pair, and does not auto-merge it, since the `php74` job that proves it is not a required check. Merge it by hand once that job is green. |
 | `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8` and the PSR HTTP interfaces, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
-| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness script, and the vendored specs with `docs/versioning.md` (which tests read) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
+| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness and dev-server scripts, and the vendored specs with `docs/versioning.md` (which tests read) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
 | `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, each with the same outcome (passed, skipped or failed), compared through each run's JUnit log. It reports every failing check, not just the first. |
 
 `phpVersion: 70400` applies to the downgraded tree only. On `main` it would flag every 8.x construct

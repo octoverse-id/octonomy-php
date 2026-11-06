@@ -15,12 +15,13 @@
 #   scripts/octonomy-harness.sh down    # tear down containers, network, env file
 #   scripts/octonomy-harness.sh logs    # dump container logs
 #   scripts/octonomy-harness.sh env     # print the env file path
+#   scripts/octonomy-harness.sh status  # exit 0 when this harness is up
 #   scripts/octonomy-harness.sh stop-db # stop the database, leaving Octonomy up
 #                                       # but not ready (fixture capture only)
 #
 # POSIX sh on purpose: the PHP 8.2+ line on main and the PHP 7.4 compat line
-# both invoke this, as do the test suite and (#13) the developer-facing
-# dev-server bin, and none of them may grow a bootstrap of its own.
+# both invoke this, as do the test suite and the developer-facing dev-server bin
+# (scripts/octonomy-dev-server), and none of them may grow a bootstrap of its own.
 #
 # PROVENANCE. Ported from octonomy-go/scripts/octonomy-harness.sh at 6770494
 # (2026-09-17). The fork is deliberate: one copy here serves both this repo's
@@ -31,6 +32,7 @@
 #   * the container prefix defaults to octonomy-php-harness, so this harness
 #     never removes a Go harness running on the same machine
 #   * seed_corpus, which writes the rows the suites and fixture capture read
+#   * status, which scripts/octonomy-dev-server runs to decide whether to boot
 
 set -eu
 
@@ -813,6 +815,16 @@ cmd_stop_db() {
     log "database stopped; Octonomy is up but not ready"
 }
 
+# Exit 0 when this harness is up, 1 otherwise, printing nothing either way: its
+# env file exists and both its containers are running. It says nothing about the
+# server's health (`up` proved that), only that what `up` built is still there.
+# A reboot of the host stops both containers, so a stale env file reads as down.
+cmd_status() {
+    [ -f "$ENV_FILE" ] || return 1
+    command -v docker >/dev/null 2>&1 || return 1
+    container_running "$DB" 2>/dev/null && container_running "$APP" 2>/dev/null
+}
+
 cmd_up() {
     require_safe_config
     require_docker
@@ -873,7 +885,8 @@ cmd_up() {
     docker run -d --name "$APP" --network "$NET" \
         $(octonomy_env_args) \
         -p "${PORT}:8000" \
-        "$HARNESS_IMAGE" >/dev/null || fail "could not start the Octonomy container"
+        "$HARNESS_IMAGE" >/dev/null ||
+        fail "could not start the Octonomy container on port ${PORT}: if Docker says the port is already allocated, set OCTONOMY_HARNESS_PORT to a free one"
     wait_for_ready
 
     assert_namespaced_write
@@ -923,6 +936,7 @@ case "${1:-up}" in
     down) cmd_down ;;
     logs) dump_logs ;;
     env) printf '%s\n' "$ENV_FILE" ;;
+    status) cmd_status ;;
     stop-db) cmd_stop_db ;;
-    *) fail "unknown command '${1}' (expected: up, down, logs, env, stop-db)" ;;
+    *) fail "unknown command '${1}' (expected: up, down, logs, env, status, stop-db)" ;;
 esac

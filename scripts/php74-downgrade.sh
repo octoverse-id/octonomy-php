@@ -43,9 +43,11 @@ case "$out" in
 esac
 
 cp -R "$root/src" "$root/tests" "$root/examples" "$out/"
-# The harness is POSIX sh and serves both lines; CapturedCorpusTest reads its pin.
+# The harness and the dev-server bin over it are POSIX sh and serve both lines;
+# the 7.4 composer.json registers the bin, CapturedCorpusTest reads the harness's
+# pin, and DevServerTest runs both.
 mkdir "$out/scripts"
-cp "$root/scripts/octonomy-harness.sh" "$out/scripts/"
+cp "$root/scripts/octonomy-harness.sh" "$root/scripts/octonomy-dev-server" "$out/scripts/"
 # So are the vendored specs; VendoredSpecTest reads them and the tag versioning.md names.
 mkdir "$out/docs"
 cp "$root/docs/openapi.yaml" "$root/docs/openapi-v2.yaml" "$root/docs/versioning.md" "$out/docs/"

@@ -133,3 +133,46 @@ jobs:
       - name: Tear down the harness
         if: always()
         run: scripts/octonomy-harness.sh down
+
+  # The Composer bin end to end (#13), from a checkout: boot the dev server, run the quickstart
+  # through it, tear it down, and prove nothing is left. The unit suite covers the bin with a fake
+  # docker; this is the one place the real boot, the env translation and the quickstart meet.
+  dev-server:
+    name: dev server
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Boot the dev server
+        run: scripts/octonomy-dev-server up
+      # The same masking as the integration job: the dev server mints real bearer tokens too.
+      - name: Mask dev-server credentials
+        run: |
+          env_file=$(scripts/octonomy-dev-server env)
+          while IFS= read -r line; do
+            case "${line%%=*}" in
+              *_TOKEN) echo "::add-mask::${line#*=}" ;;
+            esac
+          done < "$env_file"
+      # Reuses the server booted above: `run` boots only when none is up.
+      - name: Run the quickstart through it
+        run: scripts/octonomy-dev-server run examples/quickstart.php
+      - name: Dump dev-server logs
+        if: failure()
+        run: scripts/octonomy-dev-server logs
+      - name: Tear down the dev server
+        if: always()
+        run: scripts/octonomy-dev-server down
+      - name: Nothing is left behind
+        run: |
+          test -z "$(docker ps -aq --filter name=octonomy-php-dev-server)"
+          test -z "$(docker network ls -q --filter name=octonomy-php-dev-server)"
+          test ! -e .octonomy-dev-server.env

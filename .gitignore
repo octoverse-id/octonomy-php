@@ -22,8 +22,9 @@ clover.xml
 # Local environment
 .env
 
-# Credentials written by scripts/octonomy-harness.sh
+# Credentials written by scripts/octonomy-harness.sh, and by it for scripts/octonomy-dev-server
 .octonomy-harness.env
+.octonomy-dev-server.env
 
 # Local code review pipeline artifacts (keep the tracked placeholder)
 code-review/*

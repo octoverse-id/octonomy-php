@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `vendor/bin/octonomy-dev-server`, the package's Composer bin (`scripts/octonomy-dev-server`): a
+  throwaway local Octonomy in Docker, so `vendor/bin/octonomy-dev-server run examples/quickstart.php`
+  takes a project from `composer require` to the quickstart's output. `run <script>` boots the server
+  unless it is running, hands the script the harness's `OCTONOMY_TEST_*` credentials as `OCTONOMY_*`
+  (the harness's env file keeps its own names, so the integration suite's skip gate is unchanged), and
+  loads the Composer autoloader from a project or a checkout before it; `up`, `down`, `logs` and `env`
+  manage the server. It runs `scripts/octonomy-harness.sh` under its own container prefix and env file,
+  never sharing a server with the read-only integration suite, and the harness gains a `status`
+  command. `examples/quickstart.php` finds its autoloader in a Composer install as well as a checkout,
+  and the README documents the Docker prerequisite, teardown, and pointing the quickstart at your own
+  Octonomy (#13).
 - `walk()` beside every list method (`walk()` on the tags, vocabularies, aliases and audit-log services,
   `tags()->walkAliases()`, `walkResources()` and `walkAuditLogs()`, `resources()->walkTags()` and
   `walkAuditLogs()`), taking the same arguments and returning a lazy `\Generator` over every page,

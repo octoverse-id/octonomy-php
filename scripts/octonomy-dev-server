@@ -1,0 +1,196 @@
+#!/bin/sh
+# A throwaway local Octonomy to try the SDK against, in one command.
+#
+# This is the package's Composer bin: vendor/bin/octonomy-dev-server in a
+# project that requires the SDK, and scripts/octonomy-dev-server in a checkout of
+# this repository (Composer links a package's bin only into projects that
+# require it).
+#
+# Usage:
+#   octonomy-dev-server run <script> [args...]  # boot unless running, then run a PHP script against it
+#   octonomy-dev-server up                      # boot, verify, seed, write the env file
+#   octonomy-dev-server down                    # remove the containers, network, env file
+#   octonomy-dev-server logs                    # dump container logs
+#   octonomy-dev-server env                     # print the env file path
+#
+# The server is scripts/octonomy-harness.sh, the harness the integration suite
+# runs against, so it needs what the harness needs: Docker and curl, and PHP for
+# `run`. Every OCTONOMY_HARNESS_* override works here too, OCTONOMY_HARNESS_PORT
+# (default 8000) above all.
+#
+# POSIX sh, like the harness, so both SDK version lines ship it unchanged.
+
+set -eu
+# A relative `cd` consults CDPATH and then prints where it went, which would land
+# inside the $(...) that captures a directory below.
+unset CDPATH
+
+log() { printf 'octonomy-dev-server: %s\n' "$*" >&2; }
+
+fail() {
+    printf 'octonomy-dev-server: ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+# --- Where this package is -----------------------------------------------------
+
+# Follow this file through any symlink to it (Composer can link vendor/bin to
+# it), but keep the directories as they were reached rather than resolving them.
+# Installed from a symlinked path repository, the package directory is a link to
+# a checkout, and ../.. from it must still be the project's vendor directory, not
+# whatever holds the checkout.
+self=$0
+while [ -L "$self" ]; do
+    link=$(readlink "$self")
+    case "$link" in
+        /*) self=$link ;;
+        *) self=$(dirname "$self")/$link ;;
+    esac
+done
+package_root=$(cd "$(dirname "$self")/.." && pwd)
+# Run through sh, not executed: Composer makes the declared bin executable, but
+# an archive unpacked without file modes leaves the harness beside it without.
+harness="${package_root}/scripts/octonomy-harness.sh"
+
+# Its own containers and env file, never the integration harness's. A script run
+# through `run` writes, and the integration suite reads a corpus it requires to be
+# exactly as seeded, so sharing one server would fail that suite on its next run;
+# and `up` begins by removing every container under its prefix, so sharing a
+# prefix would destroy a harness someone is testing against.
+#
+# The env file sits in the package directory, not wherever the command ran, so
+# `run` reuses one server and `down` removes its file from any directory. In a
+# project that is under vendor/, which also keeps the token it holds out of the
+# project's own tree.
+: "${OCTONOMY_HARNESS_PREFIX:=octonomy-php-dev-server}"
+: "${OCTONOMY_HARNESS_ENV_FILE:=${package_root}/.octonomy-dev-server.env}"
+export OCTONOMY_HARNESS_PREFIX OCTONOMY_HARNESS_ENV_FILE
+
+# --- run -----------------------------------------------------------------------
+
+# Set $script to the PHP file to run. A relative path is read from the current
+# directory first and then from the SDK's own, so that in a project that installed
+# the SDK `run examples/quickstart.php` finds
+# vendor/octoverse-id/octonomy-php/examples/quickstart.php. Saying which one runs
+# keeps a project file of the same name from being mistaken for the SDK's.
+resolve_script() {
+    if [ -f "$1" ]; then
+        script=$1
+        return
+    fi
+    case "$1" in
+        /*) fail "no such script: $1" ;;
+    esac
+    [ "$(pwd)" != "$package_root" ] || fail "no such script: $1 (looked in ${package_root})"
+    [ -f "${package_root}/$1" ] ||
+        fail "no such script: $1 (looked in $(pwd) and in the SDK's own directory, ${package_root})"
+    script="${package_root}/$1"
+    log "running the SDK's own $1 (${script}): $(pwd) has none"
+}
+
+# Set $autoload to the Composer autoloader the script runs with. Installed by
+# Composer, this package is <vendor>/octoverse-id/octonomy-php and the project's
+# <vendor>/autoload.php is the one to use; it is named by the
+# composer/installed.json Composer writes beside it, so a checkout that happens to
+# sit two levels under some other autoload.php is not taken for an install. In a
+# checkout it is the SDK's own vendor/autoload.php.
+find_autoload() {
+    vendor_dir=$(cd "${package_root}/../.." && pwd)
+    if [ -f "${vendor_dir}/autoload.php" ] && [ -f "${vendor_dir}/composer/installed.json" ]; then
+        autoload="${vendor_dir}/autoload.php"
+    elif [ -f "${package_root}/vendor/autoload.php" ]; then
+        autoload="${package_root}/vendor/autoload.php"
+    else
+        fail "no Composer autoloader in ${vendor_dir} or ${package_root}/vendor: run composer install first"
+    fi
+}
+
+# Export the harness's credentials under the names the SDK's examples and an
+# application read. The harness writes OCTONOMY_TEST_*, the integration suite's
+# names, and they stay as written: an empty OCTONOMY_TEST_BASE_URL is what makes
+# that suite skip rather than fail. So each OCTONOMY_TEST_<NAME> reaches the
+# script as OCTONOMY_<NAME>, and only that way: exporting the originals would
+# open the integration gate for any test suite the script runs.
+#
+# The file is read, not sourced, and only its OCTONOMY_TEST_<NAME>=<value> lines
+# are taken, so nothing in it runs. The harness writes every value unquoted and
+# within a charset that needs no unquoting.
+export_credentials() {
+    [ -f "$OCTONOMY_HARNESS_ENV_FILE" ] ||
+        fail "the dev server is running but its env file ${OCTONOMY_HARNESS_ENV_FILE} is gone: run down, then up"
+    _base_url=''
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        case "$_line" in
+            OCTONOMY_TEST_*=*) ;;
+            *) continue ;;
+        esac
+        _name=${_line%%=*}
+        case "$_name" in
+            *[!A-Z0-9_]*) continue ;;
+        esac
+        _name=${_name#OCTONOMY_TEST_}
+        [ "$_name" != BASE_URL ] || _base_url=${_line#*=}
+        export "OCTONOMY_${_name}=${_line#*=}"
+    done < "$OCTONOMY_HARNESS_ENV_FILE"
+    # Without it the quickstart would fall back to its own default URL and token,
+    # and a server answering there would be called with credentials it never issued.
+    [ -n "$_base_url" ] ||
+        fail "${OCTONOMY_HARNESS_ENV_FILE} has no OCTONOMY_TEST_BASE_URL, so there is no server to point the script at: run down, then up"
+}
+
+cmd_run() {
+    [ $# -ge 1 ] || fail "run needs a script: octonomy-dev-server run <script> [args...]"
+    # Everything that can be refused without a server is checked before booting
+    # one, which takes a minute.
+    resolve_script "$1"
+    shift
+    find_autoload
+    command -v php >/dev/null 2>&1 || fail "php is not installed or not on PATH"
+
+    if ! sh "$harness" status; then
+        log "no dev server is running; booting one (about a minute once Docker has the images)"
+        sh "$harness" up
+    fi
+    export_credentials
+
+    # auto_prepend_file loads the autoloader before the script's first line, so
+    # any script runs as it would inside the project. One that requires the same
+    # autoloader itself is unaffected: Composer's autoload.php loads once.
+    exec php -d "auto_prepend_file=${autoload}" "$script" "$@"
+}
+
+# --- Commands ------------------------------------------------------------------
+
+usage() {
+    cat >&2 <<'USAGE'
+usage: octonomy-dev-server <command>
+
+  run <script> [args...]  boot the dev server unless it is running, then run a PHP
+                          script with its credentials as OCTONOMY_BASE_URL,
+                          OCTONOMY_TOKEN and OCTONOMY_TENANT_ID
+  up                      boot, verify and seed a fresh dev server
+  down                    remove its containers, network and env file
+  logs                    dump its container logs
+  env                     print its env file path
+
+Needs Docker and curl. Set OCTONOMY_HARNESS_PORT if port 8000 is taken.
+USAGE
+}
+
+case "${1:-}" in
+    up | down | logs | env) exec sh "$harness" "$1" ;;
+    run)
+        shift
+        cmd_run "$@"
+        ;;
+    -h | --help | help) usage ;;
+    '')
+        usage
+        exit 2
+        ;;
+    *)
+        log "unknown command '$1'"
+        usage
+        exit 2
+        ;;
+esac
