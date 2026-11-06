@@ -337,15 +337,17 @@ $signatureHeader, $rawBody)` checks it:
 | The body's own digest under the secret | `true` |
 | No header: `null` or `''` | `false` |
 | Not `sha256=` (exactly, lowercase) followed by 64 hex digits (either case) and nothing else | `false` |
-| A well-formed digest that is not this body's under this secret | `false` |
-| An empty body | `false`: the server never sends one, so it means something read the body first |
+| A well-formed digest that is not this body's under this secret, an empty body's included | `false` |
 | A secret that is not a string, or is empty | `InvalidArgumentException` |
 | A header that is neither a string nor `null`, such as PSR-7's `getHeader()` array | `InvalidArgumentException` |
 | A body that is not a string, such as a failed read's `false` or a parsed body | `InvalidArgumentException` |
 
-It never throws for anything the sender controls, only for the caller's own mistakes. The received hex
-is decoded and compared with `hash_equals()`, which takes the same time however much of a forged digest
-is right. The vectors it is tested with are octonomy-go's, generated from the server's signing code
+It never throws for anything the sender controls, only for the caller's own mistakes. Refusing an empty
+secret is its one rule beyond the HMAC, and its own, since under an empty key anyone can sign; an empty
+body is verified like any other (octonomy-go refuses one, as the server never sends it, but a `bool`
+could not say why). Every delivery failing usually means the body was read before `verify()` saw it.
+The received hex is decoded and compared with `hash_equals()`, which takes the same time however much
+of a forged digest is right. The vectors it is tested with are octonomy-go's, generated from the server's signing code
 ([`tests/fixtures/webhook`](../tests/fixtures/webhook/README.md)).
 
 A 2xx answer marks the delivery delivered, and it is never sent again; any other status leaves it
@@ -476,11 +478,12 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
 - A request id refused for any reason ([Request correlation](#request-correlation)) is not quoted
   either: it is the caller's string, which can hold a value on the list, such as the actor id the same
   call sends.
-- `Webhook::verify()` throws only for the caller's own mistakes, through the same `scrub()`, so its
-  frame never holds the webhook signing secret or the body, and its message names a wrong argument's
-  type, never its value. Its parameters are declared `mixed` and checked inside, so a wrong type is
-  that exception, not a `TypeError` raised at the call, whose frame would hold every argument before
-  the SDK could remove them. `#[\SensitiveParameter]` on the secret adds the same on PHP 8.2+.
+- `Webhook::verify()` throws only for the caller's own mistakes, through `scrubAll()`, which removes the
+  arguments of every frame in the trace, the caller's too: the webhook signing secret usually reaches
+  `verify()` through a function of the caller's that took it as an argument. Its message names a wrong
+  argument's type, never its value. Its parameters are declared `mixed` and checked inside, so a wrong
+  type is that exception, not a `TypeError` raised at the call, whose trace would hold the secret in
+  every frame before the SDK could remove it. `#[\SensitiveParameter]` marks the secret on PHP 8.2+ too.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

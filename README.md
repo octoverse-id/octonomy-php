@@ -454,8 +454,8 @@ answer the failure status first, as above, and the success one only once the eve
 Frameworks answer an uncaught exception with a 500 either way.
 
 `verify()` returns false for anything the sender controls: no signature, one that is not `sha256=` and
-64 hex digits, a digest that does not match, and an empty body. It throws `InvalidArgumentException`
-only for your own mistakes:
+64 hex digits, and a digest that is not the body's. It throws `InvalidArgumentException` only for your
+own mistakes:
 
 - a secret that is not a string or is empty, such as `getenv()`'s false for an unset variable (under an
   empty key anyone could sign a delivery);

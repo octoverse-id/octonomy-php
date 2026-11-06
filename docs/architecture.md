@@ -20,7 +20,7 @@ changing the types and paths.
 | `NamespaceScope` | The atomic namespace type + id pair of one v2 request. |
 | `RequestOptions` | Per-call headers: actor (`withActor`), namespace, and request id (`withRequestId`). What a call sends in its query or body (an application scope, `include_global`) is a method argument or a params/input DTO instead. |
 | `Exception\*` | `OctonomyException` base; `ApiException` (+ `NotFound`/`Conflict`/`Validation`/`Authentication`/`Forbidden`/`FeatureDisabled`/`UnsupportedApiVersion`/`AmbiguousResolution`), mapped by `ApiException::classFor()`; `ConfigurationException`; `TransportException`; `MalformedResponseException`; `WalkInterruptedException`, which a walk throws for a failed page, with the `reachedOffset` to resume from and the failure as `getPrevious()`. |
-| `Webhook` | `verify()`, the check of a webhook delivery's signature: `hash_equals()` over the HMAC-SHA256 of the raw body, false for anything the sender controls, and `InvalidArgumentException` only for the caller's mistakes (#26). No request or response passes through it. |
+| `Webhook` | `verify()`, the check of a webhook delivery's signature: `hash_equals()` over the HMAC-SHA256 of the raw body, false for anything the sender controls, and `InvalidArgumentException`, its trace scrubbed of every argument, only for the caller's mistakes (#26). No request or response passes through it. |
 | `RequestContext` | The api_version (null for a health probe), method, path, query and namespace of one request, built by the transport before sending and carried by every exception the request ends in. No token, header or body. |
 | `Pagination`, `ResultList` | The `{data, pagination}` list envelope, one page of it. A `walk*()` method reads every page into a `\Generator` instead (`Http\Walker`). |
 | `Model\*` | Response DTOs (`Vocabulary`, `Tag`, `TagAlias`, `TagResolution`, `Assignment`, `ResourceTag`, `TagResource`, `AuditLog`, the bulk and replace results, and `HealthStatus`) and input DTOs (`*Create`, `*Update`, `*ListParams`, `AssignmentRemove`, `BulkAssign`, `BulkRemove`, `ResourceTagsReplace`). |
@@ -30,7 +30,7 @@ changing the types and paths.
 | `Internal\Path` | `Path::of(...$segments)`, every request path below the version prefix: each segment percent-encoded on its own, a `.` or `..` segment as `%2E`/`%2E%2E` so no HTTP client removes it, and an empty segment sent as it is, for the server to answer; `@internal`. |
 | `Internal\ErrorMessage` | The message of every exception a request ends in: what, why where the code tells the SDK, the fix, and the values; `@internal`. |
 | `Internal\RequestId` | The check of a caller's `X-Request-ID`, in `RequestOptions` and again in `Transport`: non-blank printable ASCII, no space at either end, so the server records the id the caller logged; `@internal`. |
-| `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), and `scrub()`, which removes the SDK frames' arguments from a trace, `Webhook::verify()`'s with its signing secret included; `@internal`. |
+| `Internal\Redaction` | What no exception may carry (token, `Authorization`, request body, `X-Actor-ID`), `scrub()`, which removes the SDK frames' arguments from a trace, and `scrubAll()`, which removes every frame's, for `Webhook::verify()`, whose callers hold its signing secret; `@internal`. |
 
 ## Request lifecycle
 

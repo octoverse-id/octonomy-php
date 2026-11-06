@@ -18,5 +18,9 @@ The file's `reason` strings are language-neutral. `WebhookTest` binds them to th
 
 - `empty_secret` throws `InvalidArgumentException`, because an empty secret is the caller's own
   misconfiguration.
-- Every other reject reason returns `false`, because the sender controls those inputs, and verify()
-  never throws on what a sender controls.
+- `empty-body-correct-digest` verifies. It is zero bytes with their own correct digest, which
+  `openssl` confirms. The file records it for an SDK that verifies the HMAC alone, as this one does.
+  octonomy-go refuses it as policy, since the server never sends an empty body. A boolean `verify()`
+  cannot say why it refused, so that policy would only add a rule that is not the server's contract.
+- Every other reject vector returns `false`, `empty-body-consumed-stream` included (its digest is the
+  full body's). The sender controls those inputs, and verify() never throws on what a sender controls.

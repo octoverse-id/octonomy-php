@@ -27,6 +27,17 @@ final class WebhookTest extends TestCase
     /** A secret the trace tests plant, to find it wherever it leaks. */
     private const SECRET = 'whsec_planted_secret_for_the_trace';
 
+    /**
+     * The one reject vector this SDK accepts: zero bytes with their own correct
+     * digest, recorded by the file for an SDK that verifies the HMAC alone, as
+     * this one does. octonomy-go refuses it as policy (the server never sends
+     * an empty body); a boolean verify() cannot say why it refused, so that
+     * policy would only add a rule the server's contract does not have. A
+     * drained body still fails here, as the empty-body-consumed-stream vector
+     * shows: its digest is the full body's.
+     */
+    private const ACCEPTED_EMPTY_BODY = 'empty-body-correct-digest';
+
     public function testTheVectorsAreTheVendoredFile(): void
     {
         self::assertSame(
@@ -72,9 +83,20 @@ final class WebhookTest extends TestCase
         self::assertTrue(Webhook::verify($secret, $header, $body));
     }
 
+    public function testAnEmptyBodyWithItsOwnDigestVerifies(): void
+    {
+        $vector = self::cases('reject')[self::ACCEPTED_EMPTY_BODY] ?? null;
+        self::assertNotNull($vector, 'the vector file no longer has ' . self::ACCEPTED_EMPTY_BODY);
+        [$secret, $header, $body, $reason] = $vector;
+        self::assertSame(['empty_body', ''], [$reason, $body]);
+
+        self::assertTrue(Webhook::verify($secret, $header, $body));
+    }
+
     /**
-     * Everything the sender controls is refused with false, never an exception:
-     * a missing or malformed header, a digest that does not match, an empty body.
+     * Everything else the sender controls is refused with false, never an
+     * exception: a missing or malformed header, a digest that does not match,
+     * an empty body that is not the one signed.
      *
      * @param string $secret the vector's secret
      * @param string $header the vector's header value
@@ -153,40 +175,38 @@ final class WebhookTest extends TestCase
 
     /**
      * A wrong argument is the caller's mistake: InvalidArgumentException, never
-     * a TypeError raised at the call, whose trace would hold every argument
-     * before verify() could remove them. The exception verify() throws keeps
-     * none of its arguments in verify()'s frame, on either PHP line.
+     * a TypeError raised at the call, whose trace would hold the secret before
+     * verify() could remove it. The exception verify() throws keeps no argument
+     * in any frame, verify()'s own or the caller's that passed the secret down
+     * (handle() here), on either PHP line.
      *
-     * verify() is called through call_user_func(), a frame that is not the
-     * SDK's, so the trace shows arguments are being recorded at all: the
-     * caller's own frame keeps what it passed, which is the caller's business.
+     * The control is an exception thrown from the same call shape by code that
+     * is not the SDK's, whose trace does hold the secret: it shows arguments are
+     * being recorded at all, so the assertions on verify()'s do not pass on
+     * nothing.
      */
     #[DataProvider('callerMistakes')]
-    public function testACallerMistakeThrowsWithNoArgumentInTheFrame(mixed $secret, mixed $header, mixed $body, string $message): void
+    public function testACallerMistakeThrowsWithNoArgumentInItsTrace(mixed $secret, mixed $header, mixed $body, string $message): void
     {
         // php.ini-production turns this on, and then no frame records any
         // argument and the assertions below would pass on nothing.
         $ignoreArgs = ini_set('zend.exception_ignore_args', '0');
         try {
-            call_user_func([Webhook::class, 'verify'], $secret, $header, $body);
-            self::fail('verify() accepted ' . $message);
-        } catch (\InvalidArgumentException $e) {
+            $control = self::thrownBy(static function (string $secret): void {
+                throw new \RuntimeException('control');
+            });
+            self::assertTrue(self::holdsSecret($control), 'arguments are not being recorded, so this test checks nothing');
+
+            $e = self::thrownBy(static fn(string $handled): bool => Webhook::verify($secret, $header, $body));
+            self::assertInstanceOf(\InvalidArgumentException::class, $e, 'verify() accepted ' . $message);
             self::assertStringContainsString($message, $e->getMessage());
             self::assertStringNotContainsString(self::SECRET, $e->getMessage());
-
-            $verify = $caller = null;
-            foreach ($e->getTrace() as $frame) {
-                if (($frame['class'] ?? null) === Webhook::class && $frame['function'] === 'verify') {
-                    $verify = $frame;
-                }
-                if (!isset($frame['class']) && $frame['function'] === 'call_user_func') {
-                    $caller = $frame;
-                }
+            self::assertFalse(self::holdsSecret($e));
+            foreach ($e->getTrace() as $i => $frame) {
+                self::assertArrayNotHasKey('args', $frame, "frame {$i} ({$frame['function']}) keeps its arguments");
             }
-            self::assertNotNull($verify, 'the trace has verify()\'s frame');
-            self::assertArrayNotHasKey('args', $verify, 'verify()\'s frame keeps an argument');
-            self::assertNotNull($caller);
-            self::assertArrayHasKey('args', $caller, 'arguments are not being recorded, so this test checks nothing');
+            // getTraceAsString() cuts a string argument at 15 characters.
+            self::assertStringNotContainsString(substr(self::SECRET, 0, 15), $e->getTraceAsString());
         } finally {
             if ($ignoreArgs !== false) {
                 ini_set('zend.exception_ignore_args', $ignoreArgs);
@@ -195,14 +215,60 @@ final class WebhookTest extends TestCase
     }
 
     /**
-     * hash_equals() is the only thing that may compare the body's digest: ==,
+     * What $call throws, called the way an application calls verify(): from a
+     * handler of its own that took the secret as an argument, and passes it on.
+     *
+     * @param callable(string): mixed $call
+     */
+    private static function thrownBy(callable $call): ?\Throwable
+    {
+        try {
+            self::handle(self::SECRET, $call);
+        } catch (\Throwable $e) {
+            return $e;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param callable(string): mixed $call
+     */
+    private static function handle(string $secret, callable $call): void
+    {
+        call_user_func($call, $secret);
+    }
+
+    /**
+     * Whether any frame of $e's trace holds the planted secret as an argument.
+     */
+    private static function holdsSecret(?\Throwable $e): bool
+    {
+        if ($e === null) {
+            return false;
+        }
+        foreach ($e->getTrace() as $frame) {
+            foreach ($frame['args'] ?? [] as $arg) {
+                if ($arg === self::SECRET) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * hash_equals() is the only thing that may decide a delivery verifies: ==,
      * === or strcmp() stop at the first byte that differs, and the time that
      * takes tells a forger how much of their digest is right. Timing cannot be
-     * asserted from a test, so the source is: the HMAC is computed in exactly
-     * one place, as the first argument of the one hash_equals() call, and no
-     * string comparison function appears at all.
+     * asserted from a test, so the source is: in verify(), every return but the
+     * last returns false, and the last returns exactly hash_equals() over the
+     * HMAC of the body and the received digest. No other path can answer true,
+     * and nothing can be or-ed onto that comparison. The HMAC is computed in no
+     * other place.
      */
-    public function testTheDigestIsComparedOnlyInsideHashEquals(): void
+    public function testOnlyHashEqualsCanVerifyADelivery(): void
     {
         $source = file_get_contents(dirname(__DIR__) . '/src/Webhook.php');
         self::assertIsString($source);
@@ -214,19 +280,32 @@ final class WebhookTest extends TestCase
             }
             $code[] = is_array($token) ? $token[1] : $token;
         }
-        $calls = static fn(string $name): array => array_keys(array_filter(
-            $code,
-            static fn(string $text, int $i): bool => $text === $name && ($code[$i + 1] ?? null) === '(',
-            ARRAY_FILTER_USE_BOTH,
-        ));
+        $start = array_search('verify', $code, true);
+        self::assertIsInt($start, 'Webhook.php has no verify()');
 
-        $hmac = $calls('hash_hmac');
-        self::assertCount(1, $hmac, 'the digest is computed in exactly one place');
-        self::assertCount(1, $calls('hash_equals'));
-        self::assertSame(['hash_equals', '('], [$code[$hmac[0] - 2], $code[$hmac[0] - 1]], 'the digest is computed directly inside hash_equals()');
-        foreach (['strcmp', 'strcasecmp', 'strncmp', 'strncasecmp', 'substr_compare', 'strcoll'] as $compare) {
-            self::assertSame([], $calls($compare), $compare . '() compares strings in variable time');
+        $returns = [];
+        $current = null;
+        foreach (array_slice($code, $start) as $text) {
+            if ($text === 'return') {
+                $current = [];
+            }
+            if ($current !== null) {
+                $current[] = $text;
+                if ($text === ';') {
+                    $returns[] = implode(' ', $current);
+                    $current = null;
+                }
+            }
         }
+        self::assertNotEmpty($returns);
+        $last = array_pop($returns);
+        self::assertSame(
+            'return hash_equals ( hash_hmac ( \'sha256\' , $rawBody , $secret , true ) , $received ) ;',
+            $last,
+            'verify() must end by returning hash_equals() over the body\'s HMAC and the received digest, and nothing else',
+        );
+        self::assertSame(array_fill(0, count($returns), 'return false ;'), $returns, 'every other return in verify() must return false');
+        self::assertSame(1, count(array_keys($code, 'hash_hmac', true)), 'the HMAC is computed in exactly one place');
     }
 
     /**
@@ -243,7 +322,8 @@ final class WebhookTest extends TestCase
     }
 
     /**
-     * The reject vectors whose input the sender controls: all but empty_secret.
+     * The reject vectors whose input the sender controls: all but empty_secret,
+     * and but the empty body this SDK accepts (ACCEPTED_EMPTY_BODY).
      *
      * @return array<string, array{string, string, string}>
      */
@@ -251,7 +331,7 @@ final class WebhookTest extends TestCase
     {
         $out = [];
         foreach (self::cases('reject') as $name => [$secret, $header, $body, $reason]) {
-            if ($reason !== 'empty_secret') {
+            if ($reason !== 'empty_secret' && $name !== self::ACCEPTED_EMPTY_BODY) {
                 $out[$name] = [$secret, $header, $body];
             }
         }

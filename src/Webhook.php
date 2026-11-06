@@ -41,24 +41,27 @@ final class Webhook
      * Whether $rawBody carries a valid Octonomy signature under $secret.
      *
      * It answers false for anything the sender controls: no signature (null or
-     * ''), a value that is not `sha256=` followed by 64 hex digits, a digest
-     * that does not match, and an empty body. Octonomy never sends an empty
-     * body, so every delivery failing is usually a body that something read
-     * before this call did: pass the bytes exactly as received.
+     * ''), a value that is not `sha256=` followed by 64 hex digits, and a digest
+     * that is not the body's. Every delivery failing usually means something
+     * read the body before this call did, leaving it partly or wholly unread:
+     * pass the bytes exactly as received.
      *
      * It throws InvalidArgumentException only for the caller's own mistakes,
-     * which no sender can cause: a secret that is not a string or is empty,
-     * under which anyone could sign a delivery, a header passed as anything but
-     * a string or null (such as PSR-7's getHeader() array), and a body that is
-     * not a string (such as a failed read's false, or a parsed body, whose bytes
-     * are gone).
+     * which no sender can cause: a secret that is not a string, or is empty,
+     * since under an empty key anyone can sign a delivery that verifies; a
+     * header passed as anything but a string or null (such as PSR-7's
+     * getHeader() array); and a body that is not a string (such as a failed
+     * read's false, or a parsed body, whose bytes are gone). Refusing the empty
+     * secret is the one rule here beyond the HMAC itself, and it is the
+     * verifier's own: no server rule is involved.
      *
      * The parameters are declared mixed, and the types above are checked here,
-     * so that a wrong one never stops the call at its boundary: PHP would put
-     * every argument, the secret too, into that TypeError's trace, before any
-     * code here could remove it. Every exception thrown here goes through
-     * Redaction::scrub(), so this frame holds none of its arguments on either
-     * PHP line; #[\SensitiveParameter] adds the same on PHP 8.2+.
+     * so that a wrong one never stops the call at its boundary: that TypeError
+     * would hold the secret in this frame and in every caller's frame that
+     * passed it down, before any code here could remove it. Every exception
+     * thrown here goes through Redaction::scrubAll(), which removes the
+     * arguments of every frame in its trace, on either PHP line.
+     * #[\SensitiveParameter] marks the secret as well on PHP 8.2+.
      *
      * The digests are compared with hash_equals(), never with == or ===, which
      * would reveal through timing how much of a forged digest is right. The hex
@@ -82,7 +85,7 @@ final class Webhook
     ): bool {
         // The caller's mistakes first: they are true whatever the sender did.
         if (!is_string($secret)) {
-            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::webhookArgument(
+            throw Redaction::scrubAll(new \InvalidArgumentException(ErrorMessage::webhookArgument(
                 'the signing secret',
                 $secret,
                 'pass the secret the Octonomy server signs with, its OCTONOMY_WEBHOOK_SIGNING_SECRET, as a string;'
@@ -90,10 +93,10 @@ final class Webhook
             )));
         }
         if ($secret === '') {
-            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::webhookEmptySecret()));
+            throw Redaction::scrubAll(new \InvalidArgumentException(ErrorMessage::webhookEmptySecret()));
         }
         if ($signatureHeader !== null && !is_string($signatureHeader)) {
-            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::webhookArgument(
+            throw Redaction::scrubAll(new \InvalidArgumentException(ErrorMessage::webhookArgument(
                 'the signature header',
                 $signatureHeader,
                 'pass the X-Octonomy-Signature header\'s value as a string, such as PSR-7\'s'
@@ -101,7 +104,7 @@ final class Webhook
             )));
         }
         if (!is_string($rawBody)) {
-            throw Redaction::scrub(new \InvalidArgumentException(ErrorMessage::webhookArgument(
+            throw Redaction::scrubAll(new \InvalidArgumentException(ErrorMessage::webhookArgument(
                 'the body',
                 $rawBody,
                 'pass the request body as the exact bytes received, such as file_get_contents(\'php://input\'),'
@@ -111,7 +114,7 @@ final class Webhook
         }
 
         // Then what the sender controls, each a plain no.
-        if ($signatureHeader === null || $rawBody === '') {
+        if ($signatureHeader === null) {
             return false;
         }
         // \z, not $: $ would also match before a trailing newline.
