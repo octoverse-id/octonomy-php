@@ -52,8 +52,11 @@ $acmeTag = $client->tags()->create($featured, $acme);
 $client->tags()->create($featured, $globex);
 
 // Each merchant reads back only its own row.
-$page = $client->tags()->list(new TagListParams(applicationId: 'storefront', slug: 'featured'), $globex);
-echo $page->data[0]->namespaceId, PHP_EOL; // globex
+$label = new TagListParams(applicationId: 'storefront', isActive: true, slug: 'featured', type: 'label');
+foreach (['acme' => $acme, 'globex' => $globex] as $merchant => $scope) {
+    $row = $client->tags()->list($label, $scope)->data[0];
+    echo "reading as merchant:{$merchant} -> {$row->slug} ({$row->namespaceId}'s)\n";
+}
 
 // Not even by id: as far as globex can tell, acme's tag does not exist.
 try {

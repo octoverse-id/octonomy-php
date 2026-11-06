@@ -79,10 +79,17 @@ function merchant(string $id): RequestOptions
     return new RequestOptions(namespace: new NamespaceScope('merchant', $id));
 }
 
+// The quickstart's tag, as a merchant holds it: one active tag per (type, slug),
+// so another type's `featured`, or a deactivated one, is not it.
+function featuredLabel(string $application): TagListParams
+{
+    return new TagListParams(applicationId: $application, isActive: true, slug: 'featured', type: 'label');
+}
+
 /**
- * Create the merchant's `featured` tag, or find the one already there, such as
- * an earlier run's: a slug is taken once per merchant, so a second create there
- * is a 409. Only an active tag holds a slug, so that is the one looked up.
+ * Create the merchant's `featured` label, or find the one already there, such
+ * as an earlier run's: a merchant holds it once, so a second create there is a
+ * 409.
  */
 function featuredTag(Client $client, string $application, string $merchant): Tag
 {
@@ -93,10 +100,7 @@ function featuredTag(Client $client, string $application, string $merchant): Tag
         );
         $how = 'created';
     } catch (ConflictException $e) {
-        $found = $client->tags()->list(
-            new TagListParams(applicationId: $application, isActive: true, slug: 'featured', type: 'label'),
-            merchant($merchant),
-        )->data;
+        $found = $client->tags()->list(featuredLabel($application), merchant($merchant))->data;
         if ($found === []) {
             throw $e;
         }
@@ -117,7 +121,7 @@ try {
     // Each merchant reads back its own row, and only that: the label comes from
     // the namespace the server says the row is in.
     foreach (['acme', 'globex'] as $merchant) {
-        $page = $client->tags()->list(new TagListParams(applicationId: $application, slug: 'featured'), merchant($merchant));
+        $page = $client->tags()->list(featuredLabel($application), merchant($merchant));
         foreach ($page->data as $tag) {
             printf("reading as %-16s -> %s  (%s's)\n", "merchant:{$merchant}", $tag->slug, $tag->namespaceId);
         }
