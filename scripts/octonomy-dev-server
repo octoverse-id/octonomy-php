@@ -201,7 +201,8 @@ usage: octonomy-dev-server <command>
 
   run <script> [args...]  boot the dev server unless it is running, then run a PHP
                           script with its credentials as OCTONOMY_BASE_URL,
-                          OCTONOMY_TOKEN and OCTONOMY_TENANT_ID
+                          OCTONOMY_TOKEN, OCTONOMY_TENANT_ID and
+                          OCTONOMY_APPLICATION_ID
   up                      boot, verify and seed a fresh dev server
   down                    remove its containers, network and env file
   logs                    dump its container logs

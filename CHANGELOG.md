@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `examples/quickstart.php` demonstrates namespace isolation: two merchants on one tenant each create
+  a tag with the same slug, each reads back only its own row, and neither can read the other's by id
+  (`NotFoundException`). It reads `OCTONOMY_APPLICATION_ID` beside the other three variables and
+  refuses to run with any of them unset rather than guess a server, and a second run finds the tags the
+  first created instead of failing on the conflict. The README's quickstart, its expected output, and
+  the instructions for pointing it at your own Octonomy (a token that reaches both namespaces, and
+  `OCTONOMY_NAMESPACE_WRITE_ENABLED`) match it (#22).
 - `vendor/bin/octonomy-dev-server`, the package's Composer bin (`scripts/octonomy-dev-server`): a
   throwaway local Octonomy in Docker, so `vendor/bin/octonomy-dev-server run examples/quickstart.php`
   takes a project from `composer require` to the quickstart's output. `run <script>` boots the server
@@ -17,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manage the server. It runs `scripts/octonomy-harness.sh` under its own container prefix and env file,
   never sharing a server with the read-only integration suite, and the harness gains a `status`
   command. There is one dev server per Docker daemon: in another project `run` and `up` refuse to
-  replace it rather than destroy that project's data and leave it holding rejected tokens. `examples/quickstart.php` finds its autoloader in a Composer install as well as a checkout,
-  and the README documents the Docker prerequisite, teardown, and pointing the quickstart at your own
+  replace it rather than destroy that project's data and leave it holding rejected tokens.
+  `examples/quickstart.php` finds its autoloader in a Composer install as well as a checkout, and the
+  README documents the Docker prerequisite, teardown, and pointing the quickstart at your own
   Octonomy (#13).
 - `walk()` beside every list method (`walk()` on the tags, vocabularies, aliases and audit-log services,
   `tags()->walkAliases()`, `walkResources()` and `walkAuditLogs()`, `resources()->walkTags()` and

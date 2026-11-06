@@ -178,6 +178,11 @@ jobs:
       - name: Run the quickstart through it
         working-directory: ${{ runner.temp }}/consumer
         run: vendor/bin/octonomy-dev-server run examples/quickstart.php
+      # The server keeps what the first run wrote, so the second meets its own tags: the quickstart
+      # must find them rather than fail on the conflict.
+      - name: Run it again against the same server
+        working-directory: ${{ runner.temp }}/consumer
+        run: vendor/bin/octonomy-dev-server run examples/quickstart.php
       - name: Dump dev-server logs
         if: failure()
         working-directory: ${{ runner.temp }}/consumer
