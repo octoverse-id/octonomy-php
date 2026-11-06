@@ -23,28 +23,65 @@ Requires PHP 8.2+. Requests go through Guzzle (7.8 or 8) unless you pass another
 
 ## Quickstart
 
+Two merchants on one tenant each create a tag with the same slug. Both rows live side by side, each
+merchant reads back only its own, and neither can reach the other's even by id:
+
 ```php
 <?php
 
 use Octoverse\Octonomy\Client;
-use Octoverse\Octonomy\Exception\ConflictException;
+use Octoverse\Octonomy\Exception\NotFoundException;
 use Octoverse\Octonomy\Model\TagCreate;
+use Octoverse\Octonomy\Model\TagListParams;
+use Octoverse\Octonomy\NamespaceScope;
+use Octoverse\Octonomy\RequestOptions;
 
 $client = new Client([
     'base_url'  => 'https://octonomy.example.com', // SDK appends /api/v2
     'token'     => 'svc_live_...',                 // Authorization: Bearer
-    'tenant_id' => 'acme',                         // X-Tenant-ID
+    'tenant_id' => 'marketplace',                  // X-Tenant-ID
 ]);
 
+// A namespace is chosen per request, never for the whole client.
+$acme   = new RequestOptions(namespace: new NamespaceScope('merchant', 'acme'));
+$globex = new RequestOptions(namespace: new NamespaceScope('merchant', 'globex'));
+
+// The same slug under both merchants: two rows, no conflict.
+$featured = new TagCreate(name: 'Featured', slug: 'featured', type: 'label', applicationId: 'storefront');
+$acmeTag = $client->tags()->create($featured, $acme);
+$client->tags()->create($featured, $globex);
+
+// Each merchant reads back only its own row.
+$label = new TagListParams(applicationId: 'storefront', isActive: true, slug: 'featured', type: 'label');
+foreach (['acme' => $acme, 'globex' => $globex] as $merchant => $scope) {
+    $row = $client->tags()->list($label, $scope)->data[0];
+    echo "reading as merchant:{$merchant} -> {$row->slug} ({$row->namespaceId}'s)\n";
+}
+
+// Not even by id: as far as globex can tell, acme's tag does not exist.
 try {
-    $tag = $client->tags()->create(new TagCreate(name: 'Featured', slug: 'featured', type: 'label'));
-    echo "created tag {$tag->id}\n";
-} catch (ConflictException $e) {
-    echo "a tag with this (type, slug) already exists\n";
+    $client->tags()->get($acmeTag->id, applicationId: 'storefront', options: $globex);
+} catch (NotFoundException $e) {
+    echo "globex cannot see acme's tag\n";
 }
 ```
 
-A complete, runnable program lives in [`examples/quickstart.php`](examples/quickstart.php).
+A complete, runnable program lives in [`examples/quickstart.php`](examples/quickstart.php). Run against
+the dev server below, it prints:
+
+```text
+merchant:acme    -> tag 'featured' created
+merchant:globex  -> tag 'featured' created
+   same slug, both live, no conflict
+
+reading as merchant:acme    -> featured  (acme's)
+reading as merchant:globex  -> featured  (globex's)
+
+acme's tag by id, as merchant:globex -> NotFoundException (HTTP 404)
+```
+
+Each `(…'s)` is the namespace the server reports the row in. Run it again against the same server and
+each tag is found rather than created twice: the first two lines end `already there`.
 
 ### Run it against a local Octonomy
 
@@ -61,8 +98,9 @@ supported. The first boot pulls the Postgres and Octonomy images, which takes as
 connection does; after that a boot takes about a minute.
 
 `run` boots a server unless one is already up, then runs the script with the server's credentials in
-`OCTONOMY_BASE_URL`, `OCTONOMY_TOKEN` and `OCTONOMY_TENANT_ID`, and the Composer autoloader already
-loaded. Any PHP script works the same way, your own included: `vendor/bin/octonomy-dev-server run
+`OCTONOMY_BASE_URL`, `OCTONOMY_TOKEN`, `OCTONOMY_TENANT_ID` and `OCTONOMY_APPLICATION_ID`, and the
+Composer autoloader already loaded. Its token may write in any merchant namespace, and the server has
+namespaced writes switched on. Any PHP script works the same way, your own included: `vendor/bin/octonomy-dev-server run
 try-octonomy.php`. A path is read from the current directory first, then from the SDK's own directory,
 which is where `examples/quickstart.php` comes from in your project.
 
@@ -92,19 +130,29 @@ running a source checkout on a plain server.
 
 ### Point at your own Octonomy
 
-The quickstart reads the same three variables, so run it with `php` and set them yourself. It writes:
-it creates a `labels` vocabulary and a `featured` tag shared across the tenant, so give it a tenant
-you can write to and a token with the `tags:read` and `tags:write` scopes, minted without
-`--application` (a token bound to one application cannot write tenant-wide rows).
+The quickstart reads those four variables, so run it with `php` and set them yourself. It writes: it
+creates a `featured` label tag for your application in the `merchant:acme` and `merchant:globex`
+namespaces, so give it a tenant you can write to. It also needs two things the dev server sets up for
+you:
+
+- **A token that reaches both namespaces**, with the `tags:read` and `tags:write` scopes, such as one
+  minted on the server with `python manage.py create_service_token --name quickstart --tenant
+  marketplace --application storefront --namespace-wildcard --scope tags:read --scope tags:write`. A
+  token with no namespace grant reaches only the global partition, so the first write throws
+  `ForbiddenException`.
+- **Namespaced writes switched on:** `OCTONOMY_NAMESPACE_WRITE_ENABLED=true` on the server. It is off
+  by default, and the first write then throws `FeatureDisabledException`, whose message says so.
 
 ```bash
 OCTONOMY_BASE_URL=https://octonomy.example.com \
 OCTONOMY_TOKEN=svc_... \
-OCTONOMY_TENANT_ID=acme \
+OCTONOMY_TENANT_ID=marketplace \
+OCTONOMY_APPLICATION_ID=storefront \
 php vendor/octoverse-id/octonomy-php/examples/quickstart.php
 ```
 
-Your own code takes the same values as the `base_url`, `token` and `tenant_id` options.
+Your own code takes the first three as the `base_url`, `token` and `tenant_id` options, and passes the
+application to each call that needs one.
 
 ## Authentication and tenant scope
 
