@@ -253,6 +253,39 @@ final class ErrorMessage
     }
 
     /**
+     * The message for an argument Webhook::verify() cannot use. That is always
+     * the caller's own mistake, never anything a webhook's sender controls:
+     * verify() answers those with false. It names the type it was given and
+     * never quotes the value, which may be the signing secret or the body.
+     *
+     * @param string $what what was given, as the caller would name it, such as 'the signing secret'
+     * @param mixed  $value what was given in its place
+     * @param string $fix  how to pass it, as a sentence
+     */
+    public static function webhookArgument(string $what, mixed $value, string $fix): string
+    {
+        return sprintf(
+            'octonomy: Webhook::verify() was given %s as %s, not as a string; the value is not shown. Fix: %s',
+            $what,
+            is_object($value) ? 'an instance of ' . $value::class : 'a value of type ' . gettype($value),
+            $fix,
+        );
+    }
+
+    /**
+     * The message for an empty signing secret. The SDK cannot see where the
+     * caller read it from, so it names the usual cause as that, not as the
+     * cause.
+     */
+    public static function webhookEmptySecret(): string
+    {
+        return 'octonomy: Webhook::verify() was given an empty signing secret. Under an empty key anyone can'
+            . ' sign a delivery that verifies, so it verifies nothing. The SDK cannot tell why the secret is'
+            . ' empty; an environment variable that is not set is the usual cause. Fix: pass the secret the'
+            . ' Octonomy server signs with, the value of its OCTONOMY_WEBHOOK_SIGNING_SECRET.';
+    }
+
+    /**
      * The request as a message names it: the method, the path and query as
      * sent, and the namespace, such as
      * "GET /api/v2/tags/7d1c?application_id=commerce in namespace merchant:m-42".

@@ -46,6 +46,8 @@ use Psr\Http\Message\RequestInterface;
  *
  * This is done here rather than with #[\SensitiveParameter] because the PHP 7.4
  * line has no attributes, and the redaction must hold on both lines.
+ * Webhook::verify(), which no request passes through, throws through scrub()
+ * too, so its frame never holds the webhook signing secret.
  *
  * The HTTP client's exception is never chained, because it holds the request
  * it failed to send, Authorization header and body included: Guzzle's
