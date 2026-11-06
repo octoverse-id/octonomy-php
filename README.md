@@ -46,6 +46,66 @@ try {
 
 A complete, runnable program lives in [`examples/quickstart.php`](examples/quickstart.php).
 
+### Run it against a local Octonomy
+
+The SDK ships a dev server: a throwaway Octonomy in Docker, booted, checked and seeded for you. Two
+steps from an empty project to the quickstart's output:
+
+```bash
+composer require octoverse-id/octonomy-php
+vendor/bin/octonomy-dev-server run examples/quickstart.php
+```
+
+**It needs Docker** (a running daemon) and curl, on macOS, Linux or WSL; Windows without WSL is not
+supported. The first boot pulls the Postgres and Octonomy images, which takes as long as your
+connection does; after that a boot takes about a minute.
+
+`run` boots a server unless one is already up, then runs the script with the server's credentials in
+`OCTONOMY_BASE_URL`, `OCTONOMY_TOKEN` and `OCTONOMY_TENANT_ID`, and the Composer autoloader already
+loaded. Any PHP script works the same way, your own included: `vendor/bin/octonomy-dev-server run
+try-octonomy.php`. A path is read from the current directory first, then from the SDK's own directory,
+which is where `examples/quickstart.php` comes from in your project.
+
+| Command | Does |
+| ------- | ---- |
+| `run <script> [args...]` | Boot unless running, then run a PHP script against the server |
+| `up` | Boot a fresh server: an empty database, then a small seeded corpus |
+| `down` | Remove its containers, its Docker network and its env file |
+| `logs` | Print the containers' logs, for a boot that failed |
+| `env` | Print the path of the env file holding its credentials |
+
+The server stays up between runs, keeping what each run wrote; **`down` tears it down**, and the next
+`run` or `up` starts from an empty database. It listens on `127.0.0.1:8000`: if that port is taken, as
+it is when you already run an Octonomy there, set `OCTONOMY_HARNESS_PORT` to a free one on the command
+that boots it.
+
+There is one dev server per Docker daemon, and the project that booted it holds its credentials. In
+another project, `run` and `up` refuse to replace it rather than destroy that project's data: run
+`down` where it was booted first, or set `OCTONOMY_HARNESS_PREFIX` and `OCTONOMY_HARNESS_PORT` to run
+a second one beside it.
+
+**Without the dev server,** run Octonomy yourself and point the SDK at it, as below. The server's
+[quickstart](https://github.com/octoverse-id/octonomy#quickstart-docker-compose) brings one up with
+Docker Compose. With no Docker at all, its
+[deployment guide](https://github.com/octoverse-id/octonomy/blob/main/docs/deployment.md) covers
+running a source checkout on a plain server.
+
+### Point at your own Octonomy
+
+The quickstart reads the same three variables, so run it with `php` and set them yourself. It writes:
+it creates a `labels` vocabulary and a `featured` tag shared across the tenant, so give it a tenant
+you can write to and a token with the `tags:read` and `tags:write` scopes, minted without
+`--application` (a token bound to one application cannot write tenant-wide rows).
+
+```bash
+OCTONOMY_BASE_URL=https://octonomy.example.com \
+OCTONOMY_TOKEN=svc_... \
+OCTONOMY_TENANT_ID=acme \
+php vendor/octoverse-id/octonomy-php/examples/quickstart.php
+```
+
+Your own code takes the same values as the `base_url`, `token` and `tenant_id` options.
+
 ## Authentication and tenant scope
 
 Every request carries credentials from the constructor options:

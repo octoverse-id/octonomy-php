@@ -6,15 +6,19 @@ declare(strict_types=1);
  * Quickstart for the Octonomy PHP SDK: configure a client, create a vocabulary
  * and a tag, list tags, and handle a typed error.
  *
- * Run it against a local Octonomy instance:
+ * Run it against a throwaway local Octonomy, booted in Docker for you, from a
+ * project that requires the SDK:
  *
- *   OCTONOMY_BASE_URL=http://localhost:8000 \
+ *   vendor/bin/octonomy-dev-server run examples/quickstart.php
+ *
+ * (scripts/octonomy-dev-server in a checkout of the SDK), or against your own
+ * Octonomy, with a token that may write tenant-wide rows:
+ *
+ *   OCTONOMY_BASE_URL=https://octonomy.example.com \
  *   OCTONOMY_TOKEN=svc_... \
  *   OCTONOMY_TENANT_ID=acme \
- *   php examples/quickstart.php
+ *   php vendor/octoverse-id/octonomy-php/examples/quickstart.php
  */
-
-require __DIR__ . '/../vendor/autoload.php';
 
 use Octoverse\Octonomy\Client;
 use Octoverse\Octonomy\Exception\ConflictException;
@@ -22,6 +26,20 @@ use Octoverse\Octonomy\Exception\OctonomyException;
 use Octoverse\Octonomy\Model\TagCreate;
 use Octoverse\Octonomy\Model\TagListParams;
 use Octoverse\Octonomy\Model\VocabularyCreate;
+
+// octonomy-dev-server has loaded the autoloader already. Run with php, this file
+// finds it in a checkout (the SDK's own vendor/) or in a Composer install, where
+// it is vendor/octoverse-id/octonomy-php/examples/ and the autoloader is the
+// project's.
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $autoload) {
+    if (!class_exists(Client::class) && is_file($autoload)) {
+        require $autoload;
+    }
+}
+if (!class_exists(Client::class)) {
+    fwrite(STDERR, "quickstart: no Composer autoloader found: run composer install\n");
+    exit(1);
+}
 
 function env(string $key, string $fallback): string
 {
