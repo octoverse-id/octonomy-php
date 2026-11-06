@@ -134,11 +134,14 @@ jobs:
         if: always()
         run: scripts/octonomy-harness.sh down
 
-  # The Composer bin end to end (#13), from a checkout: boot the dev server, run the quickstart
-  # through it, tear it down, and prove nothing is left. The unit suite covers the bin with a fake
-  # docker; this is the one place the real boot, the env translation and the quickstart meet.
+  # The Composer bin end to end (#13), the way a user meets it. The SDK is installed into an empty
+  # project from this checkout through a mirrored path repository, so the package has no vendor/ of
+  # its own and vendor/bin/octonomy-dev-server is Composer's generated proxy; the dev server then
+  # boots through that proxy, runs the quickstart, and is torn down with nothing left behind.
+  # DevServerTest covers the bin's layouts with a fake docker; this is the one place the real proxy,
+  # the boot, the env translation and the quickstart meet.
   dev-server:
-    name: dev server
+    name: dev server (Composer project)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -149,30 +152,43 @@ jobs:
           php-version: "8.3"
           coverage: none
           tools: composer:v2
-      - name: Install dependencies
-        run: composer install --no-interaction --no-progress
+      # `versions` pins the package to dev-main whatever ref the checkout is on (a pull request's
+      # merge commit is a detached HEAD, from which Composer cannot guess a branch).
+      - name: Install the SDK into an empty project
+        run: |
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          printf '{"repositories": [{"type": "path", "url": "%s", "options": {"symlink": false, "versions": {"octoverse-id/octonomy-php": "dev-main"}}}]}\n' "$GITHUB_WORKSPACE" > composer.json
+          composer require --no-interaction --no-progress octoverse-id/octonomy-php:dev-main
       - name: Boot the dev server
-        run: scripts/octonomy-dev-server up
+        working-directory: ${{ runner.temp }}/consumer
+        run: vendor/bin/octonomy-dev-server up
       # The same masking as the integration job: the dev server mints real bearer tokens too.
       - name: Mask dev-server credentials
+        working-directory: ${{ runner.temp }}/consumer
         run: |
-          env_file=$(scripts/octonomy-dev-server env)
+          env_file=$(vendor/bin/octonomy-dev-server env)
           while IFS= read -r line; do
             case "${line%%=*}" in
               *_TOKEN) echo "::add-mask::${line#*=}" ;;
             esac
           done < "$env_file"
-      # Reuses the server booted above: `run` boots only when none is up.
+      # Reuses the server booted above, since `run` boots only when none is up. From the project
+      # root, examples/quickstart.php resolves to the SDK's own copy under vendor/.
       - name: Run the quickstart through it
-        run: scripts/octonomy-dev-server run examples/quickstart.php
+        working-directory: ${{ runner.temp }}/consumer
+        run: vendor/bin/octonomy-dev-server run examples/quickstart.php
       - name: Dump dev-server logs
         if: failure()
-        run: scripts/octonomy-dev-server logs
+        working-directory: ${{ runner.temp }}/consumer
+        run: vendor/bin/octonomy-dev-server logs
       - name: Tear down the dev server
         if: always()
-        run: scripts/octonomy-dev-server down
+        working-directory: ${{ runner.temp }}/consumer
+        run: vendor/bin/octonomy-dev-server down
       - name: Nothing is left behind
+        working-directory: ${{ runner.temp }}/consumer
         run: |
           test -z "$(docker ps -aq --filter name=octonomy-php-dev-server)"
           test -z "$(docker network ls -q --filter name=octonomy-php-dev-server)"
-          test ! -e .octonomy-dev-server.env
+          test ! -e vendor/octoverse-id/octonomy-php/.octonomy-dev-server.env

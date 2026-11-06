@@ -84,6 +84,9 @@ final class DevServerTest extends TestCase
             'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
             'OCTONOMY_HARNESS_PREFIX' => 'octonomy-php-dev-server-test',
             'FAKE_DOCKER_RUNNING' => '1',
+            // A shell that sourced the integration harness's env file holds these.
+            'OCTONOMY_TEST_BASE_URL' => 'http://127.0.0.1:9999',
+            'OCTONOMY_TEST_NAMESPACE_B_TOKEN' => 'octo_integration_b',
         ]);
 
         self::assertSame(3, $code, 'the script\'s own exit status');
@@ -94,8 +97,10 @@ final class DevServerTest extends TestCase
             'OCTONOMY_TENANT_ID' => 'harness-tenant',
             'OCTONOMY_NAMESPACE_A_TOKEN' => 'octo_ns_a',
             'OCTONOMY_UNQUOTED' => '$(touch ' . $this->work . '/ran)',
-            // The integration suite's gate stays closed for anything the script runs.
+            // The integration suite's gate stays closed for anything the script runs,
+            // whether the name came from the file or from the caller's shell.
             'OCTONOMY_TEST_BASE_URL' => false,
+            'OCTONOMY_TEST_NAMESPACE_B_TOKEN' => false,
             'NOT_OCTONOMY' => false,
         ], $probe['env']);
         self::assertFileDoesNotExist($this->work . '/ran');
@@ -308,7 +313,7 @@ final class DevServerTest extends TestCase
             <?php
             $env = [];
             foreach (['OCTONOMY_BASE_URL', 'OCTONOMY_TOKEN', 'OCTONOMY_TENANT_ID', 'OCTONOMY_NAMESPACE_A_TOKEN',
-                'OCTONOMY_UNQUOTED', 'OCTONOMY_TEST_BASE_URL', 'NOT_OCTONOMY'] as $name) {
+                'OCTONOMY_UNQUOTED', 'OCTONOMY_TEST_BASE_URL', 'OCTONOMY_TEST_NAMESPACE_B_TOKEN', 'NOT_OCTONOMY'] as $name) {
                 $env[$name] = getenv($name);
             }
             echo json_encode([

@@ -122,8 +122,10 @@ Composer links a package's bin only into projects that require it, so in a check
 `scripts/octonomy-dev-server`, or `composer exec octonomy-dev-server`, which finds it in both. `run`
 checks `octonomy-harness.sh status` to decide whether to boot, then hands the script each
 `OCTONOMY_TEST_<NAME>` from the env file as `OCTONOMY_<NAME>`: the file itself keeps the names the
-integration suite reads, and the script never sees those, so a test suite it runs stays skipped.
-`tests/DevServerTest.php` covers it with a fake `docker` on `PATH`, without booting anything.
+integration suite reads, and the script sees none, not even one inherited from your shell, so a test
+suite it runs stays skipped. `tests/DevServerTest.php` covers it with a fake `docker` on `PATH`,
+without booting anything; CI's `dev-server` job installs the SDK into an empty Composer project and
+runs the quickstart through the real `vendor/bin` proxy.
 
 ## Captured response fixtures
 

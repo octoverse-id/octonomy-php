@@ -79,10 +79,11 @@ The server stays up between runs, keeping what each run wrote; **`down` tears it
 it is when you already run an Octonomy there, set `OCTONOMY_HARNESS_PORT` to a free one on the command
 that boots it.
 
-**Without Docker,** run Octonomy yourself: the server's
+**Without the dev server,** run Octonomy yourself and point the SDK at it, as below. The server's
 [quickstart](https://github.com/octoverse-id/octonomy#quickstart-docker-compose) brings one up with
-Docker Compose, and its [deployment guide](https://github.com/octoverse-id/octonomy/blob/main/docs/deployment.md)
-also covers a source checkout on a plain server. Then point the SDK at it.
+Docker Compose. With no Docker at all, its
+[deployment guide](https://github.com/octoverse-id/octonomy/blob/main/docs/deployment.md) covers
+running a source checkout on a plain server.
 
 ### Point at your own Octonomy
 

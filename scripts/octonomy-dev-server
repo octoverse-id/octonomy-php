@@ -109,8 +109,10 @@ find_autoload() {
 # application read. The harness writes OCTONOMY_TEST_*, the integration suite's
 # names, and they stay as written: an empty OCTONOMY_TEST_BASE_URL is what makes
 # that suite skip rather than fail. So each OCTONOMY_TEST_<NAME> reaches the
-# script as OCTONOMY_<NAME>, and only that way: exporting the originals would
-# open the integration gate for any test suite the script runs.
+# script as OCTONOMY_<NAME>, and only that way: an OCTONOMY_TEST_* would open the
+# integration gate for any test suite the script runs. That includes one the
+# caller's shell already holds, say from sourcing the integration harness's env
+# file, which would point that suite at another server; so every one is removed.
 #
 # The file is read, not sourced, and only its OCTONOMY_TEST_<NAME>=<value> lines
 # are taken, so nothing in it runs. The harness writes every value unquoted and
@@ -118,6 +120,11 @@ find_autoload() {
 export_credentials() {
     [ -f "$OCTONOMY_HARNESS_ENV_FILE" ] ||
         fail "the dev server is running but its env file ${OCTONOMY_HARNESS_ENV_FILE} is gone: run down, then up"
+    # A value holding a newline can make a line of `env` output look like a
+    # name; unsetting a variable that does not exist does nothing.
+    for _name in $(env | sed -n 's/^\(OCTONOMY_TEST_[A-Za-z0-9_]*\)=.*/\1/p'); do
+        unset "$_name"
+    done
     _base_url=''
     while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in
