@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loads the Composer autoloader from a project or a checkout before it; `up`, `down`, `logs` and `env`
   manage the server. It runs `scripts/octonomy-harness.sh` under its own container prefix and env file,
   never sharing a server with the read-only integration suite, and the harness gains a `status`
-  command. `examples/quickstart.php` finds its autoloader in a Composer install as well as a checkout,
+  command. There is one dev server per Docker daemon: in another project `run` and `up` refuse to
+  replace it rather than destroy that project's data and leave it holding rejected tokens. `examples/quickstart.php` finds its autoloader in a Composer install as well as a checkout,
   and the README documents the Docker prerequisite, teardown, and pointing the quickstart at your own
   Octonomy (#13).
 - `walk()` beside every list method (`walk()` on the tags, vocabularies, aliases and audit-log services,

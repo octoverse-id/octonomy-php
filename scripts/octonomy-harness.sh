@@ -15,7 +15,7 @@
 #   scripts/octonomy-harness.sh down    # tear down containers, network, env file
 #   scripts/octonomy-harness.sh logs    # dump container logs
 #   scripts/octonomy-harness.sh env     # print the env file path
-#   scripts/octonomy-harness.sh status  # exit 0 when this harness is up
+#   scripts/octonomy-harness.sh status  # exit 0 up, 1 down, 2 held by another env file
 #   scripts/octonomy-harness.sh stop-db # stop the database, leaving Octonomy up
 #                                       # but not ready (fixture capture only)
 #
@@ -32,7 +32,7 @@
 #   * the container prefix defaults to octonomy-php-harness, so this harness
 #     never removes a Go harness running on the same machine
 #   * seed_corpus, which writes the rows the suites and fixture capture read
-#   * status, which scripts/octonomy-dev-server runs to decide whether to boot
+#   * status, which scripts/octonomy-dev-server runs to decide whether it may boot
 
 set -eu
 
@@ -257,6 +257,11 @@ require_pinned_images() {
 
 container_running() {
     [ -n "$(docker ps --filter "name=^${1}$" --filter status=running --format '{{.Names}}')" ]
+}
+
+# Running or not.
+container_exists() {
+    [ -n "$(docker ps -a --filter "name=^${1}$" --format '{{.Names}}')" ]
 }
 
 # Every Octonomy container -- the two one-shots and the long-running app -- gets
@@ -815,14 +820,33 @@ cmd_stop_db() {
     log "database stopped; Octonomy is up but not ready"
 }
 
-# Exit 0 when this harness is up, 1 otherwise, printing nothing either way: its
-# env file exists and both its containers are running. It says nothing about the
-# server's health (`up` proved that), only that what `up` built is still there.
-# A reboot of the host stops both containers, so a stale env file reads as down.
+# Say, by exit status alone, what `up` would do here:
+#
+#   0  up: this env file exists and both containers are running. Nothing about
+#      the server's health (`up` proved that), only that what it built is still
+#      there.
+#   1  down: `up` would replace nothing but this harness's own remains. A reboot
+#      of the host stops both containers, so a stale env file reads as down.
+#   2  held: a container under this prefix exists but this env file does not, so
+#      it was booted with another env file, and `up` would remove a server whose
+#      credentials someone else holds. Two installations of the SDK each keep
+#      their dev server's env file in their own package directory, under one
+#      prefix: the second one's `up` would destroy the first's data and leave the
+#      first holding tokens for a server that no longer exists, which reads later
+#      as a bad token rather than as a replaced server.
+#
+# `up` itself does not check: the integration harness and fixture capture replace
+# a running harness on purpose. scripts/octonomy-dev-server refuses a 2.
 cmd_status() {
-    [ -f "$ENV_FILE" ] || return 1
     command -v docker >/dev/null 2>&1 || return 1
-    container_running "$DB" 2>/dev/null && container_running "$APP" 2>/dev/null
+    if [ -f "$ENV_FILE" ]; then
+        container_running "$DB" 2>/dev/null && container_running "$APP" 2>/dev/null && return 0
+        return 1
+    fi
+    if container_exists "$DB" 2>/dev/null || container_exists "$APP" 2>/dev/null; then
+        return 2
+    fi
+    return 1
 }
 
 cmd_up() {
@@ -936,7 +960,13 @@ case "${1:-up}" in
     down) cmd_down ;;
     logs) dump_logs ;;
     env) printf '%s\n' "$ENV_FILE" ;;
-    status) cmd_status ;;
+    status)
+        # Off, so the three statuses come back as they are rather than as set -e
+        # ending the script on the first command that fails.
+        set +e
+        cmd_status
+        exit $?
+        ;;
     stop-db) cmd_stop_db ;;
     *) fail "unknown command '${1}' (expected: up, down, logs, env, status, stop-db)" ;;
 esac

@@ -145,6 +145,27 @@ export_credentials() {
         fail "${OCTONOMY_HARNESS_ENV_FILE} has no OCTONOMY_TEST_BASE_URL, so there is no server to point the script at: run down, then up"
 }
 
+# Set $state to the harness's status: 0 up, 1 down, 2 held by another env file.
+server_state() {
+    state=0
+    sh "$harness" status || state=$?
+}
+
+# Every installation keeps its env file in its own package directory, but the
+# containers' names come from one prefix, so a second project (or a checkout
+# beside a project) would find no env file of its own and boot over the first
+# one's server: its data gone, and its env file left holding tokens that the
+# replacement rejects as invalid. Refuse instead, and say how to proceed.
+refuse_held_server() {
+    fail "a dev server named ${OCTONOMY_HARNESS_PREFIX} already exists, but this installation's env file ${OCTONOMY_HARNESS_ENV_FILE} does not: it was booted from another project or checkout, or this file was deleted, and booting here would destroy it and leave that project with tokens for a server that no longer exists. Run down where it was booted, or down here to remove it anyway, or set OCTONOMY_HARNESS_PREFIX and OCTONOMY_HARNESS_PORT to run a second dev server beside it"
+}
+
+cmd_up() {
+    server_state
+    [ "$state" != 2 ] || refuse_held_server
+    exec sh "$harness" up
+}
+
 cmd_run() {
     [ $# -ge 1 ] || fail "run needs a script: octonomy-dev-server run <script> [args...]"
     # Everything that can be refused without a server is checked before booting
@@ -154,10 +175,16 @@ cmd_run() {
     find_autoload
     command -v php >/dev/null 2>&1 || fail "php is not installed or not on PATH"
 
-    if ! sh "$harness" status; then
-        log "no dev server is running; booting one (about a minute once Docker has the images)"
-        sh "$harness" up
-    fi
+    server_state
+    case "$state" in
+        0) ;;
+        1)
+            log "no dev server is running; booting one (about a minute once Docker has the images)"
+            sh "$harness" up
+            ;;
+        2) refuse_held_server ;;
+        *) fail "scripts/octonomy-harness.sh status exited ${state}, which is none of 0 (up), 1 (down) or 2 (held)" ;;
+    esac
     export_credentials
 
     # auto_prepend_file loads the autoloader before the script's first line, so
@@ -185,7 +212,8 @@ USAGE
 }
 
 case "${1:-}" in
-    up | down | logs | env) exec sh "$harness" "$1" ;;
+    up) cmd_up ;;
+    down | logs | env) exec sh "$harness" "$1" ;;
     run)
         shift
         cmd_run "$@"

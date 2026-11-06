@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Octoverse\Octonomy\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -11,8 +12,9 @@ use PHPUnit\Framework\TestCase;
  *
  * A fake `docker` first on PATH stands in for the daemon: it records every call,
  * reports the dev server's two containers as running when FAKE_DOCKER_RUNNING is
- * set, accepts the removals `down` makes, and fails anything else, `docker info`
- * included, as an unreachable daemon would. So `run` either reaches the script it
+ * set, or as existing but stopped when FAKE_DOCKER_STOPPED is, accepts the
+ * removals `down` makes, and fails anything else, `docker info` included, as an
+ * unreachable daemon would. So `run` either reaches the script it
  * was given or proves it tried to boot, and no test touches a real container.
  * Booting a real server is the integration job's.
  *
@@ -36,7 +38,10 @@ final class DevServerTest extends TestCase
             printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
             case "$1" in
                 ps)
-                    [ -n "${FAKE_DOCKER_RUNNING:-}" ] || exit 0
+                    case " $* " in
+                        *' status=running '*) [ -n "${FAKE_DOCKER_RUNNING:-}" ] || exit 0 ;;
+                        *) [ -n "${FAKE_DOCKER_RUNNING:-}${FAKE_DOCKER_STOPPED:-}" ] || exit 0 ;;
+                    esac
                     for arg in "$@"; do
                         case "$arg" in
                             name=*) name=${arg#name=^}; printf '%s\n' "${name%\$}" ;;
@@ -126,6 +131,73 @@ final class DevServerTest extends TestCase
         self::assertSame('', $out, 'the script never ran');
         self::assertStringContainsString('no dev server is running; booting one', $err);
         // The fake daemon refuses `docker info`, which is as far as `up` gets.
+        self::assertStringContainsString('harness: ERROR: the docker daemon is not reachable', $err);
+        self::assertContains('info', $this->dockerCalls());
+    }
+
+    /**
+     * @return iterable<string, array{array<string, string>}>
+     */
+    public static function serversHeldElsewhere(): iterable
+    {
+        yield 'running' => [['FAKE_DOCKER_RUNNING' => '1']];
+        // Stopped, say by a reboot, it still holds that project's data and tokens.
+        yield 'stopped' => [['FAKE_DOCKER_STOPPED' => '1']];
+    }
+
+    /**
+     * Containers under the prefix with no env file of this installation's: a dev
+     * server another project booted, whose env file sits in that project's
+     * package directory. Booting here would destroy it and leave that project's
+     * tokens rejected as invalid by the replacement.
+     *
+     * @param array<string, string> $docker
+     */
+    #[DataProvider('serversHeldElsewhere')]
+    public function testRunRefusesToBootOverAServerHeldByAnotherInstallation(array $docker): void
+    {
+        $this->writeProbe($this->work . '/probe.php');
+
+        [$code, $out, $err] = $this->devServer(self::checkoutBin(), ['run', 'probe.php'], $this->work, [
+            'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
+        ] + $docker);
+
+        self::assertSame(1, $code);
+        self::assertSame('', $out, 'the script never ran');
+        self::assertStringContainsString(
+            "ERROR: a dev server named octonomy-php-dev-server already exists, but this installation's env file {$this->work}/dev.env does not",
+            $err,
+        );
+        self::assertStringContainsString('Run down where it was booted', $err);
+        self::assertNotContains('info', $this->dockerCalls(), 'nothing booted');
+    }
+
+    /**
+     * @param array<string, string> $docker
+     */
+    #[DataProvider('serversHeldElsewhere')]
+    public function testUpRefusesAServerHeldByAnotherInstallation(array $docker): void
+    {
+        [$code, , $err] = $this->devServer(self::checkoutBin(), ['up'], $this->work, [
+            'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
+        ] + $docker);
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('already exists, but this installation\'s env file', $err);
+        self::assertNotContains('info', $this->dockerCalls(), 'nothing booted');
+    }
+
+    public function testUpReplacesItsOwnServer(): void
+    {
+        $this->writeEnvFile($this->work . '/dev.env', ['OCTONOMY_TEST_BASE_URL=http://127.0.0.1:8123']);
+
+        [$code, , $err] = $this->devServer(self::checkoutBin(), ['up'], $this->work, [
+            'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
+            'FAKE_DOCKER_RUNNING' => '1',
+        ]);
+
+        // `up` went ahead, as far as the fake daemon lets it.
+        self::assertSame(1, $code);
         self::assertStringContainsString('harness: ERROR: the docker daemon is not reachable', $err);
         self::assertContains('info', $this->dockerCalls());
     }

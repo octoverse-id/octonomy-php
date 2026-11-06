@@ -79,6 +79,11 @@ The server stays up between runs, keeping what each run wrote; **`down` tears it
 it is when you already run an Octonomy there, set `OCTONOMY_HARNESS_PORT` to a free one on the command
 that boots it.
 
+There is one dev server per Docker daemon, and the project that booted it holds its credentials. In
+another project, `run` and `up` refuse to replace it rather than destroy that project's data: run
+`down` where it was booted first, or set `OCTONOMY_HARNESS_PREFIX` and `OCTONOMY_HARNESS_PORT` to run
+a second one beside it.
+
 **Without the dev server,** run Octonomy yourself and point the SDK at it, as below. The server's
 [quickstart](https://github.com/octoverse-id/octonomy#quickstart-docker-compose) brings one up with
 Docker Compose. With no Docker at all, its

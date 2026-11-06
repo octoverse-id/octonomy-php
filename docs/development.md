@@ -119,8 +119,12 @@ scripts/octonomy-dev-server down
 ```
 
 Composer links a package's bin only into projects that require it, so in a checkout it is
-`scripts/octonomy-dev-server`, or `composer exec octonomy-dev-server`, which finds it in both. `run`
-checks `octonomy-harness.sh status` to decide whether to boot, then hands the script each
+`scripts/octonomy-dev-server`, or `composer exec octonomy-dev-server`, which finds it in both.
+`octonomy-harness.sh status` decides what `run` does: 0, up, reuse it; 1, down, boot; 2, containers
+under the prefix exist without this env file, refuse. That last is another installation's server (a
+consumer project's, if you also run one from this checkout): every installation keeps its env file in
+its own package directory under the one prefix, so booting would destroy that server and leave its
+project holding rejected tokens. `up` refuses it too. `run` then hands the script each
 `OCTONOMY_TEST_<NAME>` from the env file as `OCTONOMY_<NAME>`: the file itself keeps the names the
 integration suite reads, and the script sees none, not even one inherited from your shell, so a test
 suite it runs stays skipped. `tests/DevServerTest.php` covers it with a fake `docker` on `PATH`,
