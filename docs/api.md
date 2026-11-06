@@ -324,6 +324,38 @@ At server 3.2.1, `/health/ready` opens a cursor on a database connection the ser
 seconds, which needs no round trip, so it can still answer 200 for up to a minute after the database
 goes away.
 
+## Webhook signatures
+
+A server with `OCTONOMY_OUTBOX_TRANSPORT=webhook` POSTs each outbox event to its webhook URL and signs
+the body (`octonomy/events/dispatch.py::_webhook_signature`): the `X-Octonomy-Signature` header
+(`Webhook::SIGNATURE_HEADER`) is `sha256=` followed by the lowercase hex HMAC-SHA256 of the exact body
+bytes, keyed by the UTF-8 bytes of `OCTONOMY_WEBHOOK_SIGNING_SECRET`. `Webhook::verify($secret,
+$signatureHeader, $rawBody)` checks it:
+
+| Input | Result |
+| ----- | ------ |
+| The body's own digest under the secret | `true` |
+| No header: `null` or `''` | `false` |
+| Not `sha256=` (exactly, lowercase) followed by 64 hex digits (either case) and nothing else | `false` |
+| A well-formed digest that is not this body's under this secret, an empty body's included | `false` |
+| A secret that is not a string, or is empty | `InvalidArgumentException` |
+| A header that is neither a string nor `null`, such as PSR-7's `getHeader()` array | `InvalidArgumentException` |
+| A body that is not a string, such as a failed read's `false` or a parsed body | `InvalidArgumentException` |
+
+It never throws for anything the sender controls, only for the caller's own mistakes. Refusing an empty
+secret is its one rule beyond the HMAC, and its own, since under an empty key anyone can sign; an empty
+body is verified like any other (octonomy-go refuses one, as the server never sends it, but a `bool`
+could not say why). Every delivery failing usually means the body was read before `verify()` saw it.
+The received hex is decoded and compared with `hash_equals()`, which takes the same time however much
+of a forged digest is right. The vectors it is tested with are octonomy-go's, generated from the server's signing code
+([`tests/fixtures/webhook`](../tests/fixtures/webhook/README.md)).
+
+A 2xx answer marks the delivery delivered, and it is never sent again; any other status leaves it
+failed, for the dispatcher to retry or dead-letter. Plain PHP answers an uncaught exception with 200
+while `display_errors` is on (500 while it is off), so a handler should set its failure status before
+calling `verify()`, as the README's does. The other `X-Octonomy-*` headers (event id, event
+type, tenant id, request id) are not signed: read those values from the verified body.
+
 ## Error codes → exceptions
 
 | Code | HTTP | Exception |
@@ -446,6 +478,12 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
 - A request id refused for any reason ([Request correlation](#request-correlation)) is not quoted
   either: it is the caller's string, which can hold a value on the list, such as the actor id the same
   call sends.
+- `Webhook::verify()` throws only for the caller's own mistakes, through `scrubAll()`, which removes the
+  arguments of every frame in the trace, the caller's too: the webhook signing secret usually reaches
+  `verify()` through a function of the caller's that took it as an argument. Its message names a wrong
+  argument's type, never its value. Its parameters are declared `mixed` and checked inside, so a wrong
+  type is that exception, not a `TypeError` raised at the call, whose trace would hold the secret in
+  every frame before the SDK could remove it. `#[\SensitiveParameter]` marks the secret on PHP 8.2+ too.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

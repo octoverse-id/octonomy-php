@@ -57,6 +57,17 @@ stays a faithful, ergonomic client.
   body becomes `HealthStatus` with `ok` false (`HealthStatus::fromArray($data, $ok)`, since a probe has
   no api_version). Never send an `/api` endpoint through it, and never give `Transport` a bare-body
   reader.
+- **`Webhook::verify()` (#26) declares its parameters `mixed` and checks their types itself.** Never
+  narrow them to native types. A native type lets a wrong argument (`getenv()`'s false, PSR-7's
+  `getHeader()` array) raise a TypeError at the call. That TypeError's trace holds the webhook signing
+  secret in every frame that passed it down, before any SDK code could remove it, and the 7.4 line has
+  no `#[\SensitiveParameter]` to hide even `verify()`'s own frame.
+  - **What it returns and throws:** false for anything a webhook's sender controls, and
+    `InvalidArgumentException` only for the caller's mistakes, thrown through
+    `Redaction::scrubAll()`, which removes every frame's arguments.
+  - **Its one rule beyond the HMAC:** refusing an empty secret, since under an empty key anyone can
+    sign. That is the verifier's own security, not a server rule; add no other.
+  - **Its tests:** they replay octonomy-go's vendored signature vectors, never digests computed here.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.

@@ -422,6 +422,52 @@ that answers in its place, such as a proxy's 502, throws `ApiException`. At serv
 can still pass for up to a minute after the server loses its database, since the server checks a
 database connection it keeps open for 60 seconds.
 
+## Webhooks
+
+An Octonomy server set to deliver its events by webhook (`OCTONOMY_OUTBOX_TRANSPORT=webhook`; it logs
+them by default) signs each delivery's body. `Webhook::verify()` checks that signature against the raw
+body, exactly as received:
+
+```php
+use Octoverse\Octonomy\Webhook;
+
+// Anything but a 2xx until the delivery verifies: see below.
+http_response_code(401);
+
+$body = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_OCTONOMY_SIGNATURE'] ?? null; // PSR-7: $request->getHeaderLine(Webhook::SIGNATURE_HEADER)
+
+if (!Webhook::verify(getenv('OCTONOMY_WEBHOOK_SIGNING_SECRET'), $signature, $body)) {
+    exit;
+}
+
+$event = json_decode($body, true); // read the tenant, event type and id from here, not from headers
+// ... handle the event, then:
+http_response_code(204);
+```
+
+**Reject a delivery that does not verify, with any status but a 2xx.** The server marks a delivery
+answered with a 2xx as delivered and never sends it again, so a handler that answers 200 after a failed
+check is wrong for good. A non-2xx leaves the event failed, for the server to retry or dead-letter. Plain
+PHP answers 200 for an uncaught exception while `display_errors` is on, as it is in development, so
+answer the failure status first, as above, and the success one only once the event is handled.
+Frameworks answer an uncaught exception with a 500 either way.
+
+`verify()` returns false for anything the sender controls: no signature, one that is not `sha256=` and
+64 hex digits, and a digest that is not the body's. It throws `InvalidArgumentException` only for your
+own mistakes:
+
+- a secret that is not a string or is empty, such as `getenv()`'s false for an unset variable (under an
+  empty key anyone could sign a delivery);
+- a header passed as anything but a string or null, such as PSR-7's `getHeader()` array;
+- a body that is not a string, such as a failed read's false or a parsed body.
+
+Only the body is signed, so a captured delivery still verifies with its `X-Octonomy-*` headers rewritten:
+trust what the verified body says. Nothing signed says when a delivery was sent, and the server delivers
+at least once, so deduplicate on the body's `id`. If every delivery fails to verify, something read the
+body before you did. The SDK ships no typed events or request handler: verify the bytes, then decode
+them as you need. [`docs/api.md`](docs/api.md#webhook-signatures) has the details.
+
 ## Implemented resources
 
 | Resource | Status |
@@ -433,6 +479,7 @@ database connection it keeps open for 60 seconds.
 | Resource tags (`$client->resources()`) | ✅ listTags / replaceTags / listAuditLogs |
 | Audit logs (`$client->auditLogs()`) | ✅ list |
 | Health (`$client->health()`, or `HealthClient` without credentials) | ✅ live / ready |
+| Webhooks (`Webhook::verify()`) | ✅ signature verification |
 
 ## Common commands
 

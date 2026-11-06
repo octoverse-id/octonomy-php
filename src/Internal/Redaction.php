@@ -46,6 +46,9 @@ use Psr\Http\Message\RequestInterface;
  *
  * This is done here rather than with #[\SensitiveParameter] because the PHP 7.4
  * line has no attributes, and the redaction must hold on both lines.
+ * Webhook::verify(), which no request passes through, throws through
+ * scrubAll() instead, which removes every frame's arguments: its callers hold
+ * the webhook signing secret too.
  *
  * The HTTP client's exception is never chained, because it holds the request
  * it failed to send, Authorization header and body included: Guzzle's
@@ -282,6 +285,33 @@ final class Redaction
                 $trace->setValue($link, self::withoutSdkArguments($link->getTrace()));
             }
         }
+
+        return $e;
+    }
+
+    /**
+     * $e with the arguments of every frame removed, not only the SDK's. For an
+     * exception whose callers may hold a secret they passed down: Webhook::verify()
+     * is handed the webhook signing secret, usually through a function of the
+     * caller's that took it as an argument too, and that frame is in the trace
+     * of anything verify() throws. The exception is the SDK's own and chains
+     * nothing, so the caller loses no information it relies on.
+     *
+     * @template T of \Exception
+     *
+     * @param T $e
+     *
+     * @return T
+     */
+    public static function scrubAll(\Exception $e): \Exception
+    {
+        $trace = new \ReflectionProperty(\Exception::class, 'trace');
+        $frames = [];
+        foreach ($e->getTrace() as $frame) {
+            unset($frame['args']);
+            $frames[] = $frame;
+        }
+        $trace->setValue($e, $frames);
 
         return $e;
     }

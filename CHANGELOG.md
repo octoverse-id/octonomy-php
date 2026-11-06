@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Webhook::verify($secret, $signatureHeader, $rawBody)`, which checks the `X-Octonomy-Signature` on a
+  webhook delivery (`Webhook::SIGNATURE_HEADER`): `sha256=` and the HMAC-SHA256 of the raw body,
+  compared with `hash_equals()`. It returns false for anything the sender controls (no header, a
+  malformed one, a mismatch) and throws `InvalidArgumentException` only for the caller's mistakes (an
+  empty or non-string secret, a header that is not a string or null, a body that is not a string). Its
+  parameters are declared `mixed` and checked inside, and what it throws goes through
+  `Redaction::scrubAll()`, which removes the arguments of every frame, so the secret reaches no frame of
+  its trace on either PHP line; `#[\SensitiveParameter]` marks it on PHP 8.2+ too. Tested against
+  octonomy-go's signature vectors, generated from the server's signing code and vendored under
+  `tests/fixtures/webhook`. The README and `docs/api.md` say to reject a failed check with anything but a
+  2xx, which the server takes as delivered for good (#26).
 - `examples/quickstart.php` demonstrates namespace isolation: two merchants on one tenant each create
   a tag with the same slug, each reads back only its own row, and neither can read the other's by id
   (`NotFoundException`). It reads `OCTONOMY_APPLICATION_ID` beside the other three variables and
