@@ -8,9 +8,9 @@ multi-application tag management and taxonomy service. A hand-written, Guzzle-ba
 Octonomy REST API: **`/api/v2`** by default, with merchant and sub-tenant namespaces, or `/api/v1` on
 request.
 
-> **Status:** unreleased and early. No version has been tagged or published to Packagist yet, so the
-> install command below works once the first release ships. The transport, auth, error, and pagination
-> foundation, every resource group and the health probes are implemented.
+> **Status:** unreleased and early. The package is on Packagist but no version has been tagged yet, so
+> the install command below reports no matching version until the first release ships. The transport,
+> auth, error, and pagination foundation, every resource group and the health probes are implemented.
 
 ## Install
 
