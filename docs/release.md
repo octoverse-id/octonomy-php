@@ -42,10 +42,29 @@ which fails if `CHANGELOG.md` has no release heading. All must pass.
    ```
 8. Close the milestone/issue and delete the release branch.
 
-## First publish
+## Packagist
 
-Submit the package once at https://packagist.org/packages/submit (or via the Packagist API) and enable
-the GitHub webhook so future tags auto-update. Subsequent releases need only the tag.
+The package is registered at https://packagist.org/packages/octoverse-id/octonomy-php (submitted
+2026-11-09, [#11](https://github.com/octoverse-id/octonomy-php/issues/11)), so a release needs only
+its tag.
+
+- **Owner:** Packagist user `yokz`, the package's only maintainer. Packagist has no organisations;
+  another maintainer is added on the package page.
+- **Webhook:** the repository's GitHub webhook posts push events only, as `application/json`, to
+  `https://packagist.org/api/github?username=yokz`, signed with that user's **Safe API Token**.
+  Packagist lets a safe-token hook schedule a crawl but never delete, so a leaked secret cannot remove
+  a version. The cost: a deleted branch's `dev-*` version is not removed by that branch's delete event.
+- **If the owner changes,** recreate the hook with the new owner's username in the URL and their Safe
+  API Token as the secret. Regenerating the owner's safe token also breaks the hook until its secret
+  is updated.
+- **Checking the hook:** each push should show a `202` delivery in the repository's webhook settings
+  (`gh api repos/octoverse-id/octonomy-php/hooks/<id>/deliveries`), and Packagist's `dev-main`
+  should move to the pushed commit. A `403` "Signature verification failed" means the secret is not
+  the token of the user named in the URL.
+- **Never push a test tag.** Packagist publishes every version tag it sees, and a published version
+  number is spent for good: no `0.x` release exists, and the first releases are `1.0.0` and `2.0.0`.
+  Prove the hook with an ordinary push to `main`. Branches appear as `dev-<branch>` versions, which
+  Composer installs only when asked for explicitly.
 
 ## Server contract changes
 
