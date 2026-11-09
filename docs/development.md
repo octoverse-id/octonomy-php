@@ -30,7 +30,10 @@ These are also Composer scripts: `composer cs`, `composer stan`, `composer test`
 
 Tests use Guzzle's `MockHandler` (via `tests/SdkTestCase.php`) to stand up a fake Octonomy and assert
 the wire contract. `psr18ClientWith()` does the same through `ReplayingClient`, a PSR-18 client that is
-not Guzzle's, for what the SDK sends through `sendRequest()`:
+not Guzzle's, for what the SDK sends through `sendRequest()`. Only `tests/Http/SdkBuiltClientTest.php`
+sends for real. It covers the client the SDK builds, which a mock handler would replace, by sending to a
+`php -S` server that records the request line and answers 204 with no body (#64). The other tests
+check:
 
 - **Request side:** method, path, `Authorization` and `X-Tenant-ID` headers, query params, and JSON
   body — read back through `$this->lastRequest()`, `$this->lastQuery()`, `$this->lastJsonBody()`.

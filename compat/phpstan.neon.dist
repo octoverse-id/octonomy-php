@@ -17,3 +17,15 @@ parameters:
         # stops doing this, PHPStan reports the ignore as unmatched and it must go.
         -
             identifier: property.readOnlyByPhpDocDefaultValue
+        # PathAsIsCurlFactory narrows Guzzle's resource|\CurlHandle handle with `instanceof \CurlHandle`.
+        # Rector's DowngradePhp80ResourceReturnToObjectRector rewrites that as
+        # `is_resource($handle) || $handle instanceof \CurlHandle`, the check PHP 7.4 needs, since its cURL
+        # handles are resources (SdkBuiltClientTest passes on this line). PHPStan for 7.4 knows no
+        # \CurlHandle class, so it reports the class and the resource|\CurlHandle the check leaves for
+        # curl_setopt(). An ignore that stops matching is reported, so these go when that check does.
+        -
+            identifier: class.notFound
+            path: src/Http/PathAsIsCurlFactory.php
+        -
+            identifier: argument.type
+            path: src/Http/PathAsIsCurlFactory.php
