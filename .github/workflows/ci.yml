@@ -160,6 +160,19 @@ jobs:
           cd "$RUNNER_TEMP/consumer"
           printf '{"repositories": [{"type": "path", "url": "%s", "options": {"symlink": false, "versions": {"octoverse-id/octonomy-php": "dev-main"}}}]}\n' "$GITHUB_WORKSPACE" > composer.json
           composer require --no-interaction --no-progress octoverse-id/octonomy-php:dev-main
+      # Testing\FixtureClient (#28) is for callers' own tests, so it must load from an install, where the
+      # package's autoload-dev is not registered, and find the captured corpus the package ships.
+      - name: Use FixtureClient from the install
+        working-directory: ${{ runner.temp }}/consumer
+        run: |
+          php -r '
+            require "vendor/autoload.php";
+            $fake = Octoverse\Octonomy\Testing\FixtureClient::withCapturedFixtures();
+            $client = new Octoverse\Octonomy\Client(["base_url" => "https://octonomy.test", "token" => "t", "tenant_id" => "t", "http_client" => $fake]);
+            $slug = $client->tags()->get("t1")->slug;
+            $fake->assertSent("GET", "tags/t1");
+            echo "FixtureClient answered GET tags/t1 with the captured tag \"{$slug}\"\n";
+          '
       - name: Boot the dev server
         working-directory: ${{ runner.temp }}/consumer
         run: vendor/bin/octonomy-dev-server up

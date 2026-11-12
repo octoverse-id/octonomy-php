@@ -359,6 +359,65 @@ while `display_errors` is on (500 while it is off), so a handler should set its 
 calling `verify()`, as the README's does. The other `X-Octonomy-*` headers (event id, event
 type, tenant id, request id) are not signed: read those values from the verified body.
 
+## Testing with FixtureClient
+
+`Octoverse\Octonomy\Testing\FixtureClient` is a PSR-18 client for testing your own code against the SDK
+without a server (#28). Pass it as `http_client`, and it answers each request with a response a real
+Octonomy sent, from the captured corpus the package ships (`resources/fixtures`):
+
+```php
+use Octoverse\Octonomy\Testing\FixtureClient;
+
+$fake = FixtureClient::withCapturedFixtures();
+$client = new Client([...$config, 'http_client' => $fake]);
+
+$this->assertSame('featured', $client->tags()->get('t1')->slug);
+$fake->assertSent('GET', 'tags/t1');
+```
+
+It matches a request by its method and its path below `/api/v1` or `/api/v2`, or a health probe's, and
+answers with the one response captured for that endpoint from that api_version. A path on `base_url`
+is skipped. The ids in the path, the query, the headers and the body play no part: `get('t1')` and
+`get('t2')` both return the captured tag, whose id is neither.
+
+| Endpoint | Answered with the capture of |
+| -------- | ---------------------------- |
+| `POST` / `GET` / `PATCH` / `DELETE` on vocabularies, tags and tag aliases | the plain create, get, list, update or delete: a populated list, and an update that changes a name |
+| A tag's aliases, resources and audit log | the list captured for it |
+| `POST /tag-assignments` | a new assignment (201), not an existing one (200) |
+| `DELETE /tag-assignments`, bulk-assign, bulk-remove | the capture for each |
+| `GET /tag-resolution` | a slug that resolves to a tag, not through an alias |
+| A resource's tags (`GET` and the replacing `POST`) and audit log | the capture for each |
+| `GET /audit-logs` | its first page, of 3 rows, which says more follow |
+| `GET /health/live`, `/health/ready` | the server up: 200 |
+
+It replays, and nothing more:
+
+- **No state.** A tag you create is not there to get, and no write persists.
+- **No paging.** A `walk*()` reads a captured page that is the last one, so `tags()->walk()` yields its
+  rows and ends. Where the captured page says more follow, as the audit log's does, the walk asks for the
+  next page, gets the first again, and stops with `WalkInterruptedException`.
+- **No api_version rules.** It answers a v1 request with v1's capture and a v2 request with v2's, and
+  knows nothing of what one allows that the other refuses. The SDK's own guard against a v2-only
+  feature on a v1 client still applies, before anything is sent.
+- **No failure, and no responses of yours.** It never answers with an error. Test how your code handles
+  one with a PSR-18 client of your own.
+
+A request it has no response for throws `Testing\FixtureClientException`, a PSR-18
+`ClientExceptionInterface` whose message names the method and the path. Through the SDK that arrives as a
+`TransportException` that quotes it.
+
+`assertSent($method, $path)` checks that it answered a `$method` request for `$path`, the path below
+`/api/{version}` (`'tags/t1'`) or a probe's (`'health/ready'`). Percent-encoding is ignored on both sides.
+It returns the last such request, so you can assert its query, headers or body. When there is none it
+throws PHP's `\AssertionError`, naming each request it did answer. PHPUnit and Pest report that as a
+failed assertion, but PHPUnit does not count a passing `assertSent()` as one, so a test that makes no
+other assertion is reported as risky.
+
+The bodies are what the server named in `resources/fixtures/manifest.json` sent. A re-capture can change
+any value in them, and the CHANGELOG records it. `FixtureClient`'s methods, and which endpoints it
+answers, are public API ([versioning.md](versioning.md#testingfixtureclient)).
+
 ## Error codes → exceptions
 
 | Code | HTTP | Exception |

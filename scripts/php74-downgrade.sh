@@ -1,7 +1,7 @@
 #!/bin/sh
 # Generates the PHP 7.4 tree of octonomy-php into a directory of your choosing.
 #
-# Copies src/, tests/, examples/, the harness and the vendored OpenAPI specs there,
+# Copies src/, tests/, examples/, resources/, the harness and the vendored OpenAPI specs there,
 # downgrades the PHP with Rector (tools/rector), lays the 7.4 line's config over
 # the top (compat/), and formats the result at @PSR12. The working tree is never
 # touched, and nothing is committed: CI runs this into a throwaway directory on
@@ -43,6 +43,9 @@ case "$out" in
 esac
 
 cp -R "$root/src" "$root/tests" "$root/examples" "$out/"
+# The captured corpus is data, not PHP, so Rector never sees it. The unit suite
+# replays it, and Testing\FixtureClient ships it to the 7.4 line's users too.
+cp -R "$root/resources" "$out/"
 # The harness and the dev-server bin over it are POSIX sh and serve both lines;
 # the 7.4 composer.json registers the bin, CapturedCorpusTest reads the harness's
 # pin, and DevServerTest runs both.

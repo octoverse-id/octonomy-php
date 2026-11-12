@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Testing\FixtureClient`, a PSR-18 client for testing your own code against the SDK without a server:
+  `$fake = FixtureClient::withCapturedFixtures()`, passed as `http_client`, answers each request the SDK
+  makes with the response a real Octonomy sent for that endpoint and api_version, from the captured
+  corpus the package now ships in `resources/fixtures`. It matches by method and by path below
+  `/api/{version}` or a health probe's, skipping a path on `base_url`, so `get('t1')` gets the captured
+  tag whatever its id. `assertSent($method, $path)` checks that it answered such a request and returns
+  it, or throws PHP's `\AssertionError` naming what it did answer. A request it has no response for
+  throws `Testing\FixtureClientException`, a PSR-18 `ClientExceptionInterface` naming the method and
+  path, which the SDK reports as a `TransportException` quoting it. It replays and nothing more: no
+  state, no paging (a `walk*()` whose captured page says more follow stops with
+  `WalkInterruptedException`), no api_version rules, no failures, and no way to hand it a response.
+  CI's `dev-server` job loads it from a Composer install. The bodies change when the corpus is
+  re-captured; its methods and the endpoints it answers are versioned API (#28).
 - `Webhook::verify($secret, $signatureHeader, $rawBody)`, which checks the `X-Octonomy-Signature` on a
   webhook delivery (`Webhook::SIGNATURE_HEADER`): `sha256=` and the HMAC-SHA256 of the raw body,
   compared with `hash_equals()`. It returns false for anything the sender controls (no header, a

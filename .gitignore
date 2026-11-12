@@ -31,5 +31,5 @@ code-review/*
 !code-review/.gitkeep
 
 # Left behind only if scripts/capture-fixtures.php dies mid-write or mid-swap
-/tests/fixtures/captured.staging/
-/tests/fixtures/captured.previous/
+/resources/fixtures.staging/
+/resources/fixtures.previous/

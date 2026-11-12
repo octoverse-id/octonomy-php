@@ -52,7 +52,8 @@ test-integration: ## Run the integration suite against a booted harness (skips w
 	if [ -f "$$env_file" ]; then set -a; . "$$env_file"; set +a; fi; \
 	vendor/bin/phpunit --testsuite integration --fail-on-empty-test-suite
 
-# Re-captures tests/fixtures/captured, the response bodies the unit suite replays, from a real server.
+# Re-captures resources/fixtures, the response bodies the unit suite and Testing\FixtureClient replay,
+# from a real server.
 # Capture writes, so it boots its own fresh harness (replacing a running one, as harness-up always
 # does) and removes it afterwards, leaving nothing behind for the read-only integration suite to trip
 # over. Commit the result in a PR of its own: a refresh is reviewed, never automatic. See
