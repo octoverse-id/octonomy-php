@@ -209,6 +209,11 @@ throws `ConfigurationException` rather than dropping the timeout.
   `sendRequest()`, Guzzle puts the wrapped client's default `auth`, query and body in place of the
   SDK's (a default `auth` replaces the `Authorization` header), adds its default headers, and does not
   follow redirects. Give a client wrapped that way none of those defaults.
+- **A resource type or id that is exactly `.` or `..`** is sent as `%2E` or `%2E%2E`. libcurl 8.13.0
+  and later removes those segments too, unless the client tells it to send the path as written
+  (`CURLOPT_PATH_AS_IS`). Without that, the request reaches another path. The client the SDK builds
+  sets it. With a cURL-based client of your own, set it yourself: Guzzle 7 accepts
+  `'curl' => [CURLOPT_PATH_AS_IS => true]` as a client option, but Guzzle 8 refuses that option.
 
 ```php
 use Symfony\Component\HttpClient\Psr18Client;

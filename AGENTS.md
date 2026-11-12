@@ -44,6 +44,10 @@ stays a faithful, ergonomic client.
   headers, query, body, `json` and `auth` cancelled, never through its PSR-18 `sendRequest()`, which
   applies every one of them over the SDK's request; any other client gets `sendRequest()`. `timeout` sets only the client the SDK builds, and with `http_client`
   it is refused, not dropped.
+- The client the SDK builds sends each path as written (#64). Where it sends through cURL,
+  `Http\PathAsIsCurlFactory` sets `CURLOPT_PATH_AS_IS` on every handle, because libcurl 8.13.0 and later
+  removes the `%2E` that `Internal\Path` sends for a `.` id. Never pass that option as a `curl` request
+  option: Guzzle 8 refuses it.
 - Services read responses only through `Transport::one()` (single resource), `many()` (list), or
   `none()` (204). A `walk*()` method reads its list through `Http\Walker`, which calls `many()` for
   each page. `Transport` exposes no raw-body method; a 2xx missing its envelope raises
@@ -112,7 +116,8 @@ stays a faithful, ergonomic client.
 ## Testing Expectations
 
 - PHPUnit tests using Guzzle's `MockHandler` (see `tests/SdkTestCase.php`), or `psr18ClientWith()` for
-  an `http_client` that is not Guzzle's. Assert the request
+  an `http_client` that is not Guzzle's. Only `Http\SdkBuiltClientTest` sends through the client the
+  SDK builds, to a `php -S` server that records the request line and answers 204 with no body. Assert the request
   method, path, auth headers (`Authorization`, `X-Tenant-ID`), query params, and JSON body; assert the
   decoded model/`ResultList` on the response side.
 - Response bodies in tests come from captured fixtures (`tests/fixtures/captured/<api_version>/`,
