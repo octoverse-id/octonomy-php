@@ -177,6 +177,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place of the six inline `rawurlencode()` calls. An id of `.` or `..` is sent as `%2E` or `%2E%2E`,
   where `rawurlencode()` left it for libcurl to remove as a dot segment, which sent the request to
   another endpoint. An empty id is still sent as it is, and the server's 404 throws `NotFoundException`.
+  libcurl 8.13.0 and later removes `%2E` and `%2E%2E` segments too, so the client the SDK builds sets
+  `CURLOPT_PATH_AS_IS` on each cURL handle and sends the path as written (#64). Guzzle 8 refuses that
+  option as a `curl` request option, so a handle factory sets it. A caller's own `http_client` has to
+  set it itself (README).
 - The health probes (#24): `health()->live()` and `health()->ready()` (`HealthService`), returning a
   `HealthStatus` with `ok` and the server's `status` word. They are sent to `base_url` itself, outside
   `/api/{version}`, with no token, tenant, actor, namespace or request id header, by a

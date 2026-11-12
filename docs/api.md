@@ -137,8 +137,11 @@ need `audit:read`; every other read method needs `tags:read`, and mutating metho
 
 Every id and resource type in a path is percent-encoded as one segment, so `a/b` is sent as `a%2Fb`. A
 type or id that is exactly `.` or `..`, which the server accepts, is sent as `%2E` or `%2E%2E`: left as
-it is, libcurl would remove it as a dot segment and send the request to another endpoint. A proxy in
-front of the server that decodes and normalizes paths before forwarding them can still remove it. An
+it is, libcurl would remove it as a dot segment and send the request to another endpoint. libcurl
+8.13.0 and later removes the encoded form as well, so the client the SDK builds sets
+`CURLOPT_PATH_AS_IS` on each cURL handle and sends the path as written (#64). Your own `http_client`
+has to keep it as written itself ([README](../README.md#http-client)). A proxy in front of the server
+that decodes and normalizes paths before forwarding them can still remove it. An
 empty id or type is sent as it is: no route of the server matches it, so the server answers with a 404
 and the call throws `NotFoundException`.
 

@@ -6,6 +6,9 @@ namespace Octoverse\Octonomy\Http;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface as GuzzleClientInterface;
+use GuzzleHttp\Handler\CurlFactory;
+use GuzzleHttp\Handler\CurlHandler;
+use GuzzleHttp\HandlerStack;
 use Octoverse\Octonomy\Exception\TransportException;
 use Octoverse\Octonomy\Internal\ErrorMessage;
 use Octoverse\Octonomy\Internal\Redaction;
@@ -35,10 +38,49 @@ final class Sender
     /**
      * The client to send through: $httpClient when one was given, or a Guzzle
      * client with $timeout, 30 seconds unless set.
+     *
+     * The client built here sends each path as written (#64). Where it sends
+     * through cURL, its handler is a CurlHandler whose handles
+     * PathAsIsCurlFactory sets to CURLOPT_PATH_AS_IS. libcurl 8.13.0 and later
+     * would otherwise remove the %2E segment that Internal\Path sends for a "."
+     * id. That handler is the one Guzzle picks for a synchronous request
+     * anyway, plus that one option. Elsewhere, Guzzle chooses its own handler.
+     * Its stream handler, PHP's http:// wrapper, already sends a path as
+     * written. A caller's own client is left as it is (README).
      */
     public static function client(?ClientInterface $httpClient, ?float $timeout): ClientInterface
     {
-        return $httpClient ?? new GuzzleClient(['timeout' => $timeout ?? self::DEFAULT_TIMEOUT]);
+        if ($httpClient !== null) {
+            return $httpClient;
+        }
+        $options = ['timeout' => $timeout ?? self::DEFAULT_TIMEOUT];
+        if (self::curlCanKeepPathsAsWritten()) {
+            $options['handler'] = HandlerStack::create(
+                new CurlHandler(['handle_factory' => new PathAsIsCurlFactory(new CurlFactory(3))]),
+            );
+        }
+
+        return new GuzzleClient($options);
+    }
+
+    /**
+     * Whether Guzzle would send through cURL here, and libcurl can be told to
+     * keep a path as written. That needs curl_exec(), libcurl 7.42.0 or later
+     * (the first with CURLOPT_PATH_AS_IS), and SSL support. Guzzle 8 also
+     * requires SSL support, and libcurl 7.34.0 or later, before it picks a
+     * cURL handler. Anywhere else the SDK leaves the choice to Guzzle rather
+     * than force cURL onto a libcurl that Guzzle would pass over.
+     */
+    private static function curlCanKeepPathsAsWritten(): bool
+    {
+        if (!\function_exists('curl_exec') || !\function_exists('curl_version') || !\defined('CURLOPT_PATH_AS_IS')) {
+            return false;
+        }
+        $libcurl = curl_version();
+
+        return \is_array($libcurl)
+            && version_compare((string) $libcurl['version'], '7.42.0', '>=')
+            && ((int) $libcurl['features'] & \CURL_VERSION_SSL) !== 0;
     }
 
     /**
