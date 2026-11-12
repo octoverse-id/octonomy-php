@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tag whatever its id. `assertSent($method, $path)` checks that it answered such a request and returns
   it, or throws PHP's `\AssertionError` naming what it did answer. A request it has no response for
   throws `Testing\FixtureClientException`, a PSR-18 `ClientExceptionInterface` naming the method and
-  path, which the SDK reports as a `TransportException` quoting it. It replays and nothing more: no
+  path, which the SDK reports as a `TransportException` quoting it. So does a path that reads as two
+  endpoints, which only a `base_url` ending in `/api/v1/resources` or `/api/v2/resources`, or a resource
+  of type `api` and id `v1` or `v2`, produces: it names both readings rather than guess. It replays and nothing more: no
   state, no paging (a `walk*()` whose captured page says more follow stops with
   `WalkInterruptedException`), no api_version rules, no failures, and no way to hand it a response.
   CI's `dev-server` job loads it from a Composer install. The bodies change when the corpus is

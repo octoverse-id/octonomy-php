@@ -323,14 +323,47 @@ final class FixtureClientTest extends SdkTestCase
         self::assertSame("{$basePath}/api/v2/tags/t1", $request->getUri()->getPath());
     }
 
-    public function testAnEndpointWhoseIdsSpellTheApiPrefixIsStillThatEndpoint(): void
+    /**
+     * Requests whose path reads as two endpoints, with the base_url that sends
+     * each. Both send GET /api/v2/resources/api/v2/tags.
+     *
+     * @return iterable<string, array{string, \Closure(Client): mixed}>
+     */
+    public static function pathsWithTwoReadings(): iterable
+    {
+        yield 'a base_url ending in /api/v2/resources, listing tags' => [
+            'https://octonomy.test/api/v2/resources',
+            static fn(Client $c) => $c->tags()->list(),
+        ];
+        yield "the tags of a resource of type 'api' and id 'v2'" => [
+            'https://octonomy.test',
+            static fn(Client $c) => $c->resources()->listTags('api', 'v2', 'app'),
+        ];
+    }
+
+    /**
+     * @param \Closure(Client): mixed $call
+     */
+    #[DataProvider('pathsWithTwoReadings')]
+    public function testAPathWithTwoReadingsIsRefusedNamingBothRatherThanGuessed(string $baseUrl, \Closure $call): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'http_client' => $fake]);
+        $client = new Client([...self::CONFIG, 'base_url' => $baseUrl, 'http_client' => $fake]);
 
-        self::assertCount(count(self::capturedData('v2/resources/tags')), $client->resources()->listTags('api', 'v2', 'app')->data);
+        try {
+            $call($client);
+            self::fail('the path is the tag list or a resource\'s tags, and the request does not say which');
+        } catch (TransportException $e) {
+            self::assertStringContainsString(
+                'FixtureClient cannot tell which endpoint GET /api/v2/resources/api/v2/tags is: it reads as'
+                . ' resources/api/v2/tags below /api/v2 and as tags below /api/v2.',
+                $e->getMessage(),
+            );
+        }
 
-        self::assertSame('/api/v2/resources/api/v2/tags', $fake->assertSent('GET', 'resources/api/v2/tags')->getUri()->getPath());
+        $this->expectException(\AssertionError::class);
+        $this->expectExceptionMessage('It answered no request at all.');
+        $fake->assertSent('GET', 'tags');
     }
 
     public function testAssertSentIgnoresPercentEncodingOnBothSides(): void

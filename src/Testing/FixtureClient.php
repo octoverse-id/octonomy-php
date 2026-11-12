@@ -28,7 +28,9 @@ use Psr\Http\Message\ResponseInterface;
  * no part: get('t1') and get('t2') both get the captured tag, whose id is
  * neither. A request it has no response for throws FixtureClientException,
  * naming the method and the path; the SDK reports that as a
- * TransportException that quotes it.
+ * TransportException that quotes it. So does a path it can read two ways,
+ * which takes a base_url ending in /api/v1/resources or /api/v2/resources, or
+ * a resource of type 'api' and id 'v1' or 'v2': it never guesses.
  *
  * It replays, and nothing more (#28):
  * - It keeps no state, so a tag you create is not there to get, and it
@@ -120,7 +122,8 @@ final class FixtureClient implements ClientInterface
      * response each time.
      *
      * @throws FixtureClientException when it has no response for the request, naming its method and path,
-     *                                or when the shipped corpus cannot be read
+     *                                when its path reads as two endpoints, or when the shipped corpus
+     *                                cannot be read
      */
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
@@ -190,16 +193,26 @@ final class FixtureClient implements ClientInterface
      * The fixture that answers $method $path, and the path below /api/{version}
      * that matched, or null when none does.
      *
-     * The SDK sends {base_url}/api/{version}/{endpoint}, and base_url can have a
-     * path of its own, which may hold "/api/v2/" too. So each place the
-     * version prefix appears is tried, left to right, and the first whose
-     * remainder is an endpoint wins. A probe is {base_url}/health/live or
-     * /health/ready.
+     * The SDK sends {base_url}/api/{version}/{endpoint}, or {base_url}/health/live
+     * and /health/ready, and base_url can have a path of its own, which may
+     * hold "/api/v2" too. So each place the version prefix appears is a
+     * reading, and so is a probe's path at the end.
+     *
+     * One path can have two readings, and the request does not say which is
+     * meant: /api/v2/resources/api/v2/tags is the tag list under a base_url
+     * ending in /api/v2/resources, or the tags of the resource of type 'api'
+     * and id 'v2'. Then it throws rather than answer with either capture.
+     * Only the endpoints below resources/, whose type and id sit side by side,
+     * can take the "api/v2" another reading skips, so only they can do this.
      *
      * @return array{string, string}|null the fixture below the corpus, as 'v2/tags/get', and the path
+     *
+     * @throws FixtureClientException when the path has more than one reading
      */
     private static function match(string $method, string $path): ?array
     {
+        /** @var list<array{string, string, string}> $readings each fixture, path and how it reads */
+        $readings = [];
         // The slash after the version is looked ahead at, not consumed: a
         // base_url ending in /api/v2 makes /api/v2/api/v2/..., where the two
         // prefixes share it, and the second is the SDK's.
@@ -208,16 +221,29 @@ final class FixtureClient implements ClientInterface
             $relative = substr($path, $offset + strlen($prefix) + 1);
             $fixture = self::route($method, $relative);
             if ($fixture !== null) {
-                return ["{$version}/{$fixture}", $relative];
+                $readings[] = ["{$version}/{$fixture}", $relative, "{$relative} below /api/{$version}"];
             }
         }
         foreach (self::PROBES as $probe) {
             if ($method === 'GET' && str_ends_with($path, "/{$probe}")) {
-                return [$probe, $probe];
+                $readings[] = [$probe, $probe, "the probe {$probe}"];
             }
         }
 
-        return null;
+        if (count($readings) > 1) {
+            // Scrubbed: sendRequest()'s frame, below this one, holds the request.
+            throw Redaction::scrub(new FixtureClientException(sprintf(
+                'octonomy: FixtureClient cannot tell which endpoint %s %s is: it reads as %s. Part of the path is'
+                . ' either base_url\'s own or a resource type and id that spell api/v1 or api/v2, and the request'
+                . ' does not say which. Fix: give the client a base_url whose path does not end in'
+                . ' /api/v1/resources or /api/v2/resources, or use another resource type than \'api\' in the test.',
+                $method,
+                $path,
+                implode(' and as ', array_column($readings, 2)),
+            )));
+        }
+
+        return $readings === [] ? null : [$readings[0][0], $readings[0][1]];
     }
 
     /**

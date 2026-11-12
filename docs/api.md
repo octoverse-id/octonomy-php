@@ -380,6 +380,12 @@ answers with the one response captured for that endpoint from that api_version. 
 is skipped. The ids in the path, the query, the headers and the body play no part: `get('t1')` and
 `get('t2')` both return the captured tag, whose id is neither.
 
+One kind of path reads as two endpoints, and the request does not say which:
+`/api/v2/resources/api/v2/tags` is the tag list under a `base_url` ending in `/api/v2/resources`, or the
+tags of a resource of type `api` and id `v2`. `FixtureClient` refuses such a path, naming both readings,
+rather than answer with either capture. Only those two shapes produce one: a `base_url` whose path ends
+in `/api/v1/resources` or `/api/v2/resources`, and a resource of type `api` with id `v1` or `v2`.
+
 | Endpoint | Answered with the capture of |
 | -------- | ---------------------------- |
 | `POST` / `GET` / `PATCH` / `DELETE` on vocabularies, tags and tag aliases | the plain create, get, list, update or delete: a populated list, and an update that changes a name |
