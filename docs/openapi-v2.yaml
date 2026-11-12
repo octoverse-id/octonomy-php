@@ -8,7 +8,7 @@
 # the tag in docs/versioning.md. tests/VendoredSpecTest.php checks the hash and the tag.
 #
 # KNOWN DIVERGENCES. Wherever they differ, the server, and the responses captured from it in
-# tests/fixtures/captured, win over this spec. Each item below was checked against the server source
+# resources/fixtures, win over this spec. Each item below was checked against the server source
 # at v3.2.1 and against every 2xx response captured from it. No SDK code reads this file,
 # required-ness included.
 #

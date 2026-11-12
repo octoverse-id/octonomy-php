@@ -14,6 +14,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\BufferStream;
 use GuzzleHttp\Psr7\HttpFactory;
 use GuzzleHttp\Psr7\NoSeekStream;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Utils;
 use Octoverse\Octonomy\ApiVersion;
@@ -147,6 +148,16 @@ abstract class SdkTestCase extends TestCase
         self::refuseCrossVersionReplay($client->apiVersion(), $responses);
 
         return $client;
+    }
+
+    /**
+     * A bare PSR-7 request, to hand straight to a PSR-18 client such as
+     * Testing\FixtureClient. It carries no response, so it is no way round
+     * captured fixtures.
+     */
+    protected static function request(string $method, string $uri): RequestInterface
+    {
+        return new Request($method, $uri);
     }
 
     /**
@@ -433,7 +444,7 @@ abstract class SdkTestCase extends TestCase
     }
 
     /**
-     * A response a real Octonomy sent, replayed from tests/fixtures/captured, such
+     * A response a real Octonomy sent, replayed from resources/fixtures, such
      * as captured('v1/tags/get'). Every response body a test needs comes from
      * here unless a conforming server could not produce it (syntheticNegative()).
      */

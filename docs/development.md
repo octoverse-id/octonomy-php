@@ -136,11 +136,11 @@ runs the quickstart through the real `vendor/bin` proxy.
 
 ## Captured response fixtures
 
-Every response body the unit suite replays was sent by a real Octonomy. `tests/fixtures/captured/`
-holds one JSON file per exchange, by API version, resource group, and operation:
+Every response body the unit suite replays was sent by a real Octonomy. `resources/fixtures/` holds
+one JSON file per exchange, by API version, resource group, and operation:
 
 ```text
-tests/fixtures/captured/
+resources/fixtures/
   manifest.json                  server image + version, and a sha256 per fixture
   v1/tags/get.json               {"request": {...}, "response": {"status", "headers", "body"}}
   v1/errors/not-found.json
@@ -148,6 +148,10 @@ tests/fixtures/captured/
   health/ready-unavailable.json  a health probe: no api_version, outside /api
   ...
 ```
+
+The corpus sits under `resources/`, not `tests/`, because it ships: `Testing\FixtureClient` replays it
+to callers' own tests from a Composer install (#28), and CI's `dev-server` job proves it loads from
+one. Never mark `resources/` `export-ignore`.
 
 The `response` half is what tests replay. The `request` half records what produced it — method,
 path, query, the namespace headers, which credential sent it (never the token), and the body — so a
@@ -277,7 +281,7 @@ specs in the same PR. To refresh them:
    and `...:docs/openapi-v2.yaml`.
 2. Keep each header, updating its tag, commit, and sha256 (`sha256sum` of the server's file).
 3. Re-check every divergence in the note against the server source and every 2xx response in
-   `tests/fixtures/captured`, and add any new one. A divergence the server has fixed comes out of the
+   `resources/fixtures`, and add any new one. A divergence the server has fixed comes out of the
    note.
 4. Name the tag in [versioning.md](versioning.md), and reconcile any model changes.
 

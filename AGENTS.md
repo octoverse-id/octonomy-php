@@ -72,6 +72,12 @@ stays a faithful, ergonomic client.
   - **Its one rule beyond the HMAC:** refusing an empty secret, since under an empty key anyone can
     sign. That is the verifier's own security, not a server rule; add no other.
   - **Its tests:** they replay octonomy-go's vendored signature vectors, never digests computed here.
+- **`Testing\FixtureClient` (#28) replays, and nothing more.** It is a PSR-18 client for callers' tests,
+  answering each endpoint in its `ROUTES` with that endpoint's one capture from `resources/fixtures`,
+  which sits outside `tests/` because it ships. Never give it state, persisted writes, paging,
+  api_version rules, failure injection, or a way to be handed a response: a behavioral fake is a second
+  Octonomy that drifts and teaches callers wrong behavior with a green suite. A new endpoint gets a
+  row in `ROUTES` and in `FixtureClientTest::endpoints()`.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.
@@ -120,7 +126,7 @@ stays a faithful, ergonomic client.
   SDK builds, to a `php -S` server that records the request line and answers 204 with no body. Assert the request
   method, path, auth headers (`Authorization`, `X-Tenant-ID`), query params, and JSON body; assert the
   decoded model/`ResultList` on the response side.
-- Response bodies in tests come from captured fixtures (`tests/fixtures/captured/<api_version>/`,
+- Response bodies in tests come from captured fixtures (`resources/fixtures/<api_version>/`,
   replayed with `SdkTestCase::captured()`); hand-written response bodies are banned, because a body
   written from the spec agrees with its author rather than the server (#6 shipped green that way).
   **Carve-out:** negative fixtures (missing envelope, missing field, wrong type, invalid JSON, gateway
