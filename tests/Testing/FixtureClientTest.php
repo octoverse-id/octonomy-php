@@ -299,15 +299,28 @@ final class FixtureClientTest extends SdkTestCase
         }
     }
 
-    public function testABaseUrlWithAPathOfItsOwnIsSkippedEvenWhenItLooksLikeTheApi(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function basePaths(): iterable
+    {
+        yield 'a gateway prefix' => ['/octonomy'];
+        yield 'one holding the api prefix' => ['/edge/api/v2/proxy'];
+        // Then the prefix base_url ends with and the SDK's own share a slash.
+        yield 'one ending in the api prefix' => ['/api/v2'];
+        yield 'one ending in the other api prefix' => ['/api/v1'];
+    }
+
+    #[DataProvider('basePaths')]
+    public function testABaseUrlWithAPathOfItsOwnIsSkippedEvenWhenItLooksLikeTheApi(string $basePath): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'base_url' => 'https://octonomy.test/edge/api/v2/proxy', 'http_client' => $fake]);
+        $client = new Client([...self::CONFIG, 'base_url' => "https://octonomy.test{$basePath}", 'http_client' => $fake]);
 
-        $client->tags()->get('t1');
+        self::assertSame(self::capturedData('v2/tags/get')['id'], $client->tags()->get('t1')->id);
 
         $request = $fake->assertSent('GET', 'tags/t1');
-        self::assertSame('/edge/api/v2/proxy/api/v2/tags/t1', $request->getUri()->getPath());
+        self::assertSame("{$basePath}/api/v2/tags/t1", $request->getUri()->getPath());
     }
 
     public function testAnEndpointWhoseIdsSpellTheApiPrefixIsStillThatEndpoint(): void

@@ -200,9 +200,12 @@ final class FixtureClient implements ClientInterface
      */
     private static function match(string $method, string $path): ?array
     {
-        preg_match_all('#/api/(v1|v2)/#', $path, $prefixes, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+        // The slash after the version is looked ahead at, not consumed: a
+        // base_url ending in /api/v2 makes /api/v2/api/v2/..., where the two
+        // prefixes share it, and the second is the SDK's.
+        preg_match_all('#/api/(v1|v2)(?=/)#', $path, $prefixes, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
         foreach ($prefixes as [[$prefix, $offset], [$version]]) {
-            $relative = substr($path, $offset + strlen($prefix));
+            $relative = substr($path, $offset + strlen($prefix) + 1);
             $fixture = self::route($method, $relative);
             if ($fixture !== null) {
                 return ["{$version}/{$fixture}", $relative];
