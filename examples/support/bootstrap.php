@@ -130,7 +130,9 @@ function ensureTag(Client $client, TagCreate $tag): Tag
     } catch (ConflictException $e) {
         // A list without an application holds every application's rows, and one
         // with an application holds the shared rows too unless includeShared is
-        // false, so the scope is checked on each row.
+        // false, so the scope is checked on each row. A shared row can sit past
+        // the first page, behind applications' rows with the same slug, so the
+        // walk reads on until it finds the row, and sends nothing more once it has.
         $params = new TagListParams(
             applicationId: $tag->applicationId,
             includeShared: $tag->applicationId === null ? null : false,
@@ -138,7 +140,7 @@ function ensureTag(Client $client, TagCreate $tag): Tag
             slug: $tag->slug,
             type: $tag->type,
         );
-        foreach ($client->tags()->list($params)->data as $found) {
+        foreach ($client->tags()->walk($params) as $found) {
             if ($found->applicationId === $tag->applicationId) {
                 return $found;
             }
@@ -155,13 +157,14 @@ function ensureAlias(Client $client, TagAliasCreate $alias): TagAlias
     try {
         return $client->aliases()->create($alias);
     } catch (ConflictException $e) {
+        // Walked for the same reason as in ensureTag().
         $params = new TagAliasListParams(
             applicationId: $alias->applicationId,
             includeShared: $alias->applicationId === null ? null : false,
             isActive: true,
             slug: $alias->slug,
         );
-        foreach ($client->aliases()->list($params)->data as $found) {
+        foreach ($client->aliases()->walk($params) as $found) {
             if ($found->applicationId === $alias->applicationId) {
                 return $found;
             }
