@@ -59,15 +59,9 @@ says what its token needs.
 
 ## 3. A client
 
-```php
-use Octoverse\Octonomy\Client;
-
-$client = new Client([
-    'base_url'  => 'https://octonomy.example.com',
-    'token'     => getenv('OCTONOMY_TOKEN'),
-    'tenant_id' => 'marketplace',
-]);
-```
+A `Client` takes three options: `base_url`, `token` and `tenant_id`. The examples build theirs from
+the environment in `exampleClient()`, in [`examples/support/bootstrap.php`](../examples/support/bootstrap.php),
+and the [quickstart](../examples/quickstart.php) builds its own at the top.
 
 A client talks to one tenant. Build it once and share it: it holds no state of its own between calls,
 and every per-call choice (a namespace, an actor, a request id) goes in that call's `RequestOptions`.

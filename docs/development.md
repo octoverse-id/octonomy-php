@@ -293,7 +293,8 @@ CI's `dev-server` job runs every `examples/*.php` the installed package ships tw
 Composer project, so a new one is covered without being listed. PHPStan reads them on both lines.
 
 A new example also needs a row in [`guide.md`](guide.md)'s table: `GuideTest` fails until the guide links
-every `examples/*.php`, and fails on any link in the guide whose file or heading is gone.
+every `examples/*.php`, and fails on any link in the guide whose file or heading is gone, or on PHP or
+YAML outside its testing and framework sections, where it would duplicate an example.
 
 ## Keeping the contract current
 
