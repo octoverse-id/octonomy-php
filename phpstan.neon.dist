@@ -4,4 +4,7 @@ parameters:
         - src
         - tests
         - scripts
+        # The examples ship, and only CI's dev-server job runs them: this catches a wrong
+        # argument or a renamed method before a reader does.
+        - examples
     treatPhpDocTypesAsCertain: false

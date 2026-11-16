@@ -496,16 +496,20 @@ endpoint with.
 
 ## Implemented resources
 
-| Resource | Status |
-| -------- | ------ |
-| Vocabularies (`$client->vocabularies()`) | ✅ create / get / list / update / delete |
-| Tags (`$client->tags()`) | ✅ create / get / list / update / delete, `resolve()`, and a tag's `listAliases()` / `listResources()` / `listAuditLogs()` |
-| Tag aliases (`$client->aliases()`) | ✅ create / get / list / update / delete |
-| Tag assignments (`$client->assignments()`) | ✅ create / remove / bulkAssign / bulkRemove |
-| Resource tags (`$client->resources()`) | ✅ listTags / replaceTags / listAuditLogs |
-| Audit logs (`$client->auditLogs()`) | ✅ list |
-| Health (`$client->health()`, or `HealthClient` without credentials) | ✅ live / ready |
-| Webhooks (`Webhook::verify()`) | ✅ signature verification |
+| Resource | Status | Example |
+| -------- | ------ | ------- |
+| Vocabularies (`$client->vocabularies()`) | ✅ create / get / list / update / delete | [`vocabularies.php`](examples/vocabularies.php) |
+| Tags (`$client->tags()`) | ✅ create / get / list / update / delete, `resolve()`, and a tag's `listAliases()` / `listResources()` / `listAuditLogs()` | [`tags.php`](examples/tags.php), [`resolution.php`](examples/resolution.php) |
+| Tag aliases (`$client->aliases()`) | ✅ create / get / list / update / delete | [`aliases.php`](examples/aliases.php) |
+| Tag assignments (`$client->assignments()`) | ✅ create / remove / bulkAssign / bulkRemove | [`assignments.php`](examples/assignments.php) |
+| Resource tags (`$client->resources()`) | ✅ listTags / replaceTags / listAuditLogs | [`resource-tags.php`](examples/resource-tags.php) |
+| Audit logs (`$client->auditLogs()`) | ✅ list | [`audit-logs.php`](examples/audit-logs.php) |
+| Health (`$client->health()`, or `HealthClient` without credentials) | ✅ live / ready | [`health.php`](examples/health.php) |
+| Webhooks (`Webhook::verify()`) | ✅ signature verification | — |
+
+Each example is a program you run like the quickstart, `vendor/bin/octonomy-dev-server run
+examples/tags.php`, and it says in its first comment what it shows and what token it needs on your own
+Octonomy. Every one runs again against the server it wrote to, ending with its rows as it found them.
 
 ## Common commands
 
