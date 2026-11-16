@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Eight runnable examples beside the quickstart, one per resource group, each run with
+  `vendor/bin/octonomy-dev-server run examples/<name>.php`: `vocabularies.php`, `tags.php` (a hierarchy,
+  search, partial updates, delete as deactivation), `aliases.php`, `resolution.php` (a slug to its tag,
+  through an alias, with an application's own tag overriding a shared one), `assignments.php` (assign
+  by id, by alias and in bulk, then read both directions), `resource-tags.php` (`replaceTags()`),
+  `audit-logs.php` (finding a change by your own request id) and `health.php`, which exits 1 when the
+  server is not ready. Each runs again against the server it wrote to. CI's `dev-server` job runs all
+  nine twice from a Composer install, PHPStan now checks `examples/` on `main` as it does on the 7.4
+  line, and the README's resource table links each one (#27).
 - `Testing\FixtureClient`, a PSR-18 client for testing your own code against the SDK without a server:
   `$fake = FixtureClient::withCapturedFixtures()`, passed as `http_client`, answers each request the SDK
   makes with the response a real Octonomy sent for that endpoint and api_version, from the captured

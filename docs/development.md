@@ -260,14 +260,37 @@ ignore is checked for staleness, so it fails once Rector stops doing this.
 
 ## Running against your own Octonomy
 
-Start an Octonomy server (see that repo's README), create a service token, then run the example:
+Start an Octonomy server (see that repo's README), create a service token, then run an example:
 
 ```bash
 OCTONOMY_BASE_URL=http://localhost:8000 \
 OCTONOMY_TOKEN=svc_... \
 OCTONOMY_TENANT_ID=acme \
+OCTONOMY_APPLICATION_ID=storefront \
 php examples/quickstart.php
 ```
+
+Each example's first comment says what its token needs. `health.php` reads `OCTONOMY_BASE_URL` alone.
+
+## The examples
+
+`examples/` holds one runnable program per resource group beside the quickstart (#27). They share
+`examples/support/bootstrap.php`, which loads the autoloader, builds the client from the environment,
+and holds the `ensure*()` helpers; the quickstart does not use it, so it stays one file. An example must:
+
+- **Run twice in a row against one server.** The dev server keeps what each run wrote, and so does a
+  reader's own Octonomy. Create a row it needs through `ensureVocabulary()`, `ensureTag()` or
+  `ensureAlias()`, which take the 409 an earlier run's row causes and find that row, and undo what it
+  changes: a row it deletes it reactivates, and a resource it tags it untags. A second run then prints
+  what the first did.
+- **Use slugs and resource ids no other example uses.** Each one then starts from the same state
+  whatever ran before it.
+- **Exit non-zero when something fails,** so CI notices: an `OctonomyException` ends it through
+  `exampleFail()`, which says why on stderr. It checks a result itself only where a wrong one would
+  print nothing amiss, as `audit-logs.php` does when its own request is missing from the history.
+
+CI's `dev-server` job runs every `examples/*.php` the installed package ships twice, from an empty
+Composer project, so a new one is covered without being listed. PHPStan reads them on both lines.
 
 ## Keeping the contract current
 

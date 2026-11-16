@@ -137,9 +137,9 @@ jobs:
   # The Composer bin end to end (#13), the way a user meets it. The SDK is installed into an empty
   # project from this checkout through a mirrored path repository, so the package has no vendor/ of
   # its own and vendor/bin/octonomy-dev-server is Composer's generated proxy; the dev server then
-  # boots through that proxy, runs the quickstart, and is torn down with nothing left behind.
+  # boots through that proxy, runs every example twice, and is torn down with nothing left behind.
   # DevServerTest covers the bin's layouts with a fake docker; this is the one place the real proxy,
-  # the boot, the env translation and the quickstart meet.
+  # the boot, the env translation and the examples meet.
   dev-server:
     name: dev server (Composer project)
     runs-on: ubuntu-latest
@@ -186,16 +186,28 @@ jobs:
               *_TOKEN) echo "::add-mask::${line#*=}" ;;
             esac
           done < "$env_file"
-      # Reuses the server booted above, since `run` boots only when none is up. From the project
-      # root, examples/quickstart.php resolves to the SDK's own copy under vendor/.
-      - name: Run the quickstart through it
+      # Every example the package ships (#27), the quickstart included, found by listing the install
+      # so that a new one runs here without being named. Each reuses the server booted above, since
+      # `run` boots only when none is up, and from the project root examples/<name>.php resolves to
+      # the SDK's own copy under vendor/. The default shell stops at the first that fails.
+      - name: Run every example through it
         working-directory: ${{ runner.temp }}/consumer
-        run: vendor/bin/octonomy-dev-server run examples/quickstart.php
-      # The server keeps what the first run wrote, so the second meets its own tags: the quickstart
-      # must find them rather than fail on the conflict.
-      - name: Run it again against the same server
+        run: |
+          for example in vendor/octoverse-id/octonomy-php/examples/*.php; do
+            echo "::group::examples/${example##*/}"
+            vendor/bin/octonomy-dev-server run "examples/${example##*/}"
+            echo "::endgroup::"
+          done
+      # The server keeps what the first runs wrote, so the second meets their rows: each example must
+      # find them rather than fail on a conflict.
+      - name: Run them again against the same server
         working-directory: ${{ runner.temp }}/consumer
-        run: vendor/bin/octonomy-dev-server run examples/quickstart.php
+        run: |
+          for example in vendor/octoverse-id/octonomy-php/examples/*.php; do
+            echo "::group::examples/${example##*/}"
+            vendor/bin/octonomy-dev-server run "examples/${example##*/}"
+            echo "::endgroup::"
+          done
       - name: Dump dev-server logs
         if: failure()
         working-directory: ${{ runner.temp }}/consumer
