@@ -473,6 +473,27 @@ at least once, so deduplicate on the body's `id`. If every delivery fails to ver
 body before you did. The SDK ships no typed events or request handler: verify the bytes, then decode
 them as you need. [`docs/api.md`](docs/api.md#webhook-signatures) has the details.
 
+## Testing your code
+
+`Testing\FixtureClient` stands in for the server in your own tests. It answers each request the SDK
+makes with a response a real Octonomy sent, captured into the package, and needs no Guzzle mocking:
+
+```php
+use Octoverse\Octonomy\Testing\FixtureClient;
+
+$fake = FixtureClient::withCapturedFixtures();
+$client = new Client([...$config, 'http_client' => $fake]);
+
+$this->assertSame('featured', $client->tags()->get('t1')->slug);
+$fake->assertSent('GET', 'tags/t1');
+```
+
+It replays and nothing more: whatever id you ask for, the answer is the one captured response for that
+endpoint. It keeps no state, does not page, and never fails. A request it has no response for throws,
+naming the method and path. Keep a fake of your own for anything stateful, and to test how your code
+handles an error. [`docs/api.md`](docs/api.md#testing-with-fixtureclient) has what it answers each
+endpoint with.
+
 ## Implemented resources
 
 | Resource | Status |

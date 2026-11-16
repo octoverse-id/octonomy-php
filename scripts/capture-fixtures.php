@@ -12,10 +12,10 @@ declare(strict_types=1);
  *
  * It reads the credentials scripts/octonomy-harness.sh writes, drives every
  * resource group on /api/v1 and /api/v2, and writes one JSON file per exchange to
- * tests/fixtures/captured/<api_version>/<group>/<operation>.json plus a
+ * resources/fixtures/<api_version>/<group>/<operation>.json plus a
  * manifest.json naming the server image and each file's hash. The health probes,
  * which sit outside /api and call no api_version, go to
- * tests/fixtures/captured/health/.
+ * resources/fixtures/health/.
  *
  * WHY THIS EXISTS. Every unit test once replayed a body written by hand from the
  * OpenAPI spec, which omits both response envelopes, so the suite agreed with the
@@ -103,7 +103,7 @@ final class FixtureCapture
      */
     public static function main(array $argv): int
     {
-        $output = $argv[1] ?? dirname(__DIR__) . '/tests/fixtures/captured';
+        $output = $argv[1] ?? dirname(__DIR__) . '/resources/fixtures';
         try {
             $capture = new self(self::environment());
             $capture->captureV1();

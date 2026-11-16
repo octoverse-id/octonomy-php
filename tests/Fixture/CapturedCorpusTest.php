@@ -20,7 +20,7 @@ use Octoverse\Octonomy\Tests\SdkTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * CapturedCorpusTest holds tests/fixtures/captured to what it claims to be: the
+ * CapturedCorpusTest holds resources/fixtures to what it claims to be: the
  * unedited output of scripts/capture-fixtures.php against the server the harness
  * pins, for both api_versions. It also replays every fixture, v1 and v2, through
  * the transport and the models, so no captured shape sits unread. The health
@@ -199,7 +199,7 @@ final class CapturedCorpusTest extends SdkTestCase
         self::assertSame(
             array_keys($listed),
             array_keys($onDisk),
-            'tests/fixtures/captured holds a file the capture did not write, or lost one it did: never add a fixture by hand',
+            'resources/fixtures holds a file the capture did not write, or lost one it did: never add a fixture by hand',
         );
         foreach ($listed as $file => $hash) {
             self::assertSame($hash, $onDisk[$file], "{$file} was edited after capture: re-run `make fixtures` instead");

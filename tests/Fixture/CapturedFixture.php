@@ -8,7 +8,9 @@ use GuzzleHttp\Psr7\Response;
 
 /**
  * CapturedFixture is one request/response exchange recorded from a real Octonomy
- * by scripts/capture-fixtures.php, read from tests/fixtures/captured.
+ * by scripts/capture-fixtures.php, read from resources/fixtures: outside tests/,
+ * because Testing\FixtureClient replays the same corpus from a Composer install
+ * (#28).
  *
  * Unit tests replay these instead of writing response bodies by hand: a body
  * written from the spec agrees with whoever wrote it, not with the server, and
@@ -17,7 +19,7 @@ use GuzzleHttp\Psr7\Response;
  */
 final class CapturedFixture
 {
-    public const ROOT = __DIR__ . '/../fixtures/captured';
+    public const ROOT = __DIR__ . '/../../resources/fixtures';
 
     /** @var array<string, self> */
     private static array $loaded = [];
@@ -51,7 +53,7 @@ final class CapturedFixture
         }
         if (!in_array($name, self::names(), true)) {
             throw new \InvalidArgumentException(
-                "'{$name}' is not a captured fixture: tests/fixtures/captured/manifest.json does not list it (make fixtures)",
+                "'{$name}' is not a captured fixture: resources/fixtures/manifest.json does not list it (make fixtures)",
             );
         }
 

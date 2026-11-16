@@ -9,7 +9,7 @@ source of truth for how a change maps to a version bump.
 | ------- | ----- | ------- |
 | **SDK version** | `Client::VERSION` + git tag `vX.Y.Z` | Canonical SemVer for the SDK and CHANGELOG. Composer/Packagist resolve versions from git tags. |
 | **Targeted server contract** | this document + the vendored `docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) | Which Octonomy REST contract the SDK is written against: `/api/v2` by default and `/api/v1` on request, both as served since server `2.0.0` (unchanged through `3.x`). Both specs are the server's own files at tag **`v3.2.1`**, the release the captured fixtures come from too. Each one's header lists where it diverges from what the server sends. |
-| **Captured server release** | `tests/fixtures/captured/manifest.json` | The server build the unit suite's response bodies were captured from (currently `3.2.1`, the harness pin). It moves only in a reviewed fixture-refresh PR. |
+| **Captured server release** | `resources/fixtures/manifest.json` | The server build the unit suite's response bodies, and `Testing\FixtureClient`'s, were captured from (currently `3.2.1`, the harness pin). It moves only in a reviewed fixture-refresh PR. |
 
 The SDK versions **independently** of the Octonomy server. `make version-check` asserts `Client::VERSION`
 matches the latest `CHANGELOG.md` release heading. Before the first release there is no such heading, so
@@ -44,6 +44,14 @@ Backward-compatible **additions** to the public API.
 Backward-**incompatible** changes to the public API.
 - Examples: removing/renaming a public class or method, changing a method signature or a model's
   property types.
+
+## `Testing\FixtureClient`
+
+Its methods, and which endpoints it answers, are public API under the bump rules above: no longer
+answering an endpoint is a major change. The bodies it answers with are not. They are what the captured
+server release sent, and a fixture refresh can change any value in them in any release, recorded in
+`CHANGELOG.md`. A test that asserts a literal from the corpus, such as the captured tag's slug, may
+need updating after one.
 
 ## Relationship to the server's API version
 

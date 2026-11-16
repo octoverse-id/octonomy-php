@@ -28,3 +28,6 @@ template, then:
    re-running `make fixtures` if they are not captured yet. List each response model in
    `StrictHydrationRegressionTest::MODELS`, add a `## [Unreleased]` CHANGELOG entry, and update
    [`api.md`](api.md).
+6. Give each new endpoint a row in `Testing\FixtureClient::ROUTES`, naming its plain capture, and the
+   same row in `FixtureClientTest::endpoints()` and its call in `sdkCalls()`, so callers' tests can
+   reach it without a server. Add it to the table in [`api.md`](api.md#testing-with-fixtureclient).
