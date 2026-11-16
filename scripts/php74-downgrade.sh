@@ -1,7 +1,8 @@
 #!/bin/sh
 # Generates the PHP 7.4 tree of octonomy-php into a directory of your choosing.
 #
-# Copies src/, tests/, examples/, resources/, the harness and the vendored OpenAPI specs there,
+# Copies src/, tests/, examples/, resources/, the harness, the vendored OpenAPI specs and the
+# Markdown the tests read there,
 # downgrades the PHP with Rector (tools/rector), lays the 7.4 line's config over
 # the top (compat/), and formats the result at @PSR12. The working tree is never
 # touched, and nothing is committed: CI runs this into a throwaway directory on
@@ -54,6 +55,9 @@ cp "$root/scripts/octonomy-harness.sh" "$root/scripts/octonomy-dev-server" "$out
 # So are the vendored specs; VendoredSpecTest reads them and the tag versioning.md names.
 mkdir "$out/docs"
 cp "$root/docs/openapi.yaml" "$root/docs/openapi-v2.yaml" "$root/docs/versioning.md" "$out/docs/"
+# GuideTest reads the guide and every Markdown file it links to.
+cp "$root/docs/guide.md" "$root/docs/api.md" "$out/docs/"
+cp "$root/README.md" "$root/CHANGELOG.md" "$out/"
 cp "$root/compat/composer.json" "$root/compat/phpunit.xml.dist" "$root/compat/phpstan.neon.dist" \
     "$root/compat/.php-cs-fixer.dist.php" "$out/"
 
