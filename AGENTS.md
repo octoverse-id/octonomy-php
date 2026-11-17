@@ -158,8 +158,10 @@ stays a faithful, ergonomic client.
 
 - Run `make check` before pushing and `make release-check` before a release. Run `make php74` (needs
   Docker) when a change touches `src/`, `tests/`, `tools/rector/` or `compat/`.
-- Keep the README quickstart, `examples/`, and `composer.json`/`Makefile` scripts current with the
-  public API. Every example must run twice in a row against one dev server (CI's `dev-server` job does).
+- Keep the README quickstart, `examples/`, `docs/guide.md`, and `composer.json`/`Makefile` scripts current
+  with the public API. Every example must run twice in a row against one dev server (CI's `dev-server` job
+  does), and the guide links each one. The guide shows code only where no example can: PHP and YAML in its
+  testing and framework sections alone (`GuideTest` checks both).
 - Refresh both vendored specs (`docs/openapi.yaml`, `docs/openapi-v2.yaml`) from one Octonomy server
   release tag when targeting a new contract, following `docs/development.md#keeping-the-contract-current`,
   and record the tag in `docs/versioning.md`.

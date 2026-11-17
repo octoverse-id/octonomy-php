@@ -8,6 +8,10 @@ multi-application tag management and taxonomy service. A hand-written, Guzzle-ba
 Octonomy REST API: **`/api/v2`** by default, with merchant and sub-tenant namespaces, or `/api/v1` on
 request.
 
+**Start with the [guide](docs/guide.md):** one path from trying the SDK against a local Octonomy to
+wiring it into Laravel or Symfony, with a runnable example for each resource group. This README is the
+reference it links into.
+
 > **Status:** unreleased and early. The package is on Packagist but no version has been tagged yet, so
 > the install command below reports no matching version until the first release ships. The transport,
 > auth, error, and pagination foundation, every resource group and the health probes are implemented.
@@ -521,6 +525,7 @@ make help    # list all targets
 
 ## Documentation
 
+- [Guide](docs/guide.md) — start here: from install to framework wiring, in order.
 - [Architecture](docs/architecture.md) — how the client is layered.
 - [API mapping](docs/api.md) — SDK methods ↔ Octonomy endpoints, auth, scopes.
 - [Development](docs/development.md) — setup, quality gates, testing.

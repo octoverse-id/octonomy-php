@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `docs/guide.md`, one path through the SDK: what Octonomy keeps, trying it with the dev server, a
+  client, each resource group with the example that shows it, namespaces, pagination, errors, audit
+  logs, health and webhooks, testing your code (`FixtureClient`, and a PSR-18 client of your own for
+  error paths), wiring the client into Laravel and Symfony, and upgrading. The README starts with it.
+  Its test and framework snippets were run in a Laravel 13 and a Symfony 8.1 application, and
+  `GuideTest` fails when an example goes unlinked, a link in it loses its file or heading, or code
+  appears outside those two sections (#27).
 - Eight runnable examples beside the quickstart, one per resource group, each run with
   `vendor/bin/octonomy-dev-server run examples/<name>.php`: `vocabularies.php`, `tags.php` (a hierarchy,
   search, partial updates, delete as deactivation), `aliases.php`, `resolution.php` (a slug to its tag,
