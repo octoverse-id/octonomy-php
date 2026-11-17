@@ -25,7 +25,8 @@ make stan    # phpstan analyse
 make test    # phpunit
 ```
 
-`make check` bundles all three; `make release-check` runs the full pre-release gate. Apply style
+`make check` bundles all three with the release-line guard and its tests; `make release-check` runs
+the full pre-release gate. Apply style
 fixes with `make cs-fix`. CI also downgrades the tree to PHP 7.4 and runs it there; `make php74`
 does the same locally with Docker (see
 [docs/development.md](docs/development.md#the-php-74-line)).

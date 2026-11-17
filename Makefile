@@ -1,10 +1,11 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
+	release-line-guard release-line-guard-test \
 	harness-up harness-down harness-logs test-integration fixtures php74
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install Composer dependencies
 	composer install
@@ -26,7 +27,7 @@ cs-fix: ## Apply coding style fixes
 stan: ## Run static analysis
 	vendor/bin/phpstan analyse --memory-limit=512M
 
-check: cs stan test ## Fast pre-push gate (style, static analysis, tests)
+check: cs stan test release-line-guard release-line-guard-test ## Fast pre-push gate (style, static analysis, tests, release-line guard)
 
 # The integration harness: scripts/octonomy-harness.sh boots a real Octonomy (Postgres plus the
 # digest-pinned GHCR image), seeds a global and namespaced corpus, and writes its credentials to
@@ -109,6 +110,17 @@ version-check: ## Verify Client::VERSION matches the latest released CHANGELOG.m
 	fi; \
 	echo "version OK: $$code_ver"
 
-release-check: cs stan test ## Full pre-release gate (requires a release heading in CHANGELOG.md)
+# The release-line guard (#30, docs/release.md): asserts that composer.json's php constraint and
+# Client::VERSION fit the branch, the release PR and the tag, so a 2.x tag can never publish the 7.4
+# line's tree, nor a 1.x tag main's. CI's release-line workflow runs both targets on every PR into a
+# line, every push to one, and every tag push. TAG=vX.Y.Z runs the tag checks against the checked-out
+# commit, which is the step before `git push origin vX.Y.Z` in the runbook.
+release-line-guard: ## Assert this tree fits its release line (TAG=vX.Y.Z: check a tag before pushing it)
+	@scripts/release-line-guard.sh $(if $(TAG),--tag $(TAG))
+
+release-line-guard-test: ## Run the release-line guard's fixture tests
+	@scripts/release-line-guard-test.sh
+
+release-check: cs stan test release-line-guard release-line-guard-test ## Full pre-release gate (requires a release heading in CHANGELOG.md)
 	@$(MAKE) --no-print-directory version-check REQUIRE_RELEASE=1
 	@echo "release-check passed"

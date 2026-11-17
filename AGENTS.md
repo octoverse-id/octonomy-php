@@ -187,6 +187,11 @@ stays a faithful, ergonomic client.
   in `docs/versioning.md`. The SDK version lives in `Client::VERSION` and is published as a git tag
   `vX.Y.Z`. Version bumps and tags happen only in a dedicated `release/<version>` PR, never in feature
   or fix PRs.
+- `scripts/release-line-guard.sh` (#30) holds 2.x to `main` and `php >=8.2`, and 1.x to
+  `support/php7.4` and `php >=7.4`, on every PR into a line, every push to one, and every tag. Every
+  check in it is blocking, because Composer and Packagist refuse no mistag; never relax one to let a
+  release through. A change to it comes with a case in `scripts/release-line-guard-test.sh` that
+  asserts the reason text, not only the exit status.
 - The `code-review/` directory is reserved for local code review pipeline artifacts.
 - Review agents must write findings to `code-review/findings.md`.
 - Patch agents must read `code-review/findings.md`, apply valid fixes, and write the patch summary to
