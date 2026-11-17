@@ -84,8 +84,11 @@ The guard reads `composer.json`'s `require.php`, `Client::VERSION` and, on a rel
 | A tag, pushed or (`--tag`) about to be | the tag's major, and `Client::VERSION` must equal the tag | `v2.0.0` on `support/php7.4`, `v1.0.0` on `main`, `v2.0.1` on `Client::VERSION` `2.0.0` |
 
 A tag carries no branch, so a tag is judged by the tree it points at, which is exactly what Packagist
-publishes for it. Every tag Composer would read as a version (`2.0.0`, `V2.0.0`, `release-2.0.0`,
-`v2.0`, `v2.0.0-rc.1`, ...) must be exactly `vX.Y.Z`. All of it is blocking: Composer and Packagist
+publishes for it. Composer reads a tag as a version when, with every `release-` dropped, it is a
+number after an optional `v` or `V` (`2.0.0`, `V2.0.0`, `release-2.0.0`, `v2.0`, `v2.0.0-rc.1`, and
+`v2.0.0+build`, which publishes as `2.0.0`). So any tag that starts that way must be exactly
+`vX.Y.Z`, and any other tag needs a name that does not. The test is a superset of Composer's grammar
+on purpose: renaming a tag costs less than spending a version. All of it is blocking: Composer and Packagist
 accept any `composer.json` at any tag, so nothing downstream refuses a mistag. Moving a line's floor
 means changing `MODERN_PHP` or `COMPAT_PHP` in the script in the same PR.
 

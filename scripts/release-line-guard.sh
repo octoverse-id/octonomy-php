@@ -133,11 +133,16 @@ line_major() {
 	esac
 }
 
-# composer_reads_as_version <tag> succeeds when Composer would read the tag as a version, and so
-# Packagist would publish it. Composer drops every `release-` from a tag name, then accepts an
-# optional v or V before a number (and a date-shaped version, which also starts with a digit). A
-# tag that fails this test is not a version to Composer, and nothing below applies to it.
-composer_reads_as_version() {
+# may_be_version <tag> succeeds when Composer may read the tag as a version, which Packagist then
+# publishes. Composer drops every `release-` from a tag name and reads what is left as a version when
+# it is a number after an optional v or V: 2.0.0, V2.0.0, v2.0, v2.0.0.0, v2.0.0-rc.1, v2.0.0+build
+# (published as 2.0.0), and date-shaped names like 2026.11.17. This test is a superset on purpose:
+# any tag that starts with a digit after those prefixes. It also takes tags Composer skips, such as
+# 2fa-docs or v2.0.0-dev, because Composer's grammar is not this script's to mirror (it has changed
+# between Composer releases, and Packagist runs its own copy), and the costs are lopsided: a tag
+# refused here needs renaming, while a tag let through could spend a version for good. A tag that
+# fails this test is no version to Composer, and nothing below applies to it.
+may_be_version() {
 	case "$1" in
 	*"$_NL"*) return 1 ;;
 	esac
@@ -192,8 +197,13 @@ case "$php_status" in
 *) fail "php exited $php_status while reading composer.json; its own output above says why."; exit 1 ;;
 esac
 
-# Client::VERSION, with or without a visibility or final keyword, in single or double quotes. php
-# reads it for the same reason it reads composer.json: one reader, and no sed dialect differences.
+# Client::VERSION, read with PHP's own tokenizer rather than a pattern over the text, so a comment
+# (`/* const VERSION = '2.0.0'; */`), a docblock, or a string that only mentions it is never read in
+# its place. It must be declared once, as a single string literal: a computed value such as
+# '2.0' . '.0' cannot be read without running the code, and two declarations leave no telling which
+# one the client reports. The name is the last plain identifier before `=`, so a typed constant
+# (`const string VERSION`, PHP 8.3) reads too, and the loop never runs past the declaration's `;`, so
+# `use const` is passed over.
 test -f src/Client.php || { fail "no src/Client.php in $(pwd), so nothing says which version this tree is. Run the guard from the repository root."; exit 1; }
 version_status=0
 # The $ in the single-quoted php code is PHP's, not the shell's.
@@ -201,13 +211,37 @@ version_status=0
 version=$(php -d display_errors=stderr -r '
 	$raw = @file_get_contents("src/Client.php");
 	if (!is_string($raw)) { exit(3); }
-	if (!preg_match("/^[ \t]*(?:(?:public|protected|private|final)[ \t]+)*const[ \t]+(?:string[ \t]+)?VERSION[ \t]*=[ \t]*([\"\x27])(.*?)\\1/ms", $raw, $m)) { exit(4); }
-	echo $m[2];
+	if (!function_exists("token_get_all")) { exit(7); }
+	$sig = array();
+	foreach (token_get_all($raw) as $t) {
+		if (is_array($t) && in_array($t[0], array(T_WHITESPACE, T_COMMENT, T_DOC_COMMENT), true)) { continue; }
+		$sig[] = $t;
+	}
+	$values = array();
+	$n = count($sig);
+	for ($i = 0; $i < $n; $i++) {
+		if (!is_array($sig[$i]) || $sig[$i][0] !== T_CONST) { continue; }
+		$name = null;
+		for ($j = $i + 1; $j < $n && $sig[$j] !== "=" && $sig[$j] !== ";"; $j++) {
+			if (is_array($sig[$j]) && $sig[$j][0] === T_STRING) { $name = $sig[$j][1]; }
+		}
+		if ($name !== "VERSION" || $j >= $n || $sig[$j] !== "=") { continue; }
+		$value = isset($sig[$j + 1]) ? $sig[$j + 1] : null;
+		$end = isset($sig[$j + 2]) ? $sig[$j + 2] : null;
+		if (!is_array($value) || $value[0] !== T_CONSTANT_ENCAPSED_STRING || ($end !== ";" && $end !== ",")) { exit(6); }
+		$values[] = substr($value[1], 1, -1);
+	}
+	if (count($values) === 0) { exit(4); }
+	if (count($values) > 1) { exit(5); }
+	echo $values[0];
 ') || version_status=$?
 case "$version_status" in
 0) ;;
 3) fail "src/Client.php could not be read."; exit 1 ;;
-4) fail "src/Client.php declares no Client::VERSION the guard can read (expected a line like \`public const VERSION = '2.0.0';\`). Nothing would tie a tag to the code it publishes."; exit 1 ;;
+4) fail "src/Client.php declares no Client::VERSION the guard can read (expected \`public const VERSION = '2.0.0';\`). Nothing would tie a tag to the code it publishes."; exit 1 ;;
+5) fail "src/Client.php declares VERSION more than once, so the guard cannot tell which one the client reports. Declare it once."; exit 1 ;;
+6) fail "Client::VERSION in src/Client.php is not a single string literal, so the guard cannot read it without running the code. Write the version as one literal, such as \`public const VERSION = '2.0.0';\`."; exit 1 ;;
+7) fail "the guard reads src/Client.php with PHP's tokenizer, and this php has no tokenizer extension (\`php -m\` lists the loaded ones)."; exit 1 ;;
 *) fail "php exited $version_status while reading src/Client.php; its own output above says why."; exit 1 ;;
 esac
 
@@ -359,7 +393,7 @@ fi
 
 if [ -n "$tag" ]; then
 	tag_version=""
-	if ! composer_reads_as_version "$tag"; then
+	if ! may_be_version "$tag"; then
 		note "tag $tag is not a version to Composer, so Packagist does not publish it; skipping the tag checks"
 	else
 		case "$tag" in
@@ -367,7 +401,7 @@ if [ -n "$tag" ]; then
 		esac
 		if [ -z "$tag_version" ] || ! is_version "$tag_version"; then
 			# No further comparison: a malformed tag has no line and nothing to match Client::VERSION.
-			fail "tag $tag: Composer reads it as a version and Packagist publishes it, but this repository tags vMAJOR.MINOR.PATCH only (docs/release.md), with no prerelease or build metadata. Delete the ref before anything fetches it."
+			fail "tag $tag starts with a number (after any v, V or release-), so Composer may read it as a version, and Packagist publishes every tag Composer reads as one. This repository tags vMAJOR.MINOR.PATCH only, with no prerelease or build metadata, and names any other tag so it does not start with a number (docs/release.md). Delete the ref before anything fetches it, then push it again under a name that fits."
 		else
 			tag_line=$(line_of_version "$tag_version")
 			if [ -z "$tag_line" ]; then

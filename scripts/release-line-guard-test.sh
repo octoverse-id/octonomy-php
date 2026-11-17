@@ -221,6 +221,44 @@ client "public const VERSION = '2.0.0
 1.0.0';"
 check "BLOCK: a VERSION literal spanning two lines" 1 "which is not MAJOR.MINOR.PATCH" \
 	GITHUB_EVENT_NAME=push GITHUB_REF=refs/heads/main
+# A pattern over the text read these in place of the real constant: the block comment made a v2.0.0
+# tag pass on a client that reports 1.0.0. The tokenizer skips comments and docblocks.
+fixture "$COMPAT" 1.0.0 1.0.0
+client "/* public const VERSION = '2.0.0'; */
+    public const VERSION = '1.0.0';"
+check "a VERSION in a block comment above the real one is not read" 0 "version=1.0.0" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/heads/support/php7.4
+check "BLOCK: ... so a 2.x tag meets the real 1.0.0" 1 "tag v2.0.0 does not match Client::VERSION (1.0.0)" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+fixture "$MODERN" 2.0.0 2.0.0
+client "/**
+     * public const VERSION = '9.9.9';
+     */
+    public const VERSION = '2.0.0';"
+check "a VERSION in a docblock is not read" 0 "version=2.0.0" GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const NOTE = 'const VERSION = \"9.9.9\";';
+    public const VERSION = '2.0.0';"
+check "a string that mentions VERSION is not read" 0 "version=2.0.0" GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const string VERSION = '2.0.0';"
+check "a typed constant (PHP 8.3) is read" 0 "version=2.0.0" GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const VERSION = '2.0.0', NAME = 'octonomy-php';"
+check "a VERSION followed by another constant in one declaration is read" 0 "version=2.0.0" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const VERSION = '2.0' . '.0';"
+check "BLOCK: a VERSION computed by concatenation" 1 "is not a single string literal" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const MAJOR = '2';
+    public const VERSION = self::MAJOR;"
+check "BLOCK: a VERSION that names another constant" 1 "is not a single string literal" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
+client "public const VERSION = '2.0.0';
+}
+
+final class Other
+{
+    public const VERSION = '1.0.0';"
+check "BLOCK: VERSION declared twice" 1 "declares VERSION more than once" \
+	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
 
 echo "--- release PRs: the gate a fix can still reach ---"
 fixture "$MODERN" 2.0.0 2.0.0
@@ -330,10 +368,17 @@ check "BLOCK: a 2.x tag on support/php7.4 with Client::VERSION bumped to match" 
 	GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v2.0.0
 
 fixture "$MODERN" 2.0.0 2.0.0
-# Composer reads all of these as versions (it accepts no v, a capital V, drops `release-`, strips
-# +metadata, and takes two- and four-part numbers and dates), so Packagist would publish each one.
-for bad in 2.0.0 V2.0.0 release-2.0.0 release-v2.0.0 v2.0 v2.0.0.0 v2.0.0-rc.1 v2.0.0-RC1 v2.0.0+build.1 v02.0.0 v2.0.0-dev 2026.11.17; do
-	check "BLOCK: tag $bad, which Composer would publish" 1 "tag $bad: Composer reads it as a version" \
+# Composer's VersionParser reads every one of these as a version (no v, a capital V, `release-`
+# dropped, +metadata stripped, two- and four-part numbers, a leading zero, a date), so Packagist would
+# publish each. Checked against Composer 2's VcsRepository and VersionParser.
+for bad in 2.0.0 V2.0.0 release-2.0.0 release-v2.0.0 v2.0 v2.0.0.0 v2.0.0-rc.1 v2.0.0-RC1 v2.0.0+build.1 v02.0.0 2026.11.17; do
+	check "BLOCK: tag $bad, which Composer would publish" 1 "tag $bad starts with a number" \
+		GITHUB_EVENT_NAME=push GITHUB_REF="refs/tags/$bad"
+done
+# Composer skips these (a dev suffix, or no version grammar after the digit), but the guard's test is
+# a superset on purpose, and its message says "may", not that Packagist publishes them.
+for bad in v2.0.0-dev 2fa-docs v1-notes; do
+	check "BLOCK: tag $bad, which only looks like a version" 1 "so Composer may read it as a version" \
 		GITHUB_EVENT_NAME=push GITHUB_REF="refs/tags/$bad"
 done
 for skip in docs-snapshot latest vendor-drop; do
