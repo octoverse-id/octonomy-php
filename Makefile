@@ -1,7 +1,10 @@
+# The 1.x line's Makefile (support/php7.4, #29). main's minus the targets that only main runs: php74
+# (this tree is the downgrade, generated once and never regenerated) and fixtures (the captured corpus
+# is main's, carried across like any fix). Everything here runs on PHP 7.4 or later.
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
 	release-line-guard release-line-guard-test \
-	harness-up harness-down harness-logs test-integration fixtures php74
+	harness-up harness-down harness-logs test-integration
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -16,7 +19,7 @@ test: ## Run the test suite
 coverage: ## Run tests with coverage (needs Xdebug or PCOV)
 	vendor/bin/phpunit --coverage-text
 
-cs: ## Check coding style (PSR-12 / PER-CS)
+cs: ## Check coding style (PSR-12)
 	vendor/bin/php-cs-fixer fix --dry-run --diff
 
 cs-fix: ## Apply coding style fixes
@@ -43,47 +46,17 @@ harness-logs: ## Dump the harness container logs
 
 # Sources the harness env file when one exists, so the suite reaches a booted harness without the
 # caller exporting anything. With no harness every test skips, which is the normal case on a laptop;
-# CI sets OCTONOMY_INTEGRATION_REQUIRED=1 to turn that skip into a failure. --fail-on-empty-test-suite
-# closes the other vacuous green: a suite that no longer selects any test exits 0 having asserted
-# nothing.
+# CI sets OCTONOMY_INTEGRATION_REQUIRED=1 to turn that skip into a failure. The JUnit check closes the
+# other vacuous green, a suite that no longer selects any test and exits 0 having asserted nothing:
+# main passes PHPUnit 11's --fail-on-empty-test-suite, which PHPUnit 9 does not have.
 test-integration: ## Run the integration suite against a booted harness (skips when none is up)
 	@set -e; \
 	env_file=$$(scripts/octonomy-harness.sh env); \
 	case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
 	if [ -f "$$env_file" ]; then set -a; . "$$env_file"; set +a; fi; \
-	vendor/bin/phpunit --testsuite integration --fail-on-empty-test-suite
-
-# Re-captures resources/fixtures, the response bodies the unit suite and Testing\FixtureClient replay,
-# from a real server.
-# Capture writes, so it boots its own fresh harness (replacing a running one, as harness-up always
-# does) and removes it afterwards, leaving nothing behind for the read-only integration suite to trip
-# over. Commit the result in a PR of its own: a refresh is reviewed, never automatic. See
-# docs/development.md.
-fixtures: ## Re-capture the response fixtures from a fresh harness (replaces a running harness)
-	@set -e; \
-	trap 'scripts/octonomy-harness.sh down' EXIT; \
-	scripts/octonomy-harness.sh up; \
-	env_file=$$(scripts/octonomy-harness.sh env); \
-	case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
-	set -a; . "$$env_file"; set +a; \
-	php scripts/capture-fixtures.php
-
-# The PHP 7.4 line (epic #4). scripts/php74-downgrade.sh writes the Rector-downgraded tree into a
-# temp dir, and scripts/php74-check.sh proves it on a real PHP 7.4 in Docker: lint, @PSR12, PHPStan at
-# phpVersion 70400, and PHPUnit 9.6 running exactly the tests main runs. CI's php74 job runs the same
-# two scripts. The tree's dependencies are resolved on the host, for PHP 7.4.33 by compat/composer.json's
-# platform setting. The image is pinned by digest, like the harness's.
-PHP74_IMAGE := php:7.4-cli@sha256:620a6b9f4d4feef2210026172570465e9d0c1de79766418d3affd09190a7fda5
-
-php74: ## Downgrade into a temp dir and prove it on PHP 7.4 (needs Docker)
-	@set -e; \
-	work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
-	composer install --working-dir=tools/rector --no-interaction --no-progress --quiet; \
-	scripts/php74-downgrade.sh "$$work/tree"; \
-	vendor/bin/phpunit --log-junit "$$work/main-junit.xml"; \
-	composer install --working-dir="$$work/tree" --no-interaction --no-progress --quiet; \
-	docker run --rm --user "$$(id -u):$$(id -g)" -v "$$PWD/scripts:/scripts:ro" -v "$$work:/work" \
-		$(PHP74_IMAGE) /scripts/php74-check.sh /work/tree /work/main-junit.xml
+	junit=$$(mktemp); trap 'rm -f "$$junit"' EXIT; \
+	vendor/bin/phpunit --testsuite integration --log-junit "$$junit"; \
+	grep -q 'tests="[1-9]' "$$junit" || { echo "the integration suite selected no tests"; exit 1; }
 
 # Before the first release CHANGELOG.md has only [Unreleased], so there is no heading to match and
 # Client::VERSION must stay at this placeholder until the release PR replaces it (docs/versioning.md).

@@ -5,6 +5,29 @@ a multi-tenant, multi-application tag management / taxonomy service. The SDK is 
 Guzzle-based client for the REST API: `/api/v2` by default, `/api/v1` when a client is constructed with
 `api_version` v1.
 
+## This branch: the 1.x line
+
+This is `support/php7.4`, the 1.x line for PHP 7.4 and later. This section overrides the rest of the
+file wherever they disagree; everything else applies as written.
+
+- **What it is.** `main`'s tree downgraded by Rector once (#29) and never regenerated. It is not a
+  function of `main`: its README, CHANGELOG, Makefile, CI and this section are its own. Never run
+  `scripts/php74-downgrade.sh` over it; the Rector setup stays on `main`.
+- **What it takes.** Until its `1.0.0`, what `main` ships for the current `/api/v2`; after that,
+  security fixes and major bug fixes only. New features, support for later API changes included, ship
+  on 2.x alone (#33). A fix both lines need lands on `main` first and reaches here as a pull request
+  into `support/php7.4` (`docs/development.md#changing-the-1x-line`).
+- **PHP 7.4 syntax only** (instead of "Target PHP 8.2+"): no union types, named arguments, `match`,
+  nullsafe operator, constructor promotion, `readonly`, enums or attributes. Style is `@PSR12`, not
+  `@PER-CS`. "`main` must also downgrade to PHP 7.4" is `main`'s rule; here the code is 7.4 already.
+- **Models are mutable here**, since the downgrade deleted `readonly`, and each property keeps a
+  `@readonly` docblock. Never write code here that relies on writing to one: it would throw on 2.x.
+- **Tests run on PHPUnit 9.6.** Name a data provider in a `@dataProvider` annotation (instead of the
+  attribute rule); PHP 7.4 reads `#[DataProvider]` as a comment and the provider silently stops.
+- **Releases from here are 1.x only**, and the release-line guard refuses anything else. `Client::VERSION`
+  and `CHANGELOG.md` are this line's own, set by `release/1.x.y` pull requests into `support/php7.4`.
+- Run `make check` before pushing; there is no `make php74` or `make fixtures` here.
+
 ## Product Rules
 
 These mirror server semantics the client must respect — business rules live on the server; the SDK
@@ -111,6 +134,12 @@ stays a faithful, ergonomic client.
   `docs/development.md#the-php-74-line`). No enums: use string class constants (#5). Never rely on a
   union type or `readonly` for behavior a test asserts, since the downgrade deletes both; make the
   check explicit.
+- `support/php7.4` holds the 1.x line: generated from `main` once (#29), reviewed, committed, and never
+  regenerated, so it is not a function of `main` and carries its own `AGENTS.md` section. Until its
+  `1.0.0` it takes what `main` ships for the current `/api/v2`; after that, security fixes and major bug
+  fixes only, and features ship on 2.x alone (#33). Either way a change reaches it as a pull request
+  into it, ported by hand; a fix both lines need lands on `main` first. Its models are mutable, since
+  the downgrade deletes `readonly` (`docs/upgrading-1-to-2.md`).
 - Guzzle (`guzzlehttp/guzzle`) is the **only** runtime dependency that ships code. `psr/http-client`,
   `psr/http-factory` and `psr/http-message` are required too, because `Config` and `Transport` type
   against them (#18); they hold interfaces only, and Guzzle requires them anyway. Do not add others
@@ -173,6 +202,9 @@ stays a faithful, ergonomic client.
 - Use `<type>/<description>` with lowercase alphanumerics, hyphens, and dots only where valid.
 - Allowed branch types are `feature`, `feat`, `bugfix`, `fix`, `hotfix`, `release`, and `chore`.
 - Example branch names: `feature/tag-assignments`, `fix/pagination-decode`, `chore/update-agent-rules`.
+- **One exception (#29):** `support/php7.4` is the 1.x line's long-lived release branch, not a unit of
+  planned development, so its name is exempt from the type list and the issue-number rule. Work for it
+  still arrives on ordinary `<type>/<issue-number>-...` branches, as pull requests into it.
 - When the user explicitly asks to implement an approved development plan, such as
   `PLEASE IMPLEMENT THIS PLAN`, create a GitHub issue before creating the development branch.
 - If the user provides an existing issue number, use that issue instead of creating a duplicate.

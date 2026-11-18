@@ -12,7 +12,9 @@ composer install
 make test
 ```
 
-Requires PHP 8.2+. Guzzle is the only runtime dependency that ships code, beside the PSR HTTP interface
+This is the 1.x line, on `support/php7.4`, which requires PHP 7.4+; contribute to `main` unless a fix
+belongs on 1.x ([docs/development.md](docs/development.md#changing-the-1x-line)). Guzzle is the only
+runtime dependency that ships code, beside the PSR HTTP interface
 packages it implements; everything else is `require-dev`.
 
 ## Quality gates
@@ -20,16 +22,15 @@ packages it implements; everything else is `require-dev`.
 Run these before opening a PR; CI runs the same checks and must pass before merge:
 
 ```bash
-make cs      # php-cs-fixer --dry-run (PSR-12 / PER-CS)
+make cs      # php-cs-fixer --dry-run (@PSR12)
 make stan    # phpstan analyse
 make test    # phpunit
 ```
 
 `make check` bundles all three with the release-line guard and its tests; `make release-check` runs
 the full pre-release gate. Apply style
-fixes with `make cs-fix`. CI also downgrades the tree to PHP 7.4 and runs it there; `make php74`
-does the same locally with Docker (see
-[docs/development.md](docs/development.md#the-php-74-line)).
+fixes with `make cs-fix`. CI runs the suite on every PHP from 7.4 to 8.4, and the integration suite and
+dev server on PHP 7.4 (see [docs/development.md](docs/development.md#this-branch-the-1x-line)).
 
 ## Coding conventions
 
@@ -62,8 +63,8 @@ These mirror [AGENTS.md](AGENTS.md):
   `self::syntheticNegative(SyntheticNegative::<KIND>, ...)`. See
   [docs/development.md](docs/development.md#captured-response-fixtures).
 - Cover success, the list envelope, and error→exception mapping.
-- Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations. `#[DataProvider]` is the
-  only one the PHP 7.4 downgrade converts.
+- Name a data provider in a `@dataProvider` annotation: PHPUnit 9 reads no attributes, and PHP 7.4
+  reads `#[DataProvider]` as a comment. (`main` uses the attribute; the downgrade converts it.)
 
 ## Branches, commits, and PRs
 

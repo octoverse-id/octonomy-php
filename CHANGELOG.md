@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This is the changelog of the 1.x line, on `support/php7.4`; `main`'s is 2.x's. The line's first release,
+`1.0.0`, carries everything below, generated for PHP 7.4 from `main` at `c1626d4` (#29): the classes and
+methods 2.x has, on PHP 7.4+ and Guzzle 7, with mutable models, and without the named arguments PHP 7.4
+lacks. After `1.0.0` this file records this line's own fixes.
+
 ### Added
+- The 1.x line, for PHP 7.4 to 8.1, on the `support/php7.4` branch: this SDK generated once from the
+  same source by Rector, with the same classes and methods, released as `1.x` beside `2.x`. Two
+  differences reach your code: its models are mutable where 2.x's are `readonly`, and PHP 7.4 has no
+  named arguments. `docs/upgrading-1-to-2.md` covers both and what else changes when you move to 2.x,
+  and the README and the guide link it (#29).
 - `docs/guide.md`, one path through the SDK: what Octonomy keeps, trying it with the dev server, a
   client, each resource group with the example that shows it, namespaces, pagination, errors, audit
   logs, health and webhooks, testing your code (`FixtureClient`, and a PSR-18 client of your own for
@@ -230,4 +240,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).
 
-[Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/main
+[Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/support/php7.4
