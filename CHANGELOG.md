@@ -56,7 +56,8 @@ lacks. After `1.0.0` this file records this line's own fixes.
   empty or non-string secret, a header that is not a string or null, a body that is not a string). Its
   parameters are declared `mixed` and checked inside, and what it throws goes through
   `Redaction::scrubAll()`, which removes the arguments of every frame, so the secret reaches no frame of
-  its trace on either PHP line; `#[\SensitiveParameter]` marks it on PHP 8.2+ too. Tested against
+  its trace on either PHP line. (2.x marks it `#[\SensitiveParameter]` too; this line cannot carry the
+  attribute, so the scrub is its whole protection.) Tested against
   octonomy-go's signature vectors, generated from the server's signing code and vendored under
   `tests/fixtures/webhook`. The README and `docs/api.md` say to reject a failed check with anything but a
   2xx, which the server takes as delivered for good (#26).
@@ -159,8 +160,8 @@ lacks. After `1.0.0` this file records this line's own fixes.
   before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
-- `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`
-  input DTOs.
+- `RequestOptions::withActor()`, response models (`readonly` on 2.x; on this line writable, each
+  property marked `@readonly` in its docblock), and `*Create`/`*Update`/`*ListParams` input DTOs.
 - Tri-state `TagUpdate` and `VocabularyUpdate` (#20). Every string field defaults to the new
   `Undefined::VALUE`, which omits it, so an explicit `null` is now sent: `new TagUpdate(description:
   null)` sends `{"description": null}` and clears the description. A null used to be dropped: beside
@@ -234,8 +235,8 @@ lacks. After `1.0.0` this file records this line's own fixes.
   - A 2xx is read strictly: a body that is not a JSON object with a string `status` throws
     `MalformedResponseException`.
   - `RequestContext::$apiVersion` is null for a probe, which calls no api_version.
-  - `make fixtures` captures the probes, the 503 with the harness database stopped
-    (`scripts/octonomy-harness.sh stop-db`).
+  - `make fixtures` on `main` captures the probes, the 503 with the harness database stopped
+    (`scripts/octonomy-harness.sh stop-db`); this line carries that corpus.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).
