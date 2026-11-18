@@ -39,10 +39,17 @@ use Octoverse\Octonomy\Model\HealthStatus;
 final class HealthService
 {
     /**
+     * @readonly
+     */
+    private HealthTransport $transport;
+    /**
      * Built by Client::health() and HealthClient::health(); reach the service
      * there rather than constructing it.
      */
-    public function __construct(private readonly HealthTransport $transport) {}
+    public function __construct(HealthTransport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * Probe liveness (GET /health/live): whether the server's process is up

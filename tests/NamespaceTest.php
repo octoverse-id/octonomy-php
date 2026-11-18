@@ -26,13 +26,12 @@ final class NamespaceTest extends SdkTestCase
 {
     /**
      * Half a pair names no namespace, so it cannot be built.
+     * @dataProvider incompletePairs
      */
-    #[DataProvider('incompletePairs')]
     public function testANamespaceIsATypeAndAnIdTogether(string $type, string $id, string $expected): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage($expected);
-
         new NamespaceScope($type, $id);
     }
 
@@ -53,13 +52,12 @@ final class NamespaceTest extends SdkTestCase
     /**
      * A header cannot carry a control character, and Guzzle's refusal would be
      * thrown from frames that hold the token and the body (Redaction).
+     * @dataProvider unsendablePairs
      */
-    #[DataProvider('unsendablePairs')]
     public function testANamespaceAHeaderCannotCarryIsRefused(string $type, string $id, string $expected): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage($expected);
-
         new NamespaceScope($type, $id);
     }
 
@@ -97,14 +95,12 @@ final class NamespaceTest extends SdkTestCase
      *
      * @param \Closure(Client, RequestOptions): mixed $call
      * @param array<string, string> $query
+     * @dataProvider calls
      */
-    #[DataProvider('calls')]
     public function testAV2RequestCarriesTheNamespacePair(string $operation, \Closure $call, array $query): void
     {
         $client = $this->clientWith([self::captured("v2/{$operation}")]);
-
-        $call($client, new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')));
-
+        $call($client, new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a')));
         $request = $this->lastRequest();
         self::assertSame('merchant', $request->getHeaderLine('X-Namespace-Type'));
         self::assertSame('harness-merchant-a', $request->getHeaderLine('X-Namespace-ID'));
@@ -118,7 +114,7 @@ final class NamespaceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/get')]);
 
-        $client->tags()->get('tag_1', 'harness-app', options: new RequestOptions(actorId: 'svc-call', namespace: new NamespaceScope('merchant', 'harness-merchant-a')));
+        $client->tags()->get('tag_1', 'harness-app', null, new RequestOptions('svc-call', new NamespaceScope('merchant', 'harness-merchant-a')));
 
         self::assertSame('svc-call', $this->lastRequest()->getHeaderLine('X-Actor-ID'));
         self::assertSame('harness-merchant-a', $this->lastRequest()->getHeaderLine('X-Namespace-ID'));
@@ -133,8 +129,8 @@ final class NamespaceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/vocabularies/list-include-global'), self::captured('v2/vocabularies/list-global')]);
 
         $client->vocabularies()->list(
-            new VocabularyListParams(applicationId: 'harness-app', includeGlobal: true),
-            new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')),
+            new VocabularyListParams('harness-app', null, null, null, null, true),
+            new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a')),
         );
         $client->vocabularies()->list();
 
@@ -147,14 +143,13 @@ final class NamespaceTest extends SdkTestCase
      *
      * @param \Closure(Client, RequestOptions): mixed $call
      * @param array<string, string> $query
+     * @dataProvider calls
      */
-    #[DataProvider('calls')]
     public function testAV1ClientRefusesANamespaceBeforeSending(string $operation, \Closure $call, array $query): void
     {
         $client = $this->clientWith([], ['api_version' => ApiVersion::V1]);
-
         try {
-            $call($client, new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')));
+            $call($client, new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a')));
             self::fail("expected {$operation} to be refused");
         } catch (\LogicException $e) {
             self::assertSame(
@@ -171,8 +166,8 @@ final class NamespaceTest extends SdkTestCase
      * Guard path 3: v2 + include_global sends it, true or false.
      *
      * @param \Closure(Client, bool): mixed $list
+     * @dataProvider includeGlobalReads
      */
-    #[DataProvider('includeGlobalReads')]
     public function testAV2ReadSendsIncludeGlobal(string $operation, \Closure $list): void
     {
         foreach (['true' => true, 'false' => false] as $sent => $includeGlobal) {
@@ -190,8 +185,8 @@ final class NamespaceTest extends SdkTestCase
      * drop it without a word either way.
      *
      * @param \Closure(Client, bool): mixed $list
+     * @dataProvider includeGlobalReads
      */
-    #[DataProvider('includeGlobalReads')]
     public function testAV1ClientRefusesIncludeGlobalBeforeSending(string $operation, \Closure $list): void
     {
         foreach ([true, false] as $includeGlobal) {
@@ -219,7 +214,7 @@ final class NamespaceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v1/tags/list')], ['api_version' => ApiVersion::V1]);
 
-        $client->tags()->list(new TagListParams(includeShared: true));
+        $client->tags()->list(new TagListParams(null, true));
 
         self::assertSame('/api/v1/tags', $this->lastRequest()->getUri()->getPath());
         self::assertFalse($this->lastRequest()->hasHeader('X-Namespace-Type'));
@@ -235,42 +230,42 @@ final class NamespaceTest extends SdkTestCase
     {
         $app = ['application_id' => 'harness-app'];
 
-        yield 'tags()->create()' => ['tags/create', static fn(Client $c, RequestOptions $o): mixed => $c->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label', applicationId: 'harness-app'),
+        yield 'tags()->create()' => ['tags/create', static fn (Client $c, RequestOptions $o) => $c->tags()->create(
+            new TagCreate('Featured', 'featured', 'label', 'harness-app'),
             $o,
         ), []];
-        yield 'tags()->get()' => ['tags/get', static fn(Client $c, RequestOptions $o): mixed => $c->tags()->get('tag_1', 'harness-app', options: $o), $app];
-        yield 'tags()->list()' => ['tags/list', static fn(Client $c, RequestOptions $o): mixed => $c->tags()->list(
-            new TagListParams(applicationId: 'harness-app'),
+        yield 'tags()->get()' => ['tags/get', static fn (Client $c, RequestOptions $o) => $c->tags()->get('tag_1', 'harness-app', null, $o), $app];
+        yield 'tags()->list()' => ['tags/list', static fn (Client $c, RequestOptions $o) => $c->tags()->list(
+            new TagListParams('harness-app'),
             $o,
         ), $app];
-        yield 'tags()->update()' => ['tags/update', static fn(Client $c, RequestOptions $o): mixed => $c->tags()->update(
+        yield 'tags()->update()' => ['tags/update', static fn (Client $c, RequestOptions $o) => $c->tags()->update(
             'tag_1',
-            new TagUpdate(description: 'Hand-picked by the merchandising team'),
+            new TagUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', 'Hand-picked by the merchandising team'),
             'harness-app',
             $o,
         ), $app];
-        yield 'tags()->delete()' => ['tags/delete', static function (Client $c, RequestOptions $o): mixed {
+        yield 'tags()->delete()' => ['tags/delete', static function (Client $c, RequestOptions $o) {
             $c->tags()->delete('tag_1', 'harness-app', $o);
 
             return null;
         }, $app];
-        yield 'vocabularies()->create()' => ['vocabularies/create', static fn(Client $c, RequestOptions $o): mixed => $c->vocabularies()->create(
-            new VocabularyCreate(name: 'Labels', slug: 'labels', applicationId: 'harness-app'),
+        yield 'vocabularies()->create()' => ['vocabularies/create', static fn (Client $c, RequestOptions $o) => $c->vocabularies()->create(
+            new VocabularyCreate('Labels', 'labels', 'harness-app'),
             $o,
         ), []];
-        yield 'vocabularies()->get()' => ['vocabularies/get', static fn(Client $c, RequestOptions $o): mixed => $c->vocabularies()->get('voc_1', 'harness-app', options: $o), $app];
-        yield 'vocabularies()->list()' => ['vocabularies/list', static fn(Client $c, RequestOptions $o): mixed => $c->vocabularies()->list(
-            new VocabularyListParams(applicationId: 'harness-app'),
+        yield 'vocabularies()->get()' => ['vocabularies/get', static fn (Client $c, RequestOptions $o) => $c->vocabularies()->get('voc_1', 'harness-app', null, $o), $app];
+        yield 'vocabularies()->list()' => ['vocabularies/list', static fn (Client $c, RequestOptions $o) => $c->vocabularies()->list(
+            new VocabularyListParams('harness-app'),
             $o,
         ), $app];
-        yield 'vocabularies()->update()' => ['vocabularies/update', static fn(Client $c, RequestOptions $o): mixed => $c->vocabularies()->update(
+        yield 'vocabularies()->update()' => ['vocabularies/update', static fn (Client $c, RequestOptions $o) => $c->vocabularies()->update(
             'voc_1',
-            new VocabularyUpdate(description: 'Labels the merchandising team curates'),
+            new VocabularyUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', 'Labels the merchandising team curates'),
             'harness-app',
             $o,
         ), $app];
-        yield 'vocabularies()->delete()' => ['vocabularies/delete', static function (Client $c, RequestOptions $o): mixed {
+        yield 'vocabularies()->delete()' => ['vocabularies/delete', static function (Client $c, RequestOptions $o) {
             $c->vocabularies()->delete('voc_1', 'harness-app', $o);
 
             return null;
@@ -285,13 +280,13 @@ final class NamespaceTest extends SdkTestCase
      */
     public static function includeGlobalReads(): iterable
     {
-        yield 'tags()->get()' => ['tags/get', static fn(Client $c, bool $g): mixed => $c->tags()->get('tag_1', 'harness-app', $g)];
-        yield 'vocabularies()->get()' => ['vocabularies/get', static fn(Client $c, bool $g): mixed => $c->vocabularies()->get('voc_1', 'harness-app', $g)];
-        yield 'tags()->list()' => ['tags/list', static fn(Client $c, bool $g): mixed => $c->tags()->list(
-            new TagListParams(applicationId: 'harness-app', includeGlobal: $g),
+        yield 'tags()->get()' => ['tags/get', static fn (Client $c, bool $g) => $c->tags()->get('tag_1', 'harness-app', $g)];
+        yield 'vocabularies()->get()' => ['vocabularies/get', static fn (Client $c, bool $g) => $c->vocabularies()->get('voc_1', 'harness-app', $g)];
+        yield 'tags()->list()' => ['tags/list', static fn (Client $c, bool $g) => $c->tags()->list(
+            new TagListParams('harness-app', null, null, null, null, null, null, null, null, null, $g),
         )];
-        yield 'vocabularies()->list()' => ['vocabularies/list-include-global', static fn(Client $c, bool $g): mixed => $c->vocabularies()->list(
-            new VocabularyListParams(applicationId: 'harness-app', includeGlobal: $g),
+        yield 'vocabularies()->list()' => ['vocabularies/list-include-global', static fn (Client $c, bool $g) => $c->vocabularies()->list(
+            new VocabularyListParams('harness-app', null, null, null, null, $g),
         )];
     }
 }

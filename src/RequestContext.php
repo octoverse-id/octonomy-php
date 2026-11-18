@@ -44,6 +44,31 @@ namespace Octoverse\Octonomy;
 final class RequestContext
 {
     /**
+     * @var string|null
+     * @readonly
+     */
+    public ?string $apiVersion;
+    /**
+     * @var string
+     * @readonly
+     */
+    public string $method;
+    /**
+     * @var string
+     * @readonly
+     */
+    public string $path;
+    /**
+     * @var array<string, string>
+     * @readonly
+     */
+    public array $query = [];
+    /**
+     * @var NamespaceScope|null
+     * @readonly
+     */
+    public ?NamespaceScope $namespace = null;
+    /**
      * @param string|null           $apiVersion the api_version the request called, an ApiVersion constant,
      *                                          or null for a health probe, which calls none
      * @param string                $method     the HTTP method, such as 'GET'
@@ -54,13 +79,14 @@ final class RequestContext
      * @param NamespaceScope|null   $namespace  the namespace the request was sent in, or null for the
      *                                          global (tenant-shared) partition
      */
-    public function __construct(
-        public readonly ?string $apiVersion,
-        public readonly string $method,
-        public readonly string $path,
-        public readonly array $query = [],
-        public readonly ?NamespaceScope $namespace = null,
-    ) {}
+    public function __construct(?string $apiVersion, string $method, string $path, array $query = [], ?NamespaceScope $namespace = null)
+    {
+        $this->apiVersion = $apiVersion;
+        $this->method = $method;
+        $this->path = $path;
+        $this->query = $query;
+        $this->namespace = $namespace;
+    }
 
     /**
      * The request as an exception message names it: the method and the path,

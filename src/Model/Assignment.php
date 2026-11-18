@@ -18,21 +18,62 @@ use Octoverse\Octonomy\Internal\Json;
 final class Assignment
 {
     /**
+     * @readonly
+     */
+    public string $id;
+    /**
+     * @readonly
+     */
+    public string $tenantId;
+    /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceType;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceId;
+    /**
+     * @readonly
+     */
+    public string $tagId;
+    /**
+     * @readonly
+     */
+    public string $resourceType;
+    /**
+     * @readonly
+     */
+    public string $resourceId;
+    /**
+     * @readonly
+     */
+    public ?string $assignedBy;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $assignedAt;
+    /**
      * An assignment as fromArray() reads it from a response: each argument is
      * the field of the same name, in snake_case on the wire.
      */
-    public function __construct(
-        public readonly string $id,
-        public readonly string $tenantId,
-        public readonly string $applicationId,
-        public readonly ?string $namespaceType,
-        public readonly ?string $namespaceId,
-        public readonly string $tagId,
-        public readonly string $resourceType,
-        public readonly string $resourceId,
-        public readonly ?string $assignedBy,
-        public readonly \DateTimeImmutable $assignedAt,
-    ) {}
+    public function __construct(string $id, string $tenantId, string $applicationId, ?string $namespaceType, ?string $namespaceId, string $tagId, string $resourceType, string $resourceId, ?string $assignedBy, \DateTimeImmutable $assignedAt)
+    {
+        $this->id = $id;
+        $this->tenantId = $tenantId;
+        $this->applicationId = $applicationId;
+        $this->namespaceType = $namespaceType;
+        $this->namespaceId = $namespaceId;
+        $this->tagId = $tagId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->assignedBy = $assignedBy;
+        $this->assignedAt = $assignedAt;
+    }
 
     /**
      * Hydrate an assignment from one resource object of a response read as
@@ -48,17 +89,17 @@ final class Assignment
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            id: Json::string($data, 'id'),
-            tenantId: Json::string($data, 'tenant_id'),
-            applicationId: Json::string($data, 'application_id'),
-            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
-            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
-            tagId: Json::string($data, 'tag_id'),
-            resourceType: Json::string($data, 'resource_type'),
-            resourceId: Json::string($data, 'resource_id'),
-            assignedBy: Json::nullableString($data, 'assigned_by'),
-            assignedAt: Json::dateTime($data, 'assigned_at'),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'id'),
+            Json::string($data, 'tenant_id'),
+            Json::string($data, 'application_id'),
+            Json::namespaceField($data, 'namespace_type', $apiVersion),
+            Json::namespaceField($data, 'namespace_id', $apiVersion),
+            Json::string($data, 'tag_id'),
+            Json::string($data, 'resource_type'),
+            Json::string($data, 'resource_id'),
+            Json::nullableString($data, 'assigned_by'),
+            Json::dateTime($data, 'assigned_at'),
         ));
     }
 }

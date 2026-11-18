@@ -106,7 +106,9 @@ final class FixtureClient implements ClientInterface
      */
     private array $answered = [];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * A client that answers from the captured corpus this package ships. It is
@@ -175,7 +177,7 @@ final class FixtureClient implements ClientInterface
         }
 
         $answered = array_map(
-            static fn(array $sent): string => "{$sent[0]} {$sent[1]}",
+            static fn (array $sent): string => "{$sent[0]} {$sent[1]}",
             $this->answered,
         );
 
@@ -218,14 +220,14 @@ final class FixtureClient implements ClientInterface
         // prefixes share it, and the second is the SDK's.
         preg_match_all('#/api/(v1|v2)(?=/)#', $path, $prefixes, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
         foreach ($prefixes as [[$prefix, $offset], [$version]]) {
-            $relative = substr($path, $offset + strlen($prefix) + 1);
+            $relative = (string) substr($path, $offset + strlen($prefix) + 1);
             $fixture = self::route($method, $relative);
             if ($fixture !== null) {
                 $readings[] = ["{$version}/{$fixture}", $relative, "{$relative} below /api/{$version}"];
             }
         }
         foreach (self::PROBES as $probe) {
-            if ($method === 'GET' && str_ends_with($path, "/{$probe}")) {
+            if ($method === 'GET' && substr_compare($path, "/{$probe}", -strlen("/{$probe}")) === 0) {
                 $readings[] = [$probe, $probe, "the probe {$probe}"];
             }
         }

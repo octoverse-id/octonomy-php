@@ -26,23 +26,72 @@ namespace Octoverse\Octonomy\Model;
 final class AuditLogListParams
 {
     /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @readonly
+     */
+    public ?string $action = null;
+    /**
+     * @readonly
+     */
+    public ?string $entityType = null;
+    /**
+     * @readonly
+     */
+    public ?string $entityId = null;
+    /**
+     * @readonly
+     */
+    public ?string $tagId = null;
+    /**
+     * @readonly
+     */
+    public ?string $resourceType = null;
+    /**
+     * @readonly
+     */
+    public ?string $resourceId = null;
+    /**
+     * @readonly
+     */
+    public ?string $actorId = null;
+    /**
+     * @readonly
+     */
+    public ?string $operationId = null;
+    /**
+     * @readonly
+     */
+    public ?int $limit = null;
+    /**
+     * @readonly
+     */
+    public ?int $offset = null;
+    /**
+     * @readonly
+     */
+    public ?bool $includeGlobal = null;
+    /**
      * Every argument is optional and sets the filter of the same name; null
      * leaves it out of the query string.
      */
-    public function __construct(
-        public readonly ?string $applicationId = null,
-        public readonly ?string $action = null,
-        public readonly ?string $entityType = null,
-        public readonly ?string $entityId = null,
-        public readonly ?string $tagId = null,
-        public readonly ?string $resourceType = null,
-        public readonly ?string $resourceId = null,
-        public readonly ?string $actorId = null,
-        public readonly ?string $operationId = null,
-        public readonly ?int $limit = null,
-        public readonly ?int $offset = null,
-        public readonly ?bool $includeGlobal = null,
-    ) {}
+    public function __construct(?string $applicationId = null, ?string $action = null, ?string $entityType = null, ?string $entityId = null, ?string $tagId = null, ?string $resourceType = null, ?string $resourceId = null, ?string $actorId = null, ?string $operationId = null, ?int $limit = null, ?int $offset = null, ?bool $includeGlobal = null)
+    {
+        $this->applicationId = $applicationId;
+        $this->action = $action;
+        $this->entityType = $entityType;
+        $this->entityId = $entityId;
+        $this->tagId = $tagId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->actorId = $actorId;
+        $this->operationId = $operationId;
+        $this->limit = $limit;
+        $this->offset = $offset;
+        $this->includeGlobal = $includeGlobal;
+    }
 
     /**
      * @return array<string, string>

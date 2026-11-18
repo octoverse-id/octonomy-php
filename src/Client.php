@@ -40,16 +40,23 @@ final class Client
      */
     public const VERSION = '0.1.0';
 
-    private readonly Transport $transport;
+    /**
+     * @readonly
+     */
+    private Transport $transport;
 
-    /** The connection settings of the Config, as read at construction, for health(). */
-    private readonly HealthConfig $healthConfig;
+    /**
+     * The connection settings of the Config, as read at construction, for health().
+     * @readonly
+     */
+    private HealthConfig $healthConfig;
 
     /**
      * The token and actor id of the Config, as read at construction: a probe
      * sends neither, but no message about one may quote them either.
+     * @readonly
      */
-    private readonly Redaction $healthRedaction;
+    private Redaction $healthRedaction;
 
     private ?VocabularyService $vocabularies = null;
     private ?TagService $tags = null;
@@ -65,16 +72,16 @@ final class Client
      * @throws Exception\ConfigurationException when the configuration is invalid, an unknown
      *                                          api_version included
      */
-    public function __construct(array|Config $config)
+    public function __construct($config)
     {
         $resolved = $config instanceof Config ? $config : Config::fromArray($config);
         $this->transport = new Transport($resolved, self::VERSION);
         $this->healthConfig = new HealthConfig(
-            baseUrl: $resolved->baseUrl,
-            httpClient: $resolved->httpClient,
-            timeout: $resolved->timeout,
-            userAgent: $resolved->userAgent,
-            requestFactory: $resolved->requestFactory,
+            $resolved->baseUrl,
+            $resolved->httpClient,
+            $resolved->timeout,
+            $resolved->userAgent,
+            $resolved->requestFactory,
         );
         $this->healthRedaction = Redaction::of($resolved->token, $resolved->actorId, null);
     }

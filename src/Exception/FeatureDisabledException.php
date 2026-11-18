@@ -19,4 +19,6 @@ namespace Octoverse\Octonomy\Exception;
  *
  * $errorCode says which one; retrying does not help until the flag changes.
  */
-final class FeatureDisabledException extends ApiException {}
+final class FeatureDisabledException extends ApiException
+{
+}

@@ -24,6 +24,28 @@ use Psr\Http\Message\RequestFactoryInterface;
 final class HealthConfig
 {
     /**
+     * @var string
+     * @readonly
+     */
+    public string $baseUrl;
+    /**
+     * @readonly
+     */
+    public ?ClientInterface $httpClient = null;
+    /**
+     * @var float|null
+     * @readonly
+     */
+    public ?float $timeout = null;
+    /**
+     * @readonly
+     */
+    public ?string $userAgent = null;
+    /**
+     * @readonly
+     */
+    public ?RequestFactoryInterface $requestFactory = null;
+    /**
      * @param string     $baseUrl the Octonomy server's address, as Config::$baseUrl: the probes are
      *                            sent to {baseUrl}/health/live and {baseUrl}/health/ready
      * @param float|null $timeout seconds, for the client the SDK builds when $httpClient is null
@@ -33,12 +55,17 @@ final class HealthConfig
      *                                client
      */
     public function __construct(
-        public readonly string $baseUrl,
-        public readonly ?ClientInterface $httpClient = null,
-        public readonly ?float $timeout = null,
-        public readonly ?string $userAgent = null,
-        public readonly ?RequestFactoryInterface $requestFactory = null,
+        string $baseUrl,
+        ?ClientInterface $httpClient = null,
+        ?float $timeout = null,
+        ?string $userAgent = null,
+        ?RequestFactoryInterface $requestFactory = null
     ) {
+        $this->baseUrl = $baseUrl;
+        $this->httpClient = $httpClient;
+        $this->timeout = $timeout;
+        $this->userAgent = $userAgent;
+        $this->requestFactory = $requestFactory;
         Options::checkBaseUrl($baseUrl);
         Options::checkUserAgent($userAgent);
         Options::checkTimeout($httpClient, $timeout);
@@ -62,11 +89,11 @@ final class HealthConfig
     {
         try {
             return new self(
-                baseUrl: Options::string($options, 'base_url') ?? '',
-                httpClient: Options::httpClient($options),
-                timeout: Options::float($options, 'timeout'),
-                userAgent: Options::string($options, 'user_agent'),
-                requestFactory: Options::requestFactory($options),
+                Options::string($options, 'base_url') ?? '',
+                Options::httpClient($options),
+                Options::float($options, 'timeout'),
+                Options::string($options, 'user_agent'),
+                Options::requestFactory($options),
             );
         } catch (ConfigurationException $e) {
             throw Options::namingUnread($e, $options);

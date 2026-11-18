@@ -39,7 +39,9 @@ final class ErrorMessage
      */
     private const ITEM_KINDS = ['tags' => 'tag', 'vocabularies' => 'vocabulary', 'tag-aliases' => 'tag alias'];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * The message for a non-2xx response.
@@ -60,7 +62,7 @@ final class ErrorMessage
         ?string $requestId,
         RequestContext $context,
         Redaction $redaction,
-        string $contentType = '',
+        string $contentType = ''
     ): string {
         if ($code === null) {
             // The body did not come from Octonomy's error handler: a proxy, a
@@ -106,7 +108,7 @@ final class ErrorMessage
         string $origin,
         \Throwable $clientError,
         ?int $status,
-        Redaction $redaction,
+        Redaction $redaction
     ): string {
         $write = !in_array($context->method, ['GET', 'HEAD', 'OPTIONS'], true);
 
@@ -118,7 +120,7 @@ final class ErrorMessage
             self::request($context),
             $origin,
             $status === null ? '' : sprintf(' after an HTTP %d response', $status),
-            $clientError::class,
+            get_class($clientError),
             // Withheld whole when the request the client's exception holds has
             // a body the redaction could not read: it may be quoted there.
             $redaction->isComplete()
@@ -155,14 +157,20 @@ final class ErrorMessage
      */
     public static function jsonError(int $code): string
     {
-        return match ($code) {
-            JSON_ERROR_DEPTH => 'it is nested deeper than 512 levels',
-            JSON_ERROR_RECURSION => 'it refers to itself',
-            JSON_ERROR_INF_OR_NAN => 'a number in it is INF or NAN',
-            JSON_ERROR_UNSUPPORTED_TYPE => 'it holds a value JSON has no type for, such as a resource',
-            JSON_ERROR_UTF8 => 'a string in it is not valid UTF-8',
-            default => sprintf('json_encode() refused it with error %d', $code),
-        };
+        switch ($code) {
+            case JSON_ERROR_DEPTH:
+                return 'it is nested deeper than 512 levels';
+            case JSON_ERROR_RECURSION:
+                return 'it refers to itself';
+            case JSON_ERROR_INF_OR_NAN:
+                return 'a number in it is INF or NAN';
+            case JSON_ERROR_UNSUPPORTED_TYPE:
+                return 'it holds a value JSON has no type for, such as a resource';
+            case JSON_ERROR_UTF8:
+                return 'a string in it is not valid UTF-8';
+            default:
+                return sprintf('json_encode() refused it with error %d', $code);
+        }
     }
 
     /**
@@ -200,7 +208,7 @@ final class ErrorMessage
             . ' failed: %s Fix: act on that failure (getPrevious() holds it), then walk again with the same params'
             . ' and offset %d to resume.',
             $reachedOffset,
-            str_starts_with($cause, $prefix) ? substr($cause, strlen($prefix)) : $cause,
+            strncmp($cause, $prefix, strlen($prefix)) === 0 ? (string) substr($cause, strlen($prefix)) : $cause,
             $reachedOffset,
         );
     }
@@ -238,7 +246,7 @@ final class ErrorMessage
         string $contentType,
         int $bytes,
         string $jsonError,
-        Redaction $redaction,
+        Redaction $redaction
     ): string {
         return sprintf(
             'octonomy: %s answered HTTP %d with a body that is not JSON (%s; %s, %d bytes), where the Octonomy API'
@@ -262,12 +270,12 @@ final class ErrorMessage
      * @param mixed  $value what was given in its place
      * @param string $fix  how to pass it, as a sentence
      */
-    public static function webhookArgument(string $what, mixed $value, string $fix): string
+    public static function webhookArgument(string $what, $value, string $fix): string
     {
         return sprintf(
             'octonomy: Webhook::verify() was given %s as %s, not as a string; the value is not shown. Fix: %s',
             $what,
-            is_object($value) ? 'an instance of ' . $value::class : 'a value of type ' . gettype($value),
+            is_object($value) ? 'an instance of ' . get_class($value) : 'a value of type ' . gettype($value),
             $fix,
         );
     }
@@ -317,104 +325,117 @@ final class ErrorMessage
     {
         $item = self::item($context);
 
-        return match ($code) {
-            ErrorCode::NAMESPACED_WRITES_DISABLED => [
-                'namespaced writes are disabled on this Octonomy deployment',
-                'OCTONOMY_NAMESPACE_WRITE_ENABLED is off on the server, as it is by default.',
-                'set OCTONOMY_NAMESPACE_WRITE_ENABLED=true on the server, or omit the namespace to write globally.',
-            ],
-            ErrorCode::NAMESPACE_API_DISABLED => [
-                'the namespaced v2 API is disabled on this Octonomy deployment',
-                'OCTONOMY_NAMESPACE_V2_API_ENABLED is off on the server. It is on by default, and turning it off'
-                . ' is the first step of a namespace rollback; requests without a namespace still work.',
-                'have the server\'s operator set OCTONOMY_NAMESPACE_V2_API_ENABLED=true, or omit the namespace'
-                . ' to use the global partition.',
-            ],
-            ErrorCode::NAMESPACE_NOT_SUPPORTED => [
-                'namespace headers reached an API version that has no namespaces',
-                'Only /api/v2 has namespaces. This SDK sends X-Namespace-Type and X-Namespace-ID only from'
-                . ' RequestOptions::$namespace, and only on a v2 Client.',
-                'build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or remove'
-                . ' whatever else adds those headers.',
-            ],
-            ErrorCode::NAMESPACE_INVALID => $context->namespace?->type === 'global'
-                ? [
-                    'the server refused the namespace',
-                    'The namespace type "global" is reserved: it names the tenant-shared partition.',
-                    'omit the namespace to use the global partition.',
-                ]
-                : [
-                    'the server refused the namespace',
+        switch ($code) {
+            case ErrorCode::NAMESPACED_WRITES_DISABLED:
+                return [
+                    'namespaced writes are disabled on this Octonomy deployment',
+                    'OCTONOMY_NAMESPACE_WRITE_ENABLED is off on the server, as it is by default.',
+                    'set OCTONOMY_NAMESPACE_WRITE_ENABLED=true on the server, or omit the namespace to write globally.',
+                ];
+            case ErrorCode::NAMESPACE_API_DISABLED:
+                return [
+                    'the namespaced v2 API is disabled on this Octonomy deployment',
+                    'OCTONOMY_NAMESPACE_V2_API_ENABLED is off on the server. It is on by default, and turning it off'
+                    . ' is the first step of a namespace rollback; requests without a namespace still work.',
+                    'have the server\'s operator set OCTONOMY_NAMESPACE_V2_API_ENABLED=true, or omit the namespace'
+                    . ' to use the global partition.',
+                ];
+            case ErrorCode::NAMESPACE_NOT_SUPPORTED:
+                return [
+                    'namespace headers reached an API version that has no namespaces',
+                    'Only /api/v2 has namespaces. This SDK sends X-Namespace-Type and X-Namespace-ID only from'
+                    . ' RequestOptions::$namespace, and only on a v2 Client.',
+                    'build the Client with \'api_version\' => \'v2\' (Octonomy server 2.0.0 or newer), or remove'
+                    . ' whatever else adds those headers.',
+                ];
+            case ErrorCode::NAMESPACE_INVALID:
+                return (($nullsafeVariable1 = $context->namespace) ? $nullsafeVariable1->type : null) === 'global'
+                    ? [
+                        'the server refused the namespace',
+                        'The namespace type "global" is reserved: it names the tenant-shared partition.',
+                        'omit the namespace to use the global partition.',
+                    ]
+                    : [
+                        'the server refused the namespace',
+                        null,
+                        'check the namespace type and id, and that nothing else adds X-Namespace-* headers.',
+                    ];
+            case ErrorCode::NOT_FOUND:
+                return [
+                    $item === null ? 'the resource was not found' : sprintf('%s "%s" was not found', $item[0], $item[1]),
+                    'The server does not say why, so the SDK cannot either.',
+                    $item === null
+                        ? 'check that the request above is the one you meant to send.'
+                        : 'check that the request above, its id included, is the one you meant to send.',
+                ];
+            case ErrorCode::CONFLICT:
+                return [
+                    'the request conflicts with existing data',
                     null,
-                    'check the namespace type and id, and that nothing else adds X-Namespace-* headers.',
-                ],
-            // Nothing about where else the row might be: a scoped read does not
-            // reveal whether it exists outside what the request could see.
-            ErrorCode::NOT_FOUND => [
-                $item === null ? 'the resource was not found' : sprintf('%s "%s" was not found', $item[0], $item[1]),
-                'The server does not say why, so the SDK cannot either.',
-                $item === null
-                    ? 'check that the request above is the one you meant to send.'
-                    : 'check that the request above, its id included, is the one you meant to send.',
-            ],
-            ErrorCode::CONFLICT => [
-                'the request conflicts with existing data',
-                null,
-                'change the conflicting values the details name, or use the existing row.',
-            ],
-            ErrorCode::SCOPE_IMMUTABLE => [
-                'a row\'s application and namespace cannot change after it is created',
-                'The update would move the row to another application or namespace.',
-                'create the row again in the scope it should have, instead of updating it.',
-            ],
-            ErrorCode::VALIDATION => [
-                'the server rejected the request as invalid',
-                null,
-                'correct the values the details name and send the request again; $details holds the server\'s'
-                . ' reason for each.',
-            ],
-            ErrorCode::TENANT_MISMATCH => [
-                'the request reaches outside its tenant',
-                null,
-                'check that tenant_id is a tenant the token is granted (create_service_token --tenant), and that'
-                . ' every id the request names belongs to that tenant.',
-            ],
-            ErrorCode::APPLICATION_MISMATCH => [
-                'the request does not fit its application',
-                null,
-                'send an application_id the token is granted, which a token without a tenant-wide grant must,'
-                . ' and use rows that belong to that application.',
-            ],
-            ErrorCode::INACTIVE_TAG => [
-                'the tag is inactive',
-                'Deleting a tag deactivates it, and an inactive tag cannot be assigned.',
-                'assign an active tag, or reactivate this one with tags()->update($id, new TagUpdate(isActive: true)).',
-            ],
-            ErrorCode::AUTH_REQUIRED => [
-                'the server did not accept the token',
-                null,
-                'pass a valid service token as the \'token\' option. An Octonomy operator issues one on the server'
-                . ' with `python manage.py create_service_token`, which prints it once.',
-            ],
-            ErrorCode::FORBIDDEN => [
-                'the token is not allowed to make this request',
-                null,
-                'use a token that is active, unexpired, and granted this request\'s scope, application and'
-                . ' namespace; an operator issues one with `python manage.py create_service_token`.',
-            ],
-            ErrorCode::AMBIGUOUS_RESOLUTION => [
-                'more than one tag or alias matched equally well',
-                null,
-                'narrow the request by application_id, type or namespace; $details names the axis that tells'
-                . ' them apart.',
-            ],
-            default => [
-                'the request failed',
-                'This SDK release does not know the code, so it cannot say why.',
-                sprintf('look the request up in the server\'s logs%s, and check that this SDK release supports the'
-                . ' server\'s version.', $requestId ? ' by its request ID' : ''),
-            ],
-        };
+                    'change the conflicting values the details name, or use the existing row.',
+                ];
+            case ErrorCode::SCOPE_IMMUTABLE:
+                return [
+                    'a row\'s application and namespace cannot change after it is created',
+                    'The update would move the row to another application or namespace.',
+                    'create the row again in the scope it should have, instead of updating it.',
+                ];
+            case ErrorCode::VALIDATION:
+                return [
+                    'the server rejected the request as invalid',
+                    null,
+                    'correct the values the details name and send the request again; $details holds the server\'s'
+                    . ' reason for each.',
+                ];
+            case ErrorCode::TENANT_MISMATCH:
+                return [
+                    'the request reaches outside its tenant',
+                    null,
+                    'check that tenant_id is a tenant the token is granted (create_service_token --tenant), and that'
+                    . ' every id the request names belongs to that tenant.',
+                ];
+            case ErrorCode::APPLICATION_MISMATCH:
+                return [
+                    'the request does not fit its application',
+                    null,
+                    'send an application_id the token is granted, which a token without a tenant-wide grant must,'
+                    . ' and use rows that belong to that application.',
+                ];
+            case ErrorCode::INACTIVE_TAG:
+                return [
+                    'the tag is inactive',
+                    'Deleting a tag deactivates it, and an inactive tag cannot be assigned.',
+                    'assign an active tag, or reactivate this one with tags()->update($id, new TagUpdate(isActive: true)).',
+                ];
+            case ErrorCode::AUTH_REQUIRED:
+                return [
+                    'the server did not accept the token',
+                    null,
+                    'pass a valid service token as the \'token\' option. An Octonomy operator issues one on the server'
+                    . ' with `python manage.py create_service_token`, which prints it once.',
+                ];
+            case ErrorCode::FORBIDDEN:
+                return [
+                    'the token is not allowed to make this request',
+                    null,
+                    'use a token that is active, unexpired, and granted this request\'s scope, application and'
+                    . ' namespace; an operator issues one with `python manage.py create_service_token`.',
+                ];
+            case ErrorCode::AMBIGUOUS_RESOLUTION:
+                return [
+                    'more than one tag or alias matched equally well',
+                    null,
+                    'narrow the request by application_id, type or namespace; $details names the axis that tells'
+                    . ' them apart.',
+                ];
+            default:
+                return [
+                    'the request failed',
+                    'This SDK release does not know the code, so it cannot say why.',
+                    sprintf('look the request up in the server\'s logs%s, and check that this SDK release supports the'
+                    . ' server\'s version.', $requestId ? ' by its request ID' : ''),
+                ];
+        }
     }
 
     /**
@@ -426,8 +447,8 @@ final class ErrorMessage
     private static function item(RequestContext $context): ?array
     {
         $prefix = '/api/' . $context->apiVersion . '/';
-        if (str_starts_with($context->path, $prefix)) {
-            $segments = explode('/', substr($context->path, strlen($prefix)));
+        if (strncmp($context->path, $prefix, strlen($prefix)) === 0) {
+            $segments = explode('/', (string) substr($context->path, strlen($prefix)));
             if (count($segments) === 2 && isset(self::ITEM_KINDS[$segments[0]]) && $segments[1] !== '') {
                 return [self::ITEM_KINDS[$segments[0]], rawurldecode($segments[1])];
             }
@@ -454,7 +475,7 @@ final class ErrorMessage
         }
         // Names only, never values (see the class comment). A list of reasons
         // has integer keys and names nothing.
-        $named = array_filter(array_keys($details), static fn(int|string $key): bool => is_string($key) && $key !== 'detail');
+        $named = array_filter(array_keys($details), static fn ($key): bool => is_string($key) && $key !== 'detail');
         if ($named !== []) {
             $parts[] = sprintf('Details on: %s.', implode(', ', $named));
         }

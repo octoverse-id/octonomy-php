@@ -32,20 +32,21 @@ final class WalkTest extends IntegrationTestCase
         yield 'api v2' => [ApiVersion::V2];
     }
 
-    #[DataProvider('apiVersions')]
+    /**
+     * @dataProvider apiVersions
+     */
     public function testAnInterruptedWalkResumesFromItsReachedOffset(string $apiVersion): void
     {
         // One tag per page, so the walk spans as many pages as the list has
         // tags, and the third request is the third page.
-        $params = new TagListParams(limit: 1);
+        $params = new TagListParams(null, null, null, null, null, null, null, null, 1);
         $whole = self::walkedIds($this->harnessClient($apiVersion), $params);
         self::assertGreaterThanOrEqual(3, count($whole), 'the seeded global partition holds four active tags');
         self::assertSame(array_keys($whole), range(0, count($whole) - 1));
-
-        $http = new InterruptingClient(failOn: 3);
+        $http = new InterruptingClient(3);
         $before = [];
         try {
-            foreach ($this->harnessClient($apiVersion, http: $http)->tags()->walk($params) as $offset => $tag) {
+            foreach ($this->harnessClient($apiVersion, 'OCTONOMY_TEST_TOKEN', $http)->tags()->walk($params) as $offset => $tag) {
                 $before[$offset] = $tag->id;
             }
             self::fail('expected the dropped third request to interrupt the walk');
@@ -57,25 +58,23 @@ final class WalkTest extends IntegrationTestCase
         }
         self::assertCount(3, $http->sent());
         self::assertSame(array_slice($whole, 0, 2, true), $before);
-
         $after = self::walkedIds(
             $this->harnessClient($apiVersion),
-            new TagListParams(limit: 1, offset: $e->reachedOffset),
+            new TagListParams(null, null, null, null, null, null, null, null, 1, $e->reachedOffset),
         );
-
         self::assertSame($whole, $before + $after, 'the resumed walk yields the rest of the list, each tag once');
     }
 
     public function testWithoutALimitAWalkAsksForPagesOf200(): void
     {
         $http = new InterruptingClient();
-        $walked = self::walkedIds($this->harnessClient(ApiVersion::V2, http: $http), null);
+        $walked = self::walkedIds($this->harnessClient(ApiVersion::V2, 'OCTONOMY_TEST_TOKEN', $http), null);
 
         self::assertCount(1, $http->sent(), 'the whole list fits on one page of 200');
         $query = [];
         parse_str($http->sent()[0]->getUri()->getQuery(), $query);
         self::assertSame(['limit' => '200', 'offset' => '0'], $query);
-        self::assertSame(self::walkedIds($this->harnessClient(ApiVersion::V2), new TagListParams(limit: 1)), $walked);
+        self::assertSame(self::walkedIds($this->harnessClient(ApiVersion::V2), new TagListParams(null, null, null, null, null, null, null, null, 1)), $walked);
     }
 
     /**
@@ -85,7 +84,7 @@ final class WalkTest extends IntegrationTestCase
      */
     public function testTheServerClampsALimitAboveItsMaximumRatherThanRefuseIt(): void
     {
-        $page = $this->harnessClient(ApiVersion::V2)->tags()->list(new TagListParams(limit: 500));
+        $page = $this->harnessClient(ApiVersion::V2)->tags()->list(new TagListParams(null, null, null, null, null, null, null, null, 500));
 
         self::assertSame(200, $page->pagination->limit);
     }

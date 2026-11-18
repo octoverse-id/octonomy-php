@@ -25,22 +25,72 @@ use Octoverse\Octonomy\Internal\Json;
 final class Vocabulary
 {
     /**
+     * @readonly
+     */
+    public string $id;
+    /**
+     * @readonly
+     */
+    public string $tenantId;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceType;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceId;
+    /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @readonly
+     */
+    public string $slug;
+    /**
+     * @readonly
+     */
+    public ?string $description;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata;
+    /**
+     * @readonly
+     */
+    public bool $isActive;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $createdAt;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $updatedAt;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly string $id,
-        public readonly string $tenantId,
-        public readonly ?string $applicationId,
-        public readonly ?string $namespaceType,
-        public readonly ?string $namespaceId,
-        public readonly string $name,
-        public readonly string $slug,
-        public readonly ?string $description,
-        public readonly ?array $metadata,
-        public readonly bool $isActive,
-        public readonly \DateTimeImmutable $createdAt,
-        public readonly \DateTimeImmutable $updatedAt,
-    ) {}
+    public function __construct(string $id, string $tenantId, ?string $applicationId, ?string $namespaceType, ?string $namespaceId, string $name, string $slug, ?string $description, ?array $metadata, bool $isActive, \DateTimeImmutable $createdAt, \DateTimeImmutable $updatedAt)
+    {
+        $this->id = $id;
+        $this->tenantId = $tenantId;
+        $this->applicationId = $applicationId;
+        $this->namespaceType = $namespaceType;
+        $this->namespaceId = $namespaceId;
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->description = $description;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+        $this->createdAt = $createdAt;
+        $this->updatedAt = $updatedAt;
+    }
 
     /**
      * Hydrate a vocabulary from one resource object of a response read as
@@ -57,19 +107,19 @@ final class Vocabulary
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            id: Json::string($data, 'id'),
-            tenantId: Json::string($data, 'tenant_id'),
-            applicationId: Json::nullableString($data, 'application_id'),
-            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
-            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
-            name: Json::string($data, 'name'),
-            slug: Json::string($data, 'slug'),
-            description: Json::nullableString($data, 'description'),
-            metadata: Json::nullableObject($data, 'metadata'),
-            isActive: Json::bool($data, 'is_active'),
-            createdAt: Json::dateTime($data, 'created_at'),
-            updatedAt: Json::dateTime($data, 'updated_at'),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'id'),
+            Json::string($data, 'tenant_id'),
+            Json::nullableString($data, 'application_id'),
+            Json::namespaceField($data, 'namespace_type', $apiVersion),
+            Json::namespaceField($data, 'namespace_id', $apiVersion),
+            Json::string($data, 'name'),
+            Json::string($data, 'slug'),
+            Json::nullableString($data, 'description'),
+            Json::nullableObject($data, 'metadata'),
+            Json::bool($data, 'is_active'),
+            Json::dateTime($data, 'created_at'),
+            Json::dateTime($data, 'updated_at'),
         ));
     }
 }

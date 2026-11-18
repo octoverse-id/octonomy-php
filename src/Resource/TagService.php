@@ -34,7 +34,14 @@ use Octoverse\Octonomy\ResultList;
  */
 final class TagService
 {
-    public function __construct(private readonly Transport $transport) {}
+    /**
+     * @readonly
+     */
+    private Transport $transport;
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * Create a tag (POST /tags). A duplicate (type, slug) for the tenant raises a
@@ -42,7 +49,7 @@ final class TagService
      */
     public function create(TagCreate $input, ?RequestOptions $options = null): Tag
     {
-        return $this->transport->one('POST', 'tags', Tag::fromArray(...), [], $input->toArray(), $options);
+        return $this->transport->one('POST', 'tags', \Closure::fromCallable([Tag::class, 'fromArray']), [], $input->toArray(), $options);
     }
 
     /**
@@ -54,12 +61,12 @@ final class TagService
         string $id,
         ?string $applicationId = null,
         ?bool $includeGlobal = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): Tag {
         return $this->transport->one(
             'GET',
             Path::of('tags', $id),
-            Tag::fromArray(...),
+            \Closure::fromCallable([Tag::class, 'fromArray']),
             ScopeQuery::of($applicationId, $includeGlobal),
             null,
             $options,
@@ -76,8 +83,8 @@ final class TagService
         return $this->transport->many(
             'GET',
             'tags',
-            Tag::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([Tag::class, 'fromArray']),
+            (($nullsafeVariable1 = $params) ? $nullsafeVariable1->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -122,9 +129,9 @@ final class TagService
         return Walker::walk(
             $this->transport,
             'tags',
-            Tag::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([Tag::class, 'fromArray']),
+            (($nullsafeVariable2 = $params) ? $nullsafeVariable2->toQuery() : null) ?? [],
+            ($nullsafeVariable3 = $params) ? $nullsafeVariable3->offset : null,
             $options,
         );
     }
@@ -139,12 +146,12 @@ final class TagService
         string $id,
         TagUpdate $input,
         ?string $applicationId = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): Tag {
         return $this->transport->one(
             'PATCH',
             Path::of('tags', $id),
-            Tag::fromArray(...),
+            \Closure::fromCallable([Tag::class, 'fromArray']),
             ScopeQuery::of($applicationId),
             $input->toArray(),
             $options,
@@ -182,7 +189,7 @@ final class TagService
         ?string $type = null,
         ?string $scope = null,
         ?bool $includeGlobal = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): TagResolution {
         $query = ['slug' => $slug];
         if ($type !== null) {
@@ -195,7 +202,7 @@ final class TagService
         return $this->transport->one(
             'GET',
             'tag-resolution',
-            TagResolution::fromArray(...),
+            \Closure::fromCallable([TagResolution::class, 'fromArray']),
             $query + ScopeQuery::of($applicationId, $includeGlobal),
             null,
             $options,
@@ -212,13 +219,13 @@ final class TagService
     public function listAliases(
         string $id,
         ?TagAliasListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         return $this->transport->many(
             'GET',
             Path::of('tags', $id, 'aliases'),
-            TagAlias::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
+            (($nullsafeVariable4 = $params) ? $nullsafeVariable4->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -244,14 +251,14 @@ final class TagService
     public function walkAliases(
         string $id,
         ?TagAliasListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): \Generator {
         return Walker::walk(
             $this->transport,
             Path::of('tags', $id, 'aliases'),
-            TagAlias::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
+            (($nullsafeVariable5 = $params) ? $nullsafeVariable5->toQuery() : null) ?? [],
+            ($nullsafeVariable6 = $params) ? $nullsafeVariable6->offset : null,
             $options,
         );
     }
@@ -266,13 +273,13 @@ final class TagService
     public function listResources(
         string $id,
         ?TagResourceListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         return $this->transport->many(
             'GET',
             Path::of('tags', $id, 'resources'),
-            TagResource::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([TagResource::class, 'fromArray']),
+            (($nullsafeVariable7 = $params) ? $nullsafeVariable7->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -299,14 +306,14 @@ final class TagService
     public function walkResources(
         string $id,
         ?TagResourceListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): \Generator {
         return Walker::walk(
             $this->transport,
             Path::of('tags', $id, 'resources'),
-            TagResource::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([TagResource::class, 'fromArray']),
+            (($nullsafeVariable8 = $params) ? $nullsafeVariable8->toQuery() : null) ?? [],
+            ($nullsafeVariable9 = $params) ? $nullsafeVariable9->offset : null,
             $options,
         );
     }
@@ -321,13 +328,13 @@ final class TagService
     public function listAuditLogs(
         string $id,
         ?AuditLogListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         return $this->transport->many(
             'GET',
             Path::of('tags', $id, 'audit-logs'),
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable10 = $params) ? $nullsafeVariable10->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -354,14 +361,14 @@ final class TagService
     public function walkAuditLogs(
         string $id,
         ?AuditLogListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): \Generator {
         return Walker::walk(
             $this->transport,
             Path::of('tags', $id, 'audit-logs'),
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable11 = $params) ? $nullsafeVariable11->toQuery() : null) ?? [],
+            ($nullsafeVariable12 = $params) ? $nullsafeVariable12->offset : null,
             $options,
         );
     }

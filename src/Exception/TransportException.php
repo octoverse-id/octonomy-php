@@ -21,13 +21,19 @@ use Octoverse\Octonomy\RequestContext;
 final class TransportException extends OctonomyException
 {
     /**
+     * @var RequestContext
+     * @readonly
+     */
+    public RequestContext $context;
+    /**
      * @param RequestContext $context the request that failed
      */
     public function __construct(
         string $message,
-        public readonly RequestContext $context,
-        ?\Throwable $previous = null,
+        RequestContext $context,
+        ?\Throwable $previous = null
     ) {
+        $this->context = $context;
         parent::__construct($message, 0, $previous);
     }
 }

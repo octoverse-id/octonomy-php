@@ -36,11 +36,11 @@ final class TagAliasServiceTest extends SdkTestCase
         $row = self::capturedData('v2/tag-aliases/create');
 
         $alias = $client->aliases()->create(new TagAliasCreate(
-            tagId: $row['tag_id'],
-            name: 'Staff Pick',
-            slug: 'staff-pick',
-            applicationId: 'harness-app',
-            metadata: ['source' => 'editorial'],
+            $row['tag_id'],
+            'Staff Pick',
+            'staff-pick',
+            'harness-app',
+            ['source' => 'editorial'],
         ), self::merchantA());
 
         $request = $this->lastRequest();
@@ -76,7 +76,7 @@ final class TagAliasServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tag-aliases/create')]);
 
-        $client->aliases()->create(new TagAliasCreate(tagId: 'tag_1', name: 'Staff Pick', slug: 'staff-pick'));
+        $client->aliases()->create(new TagAliasCreate('tag_1', 'Staff Pick', 'staff-pick'));
         self::assertSame('{"tag_id":"tag_1","name":"Staff Pick","slug":"staff-pick"}', $this->lastRawBody());
     }
 
@@ -84,13 +84,7 @@ final class TagAliasServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tag-aliases/create')]);
 
-        $client->aliases()->create(new TagAliasCreate(
-            tagId: 'tag_1',
-            name: 'Staff Pick',
-            slug: 'staff-pick',
-            metadata: [],
-            isActive: false,
-        ));
+        $client->aliases()->create(new TagAliasCreate('tag_1', 'Staff Pick', 'staff-pick', null, [], false));
 
         self::assertSame(
             '{"tag_id":"tag_1","name":"Staff Pick","slug":"staff-pick","metadata":{},"is_active":false}',
@@ -103,7 +97,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/conflict')]);
 
         $this->expectException(ConflictException::class);
-        $client->aliases()->create(new TagAliasCreate(tagId: 'tag_1', name: 'Promo', slug: 'promo', applicationId: 'harness-app'), self::merchantA());
+        $client->aliases()->create(new TagAliasCreate('tag_1', 'Promo', 'promo', 'harness-app'), self::merchantA());
     }
 
     public function testCreateValidationErrorThrows(): void
@@ -111,7 +105,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/validation-error')]);
 
         try {
-            $client->aliases()->create(new TagAliasCreate(tagId: 'tag_1', name: '', slug: 'Not A Slug'), self::merchantA());
+            $client->aliases()->create(new TagAliasCreate('tag_1', '', 'Not A Slug'), self::merchantA());
             self::fail('expected a ValidationException');
         } catch (ValidationException $e) {
             self::assertSame(400, $e->statusCode);
@@ -163,7 +157,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         try {
-            $client->aliases()->get('alias_1', 'harness-app', options: self::merchantA());
+            $client->aliases()->get('alias_1', 'harness-app', null, self::merchantA());
             self::fail('expected a NotFoundException');
         } catch (NotFoundException $e) {
             self::assertStringStartsWith('octonomy: tag alias "alias_1" was not found (not_found, HTTP 404).', $e->getMessage());
@@ -176,15 +170,15 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tag-aliases/list')]);
 
         $page = $client->aliases()->list(new TagAliasListParams(
-            applicationId: 'harness-app',
-            includeShared: false,
-            isActive: true,
-            query: 'pro',
-            slug: 'promo',
-            tagId: 'tag_1',
-            limit: 25,
-            offset: 50,
-            includeGlobal: false,
+            'harness-app',
+            false,
+            true,
+            'pro',
+            'promo',
+            'tag_1',
+            25,
+            50,
+            false,
         ), self::merchantA());
 
         self::assertSame('/api/v2/tag-aliases', $this->lastRequest()->getUri()->getPath());
@@ -201,7 +195,7 @@ final class TagAliasServiceTest extends SdkTestCase
         ], $this->lastQuery());
 
         $rows = self::capturedData('v2/tag-aliases/list');
-        self::assertSame(array_column($rows, 'slug'), array_map(static fn(TagAlias $a): string => $a->slug, $page->data));
+        self::assertSame(array_column($rows, 'slug'), array_map(static fn (TagAlias $a): string => $a->slug, $page->data));
         self::assertSame(count($rows), $page->pagination->count);
     }
 
@@ -220,7 +214,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $rows = self::capturedData('v2/tag-aliases/list');
 
         $walked = iterator_to_array($client->aliases()->walk(
-            new TagAliasListParams(applicationId: 'harness-app', isActive: true),
+            new TagAliasListParams('harness-app', null, true),
             self::merchantA(),
         ));
 
@@ -231,7 +225,7 @@ final class TagAliasServiceTest extends SdkTestCase
             $this->sentQueries(),
         );
         self::assertSame(array_keys($rows), array_keys($walked));
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(TagAlias $a): string => $a->id, $walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (TagAlias $a): string => $a->id, $walked));
     }
 
     public function testUpdate(): void
@@ -239,7 +233,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tag-aliases/update')]);
         $row = self::capturedData('v2/tag-aliases/update');
 
-        $alias = $client->aliases()->update($row['id'], new TagAliasUpdate(name: 'Staff Picks'), 'harness-app', self::merchantA());
+        $alias = $client->aliases()->update($row['id'], new TagAliasUpdate(' octonomy:undefined', 'Staff Picks'), 'harness-app', self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('PATCH', $request->getMethod());
@@ -254,14 +248,12 @@ final class TagAliasServiceTest extends SdkTestCase
     /**
      * Each string field has three states (#20), as on TagUpdate. $body is the
      * JSON sent, exactly.
+     * @dataProvider aliasUpdateBodies
      */
-    #[DataProvider('aliasUpdateBodies')]
     public function testUpdateSendsEachFieldInItsState(TagAliasUpdate $input, string $body): void
     {
         $client = $this->clientWith([self::captured('v2/tag-aliases/update')]);
-
         $client->aliases()->update('alias_1', $input, 'harness-app', self::merchantA());
-
         self::assertSame($body, $this->lastRawBody());
     }
 
@@ -272,42 +264,36 @@ final class TagAliasServiceTest extends SdkTestCase
     {
         yield 'nothing set sends an empty object (#46)' => [new TagAliasUpdate(), '{}'];
         yield 'a string field passed Undefined::VALUE is omitted' => [
-            new TagAliasUpdate(
-                tagId: Undefined::VALUE,
-                name: Undefined::VALUE,
-                slug: Undefined::VALUE,
-                applicationId: Undefined::VALUE,
-                isActive: false,
-            ),
+            new TagAliasUpdate(Undefined::VALUE, Undefined::VALUE, Undefined::VALUE, Undefined::VALUE, null, false),
             '{"is_active":false}',
         ];
         // The server refuses these nulls; the SDK sends them regardless.
         yield 'every string field passed null is sent as null' => [
-            new TagAliasUpdate(tagId: null, name: null, slug: null, applicationId: null),
+            new TagAliasUpdate(null, null, null, null),
             '{"tag_id":null,"name":null,"slug":null,"application_id":null}',
         ];
         yield 're-pointing the alias at another tag sends the tag alone' => [
-            new TagAliasUpdate(tagId: 'tag_2'),
+            new TagAliasUpdate('tag_2'),
             '{"tag_id":"tag_2"}',
         ];
         yield 'every field passed a value is sent as that value' => [
             new TagAliasUpdate(
-                tagId: 'tag_2',
-                name: 'Staff Picks',
-                slug: 'staff-picks',
-                applicationId: 'harness-app',
-                metadata: ['source' => 'editorial'],
-                isActive: true,
+                'tag_2',
+                'Staff Picks',
+                'staff-picks',
+                'harness-app',
+                ['source' => 'editorial'],
+                true,
             ),
             '{"tag_id":"tag_2","name":"Staff Picks","slug":"staff-picks","application_id":"harness-app",'
             . '"metadata":{"source":"editorial"},"is_active":true}',
         ];
         yield 'an empty metadata is sent as an object, which empties it' => [
-            new TagAliasUpdate(metadata: []),
+            new TagAliasUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', []),
             '{"metadata":{}}',
         ];
         yield 'metadata and isActive passed null are omitted' => [
-            new TagAliasUpdate(name: 'Staff Picks', metadata: null, isActive: null),
+            new TagAliasUpdate(' octonomy:undefined', 'Staff Picks', ' octonomy:undefined', ' octonomy:undefined', null, null),
             '{"name":"Staff Picks"}',
         ];
     }
@@ -320,10 +306,10 @@ final class TagAliasServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tag-aliases/list'), self::captured('v2/tag-aliases/update')]);
 
-        $alias = $client->aliases()->list(new TagAliasListParams(applicationId: 'harness-app'), self::merchantA())->data[0];
+        $alias = $client->aliases()->list(new TagAliasListParams('harness-app'), self::merchantA())->data[0];
         self::assertSame([], $alias->metadata);
 
-        $client->aliases()->update($alias->id, new TagAliasUpdate(metadata: $alias->metadata), 'harness-app', self::merchantA());
+        $client->aliases()->update($alias->id, new TagAliasUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', $alias->metadata), 'harness-app', self::merchantA());
 
         self::assertSame('{"metadata":{}}', $this->lastRawBody());
     }
@@ -349,13 +335,13 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tags/aliases')]);
         $rows = self::capturedData('v2/tags/aliases');
 
-        $page = $client->tags()->listAliases('tag_1', new TagAliasListParams(applicationId: 'harness-app', isActive: true), self::merchantA());
+        $page = $client->tags()->listAliases('tag_1', new TagAliasListParams('harness-app', null, true), self::merchantA());
 
         self::assertSame('GET', $this->lastRequest()->getMethod());
         self::assertSame('/api/v2/tags/tag_1/aliases', $this->lastRequest()->getUri()->getPath());
         self::assertSame(['application_id' => 'harness-app', 'is_active' => 'true'], $this->lastQuery());
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(TagAlias $a): string => $a->id, $page->data));
-        self::assertSame(array_column($rows, 'tag_id'), array_map(static fn(TagAlias $a): string => $a->tagId, $page->data));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (TagAlias $a): string => $a->id, $page->data));
+        self::assertSame(array_column($rows, 'tag_id'), array_map(static fn (TagAlias $a): string => $a->tagId, $page->data));
     }
 
     public function testTagsListAliasesWithoutParams(): void
@@ -374,7 +360,7 @@ final class TagAliasServiceTest extends SdkTestCase
 
         $walked = iterator_to_array($client->tags()->walkAliases(
             'tag_1',
-            new TagAliasListParams(applicationId: 'harness-app', limit: 25),
+            new TagAliasListParams('harness-app', null, null, null, null, null, 25),
             self::merchantA(),
         ));
 
@@ -382,7 +368,7 @@ final class TagAliasServiceTest extends SdkTestCase
         self::assertSame('/api/v2/tags/tag_1/aliases', $this->lastRequest()->getUri()->getPath());
         self::assertSame([['application_id' => 'harness-app', 'limit' => '25', 'offset' => '0']], $this->sentQueries());
         self::assertSame(array_keys($rows), array_keys($walked));
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(TagAlias $a): string => $a->id, $walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (TagAlias $a): string => $a->id, $walked));
     }
 
     /**
@@ -393,7 +379,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
-        $client->tags()->listAliases('missing', new TagAliasListParams(applicationId: 'harness-app'), self::merchantA());
+        $client->tags()->listAliases('missing', new TagAliasListParams('harness-app'), self::merchantA());
     }
 
     /**
@@ -418,7 +404,7 @@ final class TagAliasServiceTest extends SdkTestCase
         $client = $this->clientWith([], ['api_version' => ApiVersion::V1]);
 
         try {
-            $client->aliases()->list(new TagAliasListParams(includeGlobal: true));
+            $client->aliases()->list(new TagAliasListParams(null, null, null, null, null, null, null, null, true));
             self::fail('expected a LogicException');
         } catch (\LogicException $e) {
             self::assertStringStartsWith('octonomy: include_global requires api_version v2', $e->getMessage());
@@ -431,6 +417,6 @@ final class TagAliasServiceTest extends SdkTestCase
      */
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

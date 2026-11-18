@@ -88,14 +88,12 @@ final class AssignmentServiceTest extends SdkTestCase
      * Each named constructor sends its own identifier, and only that one.
      *
      * @param array<string, string> $body
+     * @dataProvider createBodies
      */
-    #[DataProvider('createBodies')]
     public function testEachWayToNameTheTagSendsItAlone(AssignmentCreate $input, array $body): void
     {
         $client = $this->clientWith([self::captured('v2/tag-assignments/create')]);
-
         $client->assignments()->create($input);
-
         self::assertSame($body, $this->lastJsonBody());
     }
 
@@ -212,12 +210,12 @@ final class AssignmentServiceTest extends SdkTestCase
         $data = self::capturedData('v2/tag-assignments/bulk-assign');
 
         $result = $client->assignments()->bulkAssign(new BulkAssign(
-            applicationId: 'harness-app',
-            resourceType: 'product',
-            resourceId: 'sku-003',
-            tagIds: ['tag_1', 'tag_2'],
-            aliasSlugs: ['promo'],
-            assignedBy: 'octonomy-php-capture',
+            'harness-app',
+            'product',
+            'sku-003',
+            ['tag_1', 'tag_2'],
+            ['promo'],
+            'octonomy-php-capture',
         ), self::merchantA());
 
         $request = $this->lastRequest();
@@ -242,7 +240,7 @@ final class AssignmentServiceTest extends SdkTestCase
         self::assertContainsOnlyInstancesOf(Assignment::class, $result->assignments);
         self::assertSame(
             array_column($data['assignments'], 'tag_id'),
-            array_map(static fn(Assignment $a): string => $a->tagId, $result->assignments),
+            array_map(static fn (Assignment $a): string => $a->tagId, $result->assignments),
         );
     }
 
@@ -258,8 +256,8 @@ final class AssignmentServiceTest extends SdkTestCase
             'harness-app',
             'product',
             'sku-003',
-            tagIds: array_filter(['', 'tag_1', '', 'tag_2']),
-            aliasSlugs: [3 => 'promo'],
+            array_filter(['', 'tag_1', '', 'tag_2']),
+            [3 => 'promo'],
         ));
         self::assertSame(
             '{"application_id":"harness-app","resource_type":"product","resource_id":"sku-003",'
@@ -281,7 +279,7 @@ final class AssignmentServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tag-assignments/bulk-assign')]);
 
-        $client->assignments()->bulkAssign(new BulkAssign('harness-app', 'product', 'sku-003', aliasSlugs: []));
+        $client->assignments()->bulkAssign(new BulkAssign('harness-app', 'product', 'sku-003', null, []));
 
         self::assertSame(
             '{"application_id":"harness-app","resource_type":"product","resource_id":"sku-003","alias_slugs":[]}',
@@ -336,15 +334,13 @@ final class AssignmentServiceTest extends SdkTestCase
 
     /**
      * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
+     * @dataProvider malformedBulkResults
      */
-    #[DataProvider('malformedBulkResults')]
     public function testAMalformedBulkAssignmentListIsRefused(\Closure $break, string $expected): void
     {
         $client = $this->clientWith([self::syntheticNegativeFrom('v2/tag-assignments/bulk-assign', SyntheticNegative::WRONG_TYPE, $break)]);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage($expected);
-
         $client->assignments()->bulkAssign(new BulkAssign('harness-app', 'product', 'sku-003', ['tag_1']), self::merchantA());
     }
 
@@ -402,6 +398,6 @@ final class AssignmentServiceTest extends SdkTestCase
      */
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

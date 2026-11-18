@@ -32,7 +32,7 @@ final class TagResolutionTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tag-resolution/tag')]);
         $data = self::capturedData('v2/tag-resolution/tag');
 
-        $resolution = $client->tags()->resolve('sale', 'harness-app', 'label', options: self::merchantA());
+        $resolution = $client->tags()->resolve('sale', 'harness-app', 'label', null, null, self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('GET', $request->getMethod());
@@ -54,7 +54,7 @@ final class TagResolutionTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tag-resolution/alias')]);
         $data = self::capturedData('v2/tag-resolution/alias');
 
-        $resolution = $client->tags()->resolve('promo', 'harness-app', options: self::merchantA());
+        $resolution = $client->tags()->resolve('promo', 'harness-app', null, null, null, self::merchantA());
 
         self::assertSame(['slug' => 'promo', 'application_id' => 'harness-app'], $this->lastQuery());
         self::assertSame(TagResolution::MATCHED_ALIAS, $resolution->matchedType);
@@ -102,7 +102,7 @@ final class TagResolutionTest extends SdkTestCase
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('octonomy: include_global requires api_version v2');
 
-        $client->tags()->resolve('red', includeGlobal: true);
+        $client->tags()->resolve('red', null, null, null, true);
     }
 
     /**
@@ -113,7 +113,7 @@ final class TagResolutionTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/validation-error')]);
 
         try {
-            $client->tags()->resolve('no-such-slug', 'harness-app', options: self::merchantA());
+            $client->tags()->resolve('no-such-slug', 'harness-app', null, null, null, self::merchantA());
             self::fail('expected a ValidationException');
         } catch (ValidationException $e) {
             self::assertSame(400, $e->statusCode);
@@ -127,7 +127,7 @@ final class TagResolutionTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
-        $client->tags()->resolve('sale', 'harness-app', options: self::merchantA());
+        $client->tags()->resolve('sale', 'harness-app', null, null, null, self::merchantA());
     }
 
     public function testAConflictMapsToConflictException(): void
@@ -135,7 +135,7 @@ final class TagResolutionTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/conflict')]);
 
         $this->expectException(ConflictException::class);
-        $client->tags()->resolve('sale', 'harness-app', options: self::merchantA());
+        $client->tags()->resolve('sale', 'harness-app', null, null, null, self::merchantA());
     }
 
     /**
@@ -143,18 +143,16 @@ final class TagResolutionTest extends SdkTestCase
      * either lacks is reported at its path through the resolution.
      *
      * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
+     * @dataProvider nestedFaults
      */
-    #[DataProvider('nestedFaults')]
     public function testANestedFaultIsReportedAtItsPath(string $fixture, string $kind, \Closure $break, string $expected): void
     {
         $client = $this->clientWith([self::syntheticNegativeFrom($fixture, $kind, $break)]);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
             'octonomy: malformed response from GET /api/v2/tag-resolution (api_version v2): ' . $expected,
         );
-
-        $client->tags()->resolve('promo', 'harness-app', options: self::merchantA());
+        $client->tags()->resolve('promo', 'harness-app', null, null, null, self::merchantA());
     }
 
     /**
@@ -194,6 +192,6 @@ final class TagResolutionTest extends SdkTestCase
      */
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

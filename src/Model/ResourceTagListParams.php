@@ -20,16 +20,37 @@ namespace Octoverse\Octonomy\Model;
 final class ResourceTagListParams
 {
     /**
+     * @readonly
+     */
+    public ?bool $includeInactive = null;
+    /**
+     * @readonly
+     */
+    public ?string $type = null;
+    /**
+     * @readonly
+     */
+    public ?int $limit = null;
+    /**
+     * @readonly
+     */
+    public ?int $offset = null;
+    /**
+     * @readonly
+     */
+    public ?bool $includeGlobal = null;
+    /**
      * Every argument is optional and sets the filter of the same name; null
      * leaves it out of the query string.
      */
-    public function __construct(
-        public readonly ?bool $includeInactive = null,
-        public readonly ?string $type = null,
-        public readonly ?int $limit = null,
-        public readonly ?int $offset = null,
-        public readonly ?bool $includeGlobal = null,
-    ) {}
+    public function __construct(?bool $includeInactive = null, ?string $type = null, ?int $limit = null, ?int $offset = null, ?bool $includeGlobal = null)
+    {
+        $this->includeInactive = $includeInactive;
+        $this->type = $type;
+        $this->limit = $limit;
+        $this->offset = $offset;
+        $this->includeGlobal = $includeGlobal;
+    }
 
     /**
      * @return array<string, string>

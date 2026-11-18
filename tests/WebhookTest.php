@@ -76,8 +76,8 @@ final class WebhookTest extends TestCase
      * @param string $secret the vector's secret
      * @param string $header the vector's header value
      * @param string $body   the vector's body bytes
+     * @dataProvider acceptVectors
      */
-    #[DataProvider('acceptVectors')]
     public function testAnAcceptVectorVerifies(string $secret, string $header, string $body): void
     {
         self::assertTrue(Webhook::verify($secret, $header, $body));
@@ -101,8 +101,8 @@ final class WebhookTest extends TestCase
      * @param string $secret the vector's secret
      * @param string $header the vector's header value
      * @param string $body   the vector's body bytes
+     * @dataProvider senderRejectVectors
      */
-    #[DataProvider('senderRejectVectors')]
     public function testARejectVectorIsRefused(string $secret, string $header, string $body): void
     {
         self::assertFalse(Webhook::verify($secret, $header, $body));
@@ -114,7 +114,7 @@ final class WebhookTest extends TestCase
      */
     public function testAnEmptySecretThrowsRatherThanVerifying(): void
     {
-        $vectors = array_filter(self::cases('reject'), static fn(array $case): bool => $case[3] === 'empty_secret');
+        $vectors = array_filter(self::cases('reject'), static fn (array $case): bool => $case[3] === 'empty_secret');
         self::assertNotEmpty($vectors);
         [$secret, $header, $body] = array_values($vectors)[0];
 
@@ -144,7 +144,7 @@ final class WebhookTest extends TestCase
     {
         [$secret, $header, $body] = self::acceptVectors()['minimal-ascii-body'];
 
-        self::assertTrue(Webhook::verify($secret, 'sha256=' . strtoupper(substr($header, 7)), $body));
+        self::assertTrue(Webhook::verify($secret, 'sha256=' . strtoupper((string) substr($header, 7)), $body));
     }
 
     /**
@@ -184,9 +184,12 @@ final class WebhookTest extends TestCase
      * is not the SDK's, whose trace does hold the secret: it shows arguments are
      * being recorded at all, so the assertions on verify()'s do not pass on
      * nothing.
+     * @dataProvider callerMistakes
+     * @param mixed $secret
+     * @param mixed $header
+     * @param mixed $body
      */
-    #[DataProvider('callerMistakes')]
-    public function testACallerMistakeThrowsWithNoArgumentInItsTrace(mixed $secret, mixed $header, mixed $body, string $message): void
+    public function testACallerMistakeThrowsWithNoArgumentInItsTrace($secret, $header, $body, string $message): void
     {
         // php.ini-production turns this on, and then no frame records any
         // argument and the assertions below would pass on nothing.
@@ -197,7 +200,7 @@ final class WebhookTest extends TestCase
             });
             self::assertTrue(self::holdsSecret($control), 'arguments are not being recorded, so this test checks nothing');
 
-            $e = self::thrownBy(static fn(string $handled): bool => Webhook::verify($secret, $header, $body));
+            $e = self::thrownBy(static fn (string $handled): bool => Webhook::verify($secret, $header, $body));
             self::assertInstanceOf(\InvalidArgumentException::class, $e, 'verify() accepted ' . $message);
             self::assertStringContainsString($message, $e->getMessage());
             self::assertStringNotContainsString(self::SECRET, $e->getMessage());

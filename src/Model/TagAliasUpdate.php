@@ -37,16 +37,42 @@ use Octoverse\Octonomy\Undefined;
 final class TagAliasUpdate
 {
     /**
+     * @readonly
+     */
+    public ?string $tagId = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $name = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $slug = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = Undefined::VALUE;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly ?string $tagId = Undefined::VALUE,
-        public readonly ?string $name = Undefined::VALUE,
-        public readonly ?string $slug = Undefined::VALUE,
-        public readonly ?string $applicationId = Undefined::VALUE,
-        public readonly ?array $metadata = null,
-        public readonly ?bool $isActive = null,
-    ) {}
+    public function __construct(?string $tagId = Undefined::VALUE, ?string $name = Undefined::VALUE, ?string $slug = Undefined::VALUE, ?string $applicationId = Undefined::VALUE, ?array $metadata = null, ?bool $isActive = null)
+    {
+        $this->tagId = $tagId;
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->applicationId = $applicationId;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+    }
 
     /**
      * The JSON body: every string field that is not Undefined::VALUE, null

@@ -25,28 +25,99 @@ use Octoverse\Octonomy\Internal\Json;
 final class AuditLog
 {
     /**
+     * @readonly
+     */
+    public string $id;
+    /**
+     * @readonly
+     */
+    public string $tenantId;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceType;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceId;
+    /**
+     * @readonly
+     */
+    public string $action;
+    /**
+     * @readonly
+     */
+    public string $entityType;
+    /**
+     * @readonly
+     */
+    public string $entityId;
+    /**
+     * @readonly
+     */
+    public ?string $tagId;
+    /**
+     * @readonly
+     */
+    public ?string $resourceType;
+    /**
+     * @readonly
+     */
+    public ?string $resourceId;
+    /**
+     * @readonly
+     */
+    public ?string $actorId;
+    /**
+     * @readonly
+     */
+    public ?string $requestId;
+    /**
+     * @readonly
+     */
+    public string $operationId;
+    /**
+     * @var array<array-key, mixed>
+     * @readonly
+     */
+    public array $changes;
+    /**
+     * @var array<array-key, mixed>
+     * @readonly
+     */
+    public array $metadata;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $createdAt;
+    /**
      * @param array<array-key, mixed> $changes  never null: the server stores {} for none
      * @param array<array-key, mixed> $metadata never null: the server stores {} for none
      */
-    public function __construct(
-        public readonly string $id,
-        public readonly string $tenantId,
-        public readonly ?string $applicationId,
-        public readonly ?string $namespaceType,
-        public readonly ?string $namespaceId,
-        public readonly string $action,
-        public readonly string $entityType,
-        public readonly string $entityId,
-        public readonly ?string $tagId,
-        public readonly ?string $resourceType,
-        public readonly ?string $resourceId,
-        public readonly ?string $actorId,
-        public readonly ?string $requestId,
-        public readonly string $operationId,
-        public readonly array $changes,
-        public readonly array $metadata,
-        public readonly \DateTimeImmutable $createdAt,
-    ) {}
+    public function __construct(string $id, string $tenantId, ?string $applicationId, ?string $namespaceType, ?string $namespaceId, string $action, string $entityType, string $entityId, ?string $tagId, ?string $resourceType, ?string $resourceId, ?string $actorId, ?string $requestId, string $operationId, array $changes, array $metadata, \DateTimeImmutable $createdAt)
+    {
+        $this->id = $id;
+        $this->tenantId = $tenantId;
+        $this->applicationId = $applicationId;
+        $this->namespaceType = $namespaceType;
+        $this->namespaceId = $namespaceId;
+        $this->action = $action;
+        $this->entityType = $entityType;
+        $this->entityId = $entityId;
+        $this->tagId = $tagId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->actorId = $actorId;
+        $this->requestId = $requestId;
+        $this->operationId = $operationId;
+        $this->changes = $changes;
+        $this->metadata = $metadata;
+        $this->createdAt = $createdAt;
+    }
 
     /**
      * Hydrate an entry from one row of a response read as $apiVersion. Every
@@ -63,24 +134,24 @@ final class AuditLog
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            id: Json::string($data, 'id'),
-            tenantId: Json::string($data, 'tenant_id'),
-            applicationId: Json::nullableString($data, 'application_id'),
-            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
-            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
-            action: Json::string($data, 'action'),
-            entityType: Json::string($data, 'entity_type'),
-            entityId: Json::string($data, 'entity_id'),
-            tagId: Json::nullableString($data, 'tag_id'),
-            resourceType: Json::nullableString($data, 'resource_type'),
-            resourceId: Json::nullableString($data, 'resource_id'),
-            actorId: Json::nullableString($data, 'actor_id'),
-            requestId: Json::nullableString($data, 'request_id'),
-            operationId: Json::string($data, 'operation_id'),
-            changes: Json::object($data, 'changes'),
-            metadata: Json::object($data, 'metadata'),
-            createdAt: Json::dateTime($data, 'created_at'),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'id'),
+            Json::string($data, 'tenant_id'),
+            Json::nullableString($data, 'application_id'),
+            Json::namespaceField($data, 'namespace_type', $apiVersion),
+            Json::namespaceField($data, 'namespace_id', $apiVersion),
+            Json::string($data, 'action'),
+            Json::string($data, 'entity_type'),
+            Json::string($data, 'entity_id'),
+            Json::nullableString($data, 'tag_id'),
+            Json::nullableString($data, 'resource_type'),
+            Json::nullableString($data, 'resource_id'),
+            Json::nullableString($data, 'actor_id'),
+            Json::nullableString($data, 'request_id'),
+            Json::string($data, 'operation_id'),
+            Json::object($data, 'changes'),
+            Json::object($data, 'metadata'),
+            Json::dateTime($data, 'created_at'),
         ));
     }
 }

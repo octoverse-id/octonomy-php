@@ -59,6 +59,29 @@ use Psr\Http\Message\RequestInterface;
  */
 final class Redaction
 {
+    /**
+     * @readonly
+     */
+    private ?string $token;
+    /**
+     * @readonly
+     */
+    private ?string $actorId;
+    /**
+     * @var list<string>
+     * @readonly
+     */
+    private array $bodies;
+    /**
+     * @var list<string>
+     * @readonly
+     */
+    private array $also = [];
+    /**
+     * @var bool
+     * @readonly
+     */
+    private bool $complete = true;
     public const TOKEN = 'token';
     public const AUTHORIZATION = 'Authorization header';
     public const BODY = 'request body';
@@ -93,13 +116,14 @@ final class Redaction
      * @param bool         $complete false when the request was sent with a body this redaction could not
      *                               read, so it cannot vouch for text that may quote it
      */
-    private function __construct(
-        private readonly ?string $token,
-        private readonly ?string $actorId,
-        private readonly array $bodies,
-        private readonly array $also = [],
-        private readonly bool $complete = true,
-    ) {}
+    private function __construct(?string $token, ?string $actorId, array $bodies, array $also = [], bool $complete = true)
+    {
+        $this->token = $token;
+        $this->actorId = $actorId;
+        $this->bodies = $bodies;
+        $this->also = $also;
+        $this->complete = $complete;
+    }
 
     /**
      * A snapshot of the values on the list that one request carries: its
@@ -192,7 +216,7 @@ final class Redaction
     private function values(): array
     {
         if ($this->values === null) {
-            $values = [(string) $this->token, (string) $this->actorId, ...$this->also];
+            $values = array_merge([(string) $this->token, (string) $this->actorId], $this->also);
             foreach (array_unique($this->bodies) as $body) {
                 $values[] = $body;
                 // Objects kept as objects: an associative array would turn a
@@ -214,8 +238,8 @@ final class Redaction
                     }
                 }
             }
-            $values = array_values(array_unique(array_filter($values, static fn(string $value): bool => $value !== '')));
-            usort($values, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+            $values = array_values(array_unique(array_filter($values, static fn (string $value): bool => $value !== '')));
+            usort($values, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
             $this->values = $values;
         }
 
@@ -228,8 +252,9 @@ final class Redaction
      * ($top), to $values.
      *
      * @param list<string> $values
+     * @param mixed $node
      */
-    private static function collect(mixed $node, bool $top, array &$values): void
+    private static function collect($node, bool $top, array &$values): void
     {
         if ($node instanceof \stdClass) {
             foreach (get_object_vars($node) as $key => $value) {
@@ -260,7 +285,7 @@ final class Redaction
     private static function add(string $text, array &$values): void
     {
         $values[] = $text;
-        $values[] = substr((string) json_encode($text), 1, -1);
+        $values[] = (string) substr((string) json_encode($text), 1, -1);
     }
 
     /**
@@ -280,6 +305,9 @@ final class Redaction
         // An \Error keeps its trace on \Error, not \Exception. The SDK chains
         // none, and throws none of its own.
         $trace = new \ReflectionProperty(\Exception::class, 'trace');
+        if (PHP_VERSION_ID < 80100) {
+            $trace->setAccessible(true);
+        }
         for ($link = $e; $link !== null; $link = $link->getPrevious()) {
             if ($link instanceof \Exception) {
                 $trace->setValue($link, self::withoutSdkArguments($link->getTrace()));
@@ -306,6 +334,9 @@ final class Redaction
     public static function scrubAll(\Exception $e): \Exception
     {
         $trace = new \ReflectionProperty(\Exception::class, 'trace');
+        if (PHP_VERSION_ID < 80100) {
+            $trace->setAccessible(true);
+        }
         $frames = [];
         foreach ($e->getTrace() as $frame) {
             unset($frame['args']);
@@ -339,7 +370,7 @@ final class Redaction
         $out = [];
         foreach ($frames as $frame) {
             $class = $frame['class'] ?? null;
-            if (is_string($class) && str_starts_with($class, self::SDK_NAMESPACE)) {
+            if (is_string($class) && strncmp($class, self::SDK_NAMESPACE, strlen(self::SDK_NAMESPACE)) === 0) {
                 unset($frame['args']);
             }
             $out[] = $frame;

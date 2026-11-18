@@ -30,20 +30,20 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         $client = $this->harnessClient(ApiVersion::V2);
 
         // color/red is seeded globally and once in each merchant namespace.
-        $red = $client->tags()->list(new TagListParams(slug: 'red', type: 'color'))->data;
+        $red = $client->tags()->list(new TagListParams(null, null, null, null, null, 'red', 'color'))->data;
         self::assertCount(1, $red);
         self::assertNull($red[0]->namespaceType);
         self::assertNull($red[0]->namespaceId);
 
         // Labels exist only inside the merchant namespaces.
-        self::assertSame([], $client->tags()->list(new TagListParams(type: 'label'))->data);
+        self::assertSame([], $client->tags()->list(new TagListParams(null, null, null, null, null, null, 'label'))->data);
     }
 
     public function testANamespacedReadSeesThatNamespaceAlone(): void
     {
         $a = self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID');
         $tags = $this->harnessClient(ApiVersion::V2)->tags()->list(
-            new TagListParams(applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID')),
+            new TagListParams(self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID')),
             self::in($a),
         )->data;
 
@@ -71,15 +71,15 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         $app = self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID');
         $inA = self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID'));
 
-        $sale = $client->tags()->list(new TagListParams(applicationId: $app, slug: 'sale'), $inA)->data[0];
-        self::assertEquals($sale, $client->tags()->get($sale->id, $app, options: $inA));
+        $sale = $client->tags()->list(new TagListParams($app, null, null, null, null, 'sale'), $inA)->data[0];
+        self::assertEquals($sale, $client->tags()->get($sale->id, $app, null, $inA));
 
-        $globalRed = $client->tags()->list(new TagListParams(slug: 'red', type: 'color'))->data[0];
+        $globalRed = $client->tags()->list(new TagListParams(null, null, null, null, null, 'red', 'color'))->data[0];
         self::assertNull($globalRed->namespaceId);
         self::assertSame($globalRed->id, $client->tags()->get($globalRed->id, $app, true, $inA)->id);
 
         try {
-            $client->tags()->get($globalRed->id, $app, options: $inA);
+            $client->tags()->get($globalRed->id, $app, null, $inA);
             self::fail('expected a namespaced read without include_global to miss the global row');
         } catch (NotFoundException $e) {
             // What tells this 404 from a wrong id: the namespace it looked in,
@@ -90,17 +90,14 @@ final class NamespacedCorpusTest extends IntegrationTestCase
         }
 
         $this->expectException(ForbiddenException::class);
-        $client->tags()->get($sale->id, options: $inA);
+        $client->tags()->get($sale->id, null, null, $inA);
     }
 
     public function testIncludeGlobalAddsTheGlobalRowsToANamespacedRead(): void
     {
         $a = self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID');
         $client = $this->harnessClient(ApiVersion::V2);
-        $params = static fn(?bool $includeGlobal): VocabularyListParams => new VocabularyListParams(
-            applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'),
-            includeGlobal: $includeGlobal,
-        );
+        $params = static fn (?bool $includeGlobal): VocabularyListParams => new VocabularyListParams(self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'), null, null, null, null, $includeGlobal);
 
         $own = self::slugs($client->vocabularies()->list($params(null), self::in($a))->data);
         $widened = self::slugs($client->vocabularies()->list($params(true), self::in($a))->data);
@@ -114,7 +111,7 @@ final class NamespacedCorpusTest extends IntegrationTestCase
     public function testAnExactMerchantGrantIsRefusedInAnotherNamespace(): void
     {
         $client = $this->harnessClient(ApiVersion::V2, 'OCTONOMY_TEST_NAMESPACE_A_TOKEN');
-        $params = new TagListParams(applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'));
+        $params = new TagListParams(self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'));
 
         // Inside its own namespace the grant reads; the namespace the SDK sent
         // is the one the server authorized against.
@@ -133,8 +130,8 @@ final class NamespacedCorpusTest extends IntegrationTestCase
      */
     public function testAReservedNamespaceTypeIsRefusedAsNamespaceInvalid(): void
     {
-        $reserved = new RequestOptions(namespace: new NamespaceScope('global', 'harness-merchant-a'));
-        $params = new TagListParams(applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'));
+        $reserved = new RequestOptions(null, new NamespaceScope('global', 'harness-merchant-a'));
+        $params = new TagListParams(self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'));
 
         try {
             $this->harnessClient(ApiVersion::V2)->tags()->list($params, $reserved);
@@ -149,7 +146,7 @@ final class NamespacedCorpusTest extends IntegrationTestCase
 
     private static function in(string $merchant): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', $merchant));
+        return new RequestOptions(null, new NamespaceScope('merchant', $merchant));
     }
 
     /**
@@ -159,6 +156,6 @@ final class NamespacedCorpusTest extends IntegrationTestCase
      */
     private static function slugs(array $vocabularies): array
     {
-        return array_map(static fn(Vocabulary $v): string => $v->slug, $vocabularies);
+        return array_map(static fn (Vocabulary $v): string => $v->slug, $vocabularies);
     }
 }

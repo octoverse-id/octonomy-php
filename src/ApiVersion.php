@@ -27,7 +27,9 @@ final class ApiVersion
 
     public const V2 = 'v2';
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * Return $apiVersion if it is V1 or V2. Nothing else may reach a URL or a

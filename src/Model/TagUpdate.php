@@ -35,19 +35,57 @@ use Octoverse\Octonomy\Undefined;
 final class TagUpdate
 {
     /**
+     * @readonly
+     */
+    public ?string $name = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $slug = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $type = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $description = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $parentId = Undefined::VALUE;
+    /**
+     * @readonly
+     */
+    public ?string $vocabularyId = Undefined::VALUE;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly ?string $name = Undefined::VALUE,
-        public readonly ?string $slug = Undefined::VALUE,
-        public readonly ?string $type = Undefined::VALUE,
-        public readonly ?string $applicationId = Undefined::VALUE,
-        public readonly ?string $description = Undefined::VALUE,
-        public readonly ?string $parentId = Undefined::VALUE,
-        public readonly ?string $vocabularyId = Undefined::VALUE,
-        public readonly ?array $metadata = null,
-        public readonly ?bool $isActive = null,
-    ) {}
+    public function __construct(?string $name = Undefined::VALUE, ?string $slug = Undefined::VALUE, ?string $type = Undefined::VALUE, ?string $applicationId = Undefined::VALUE, ?string $description = Undefined::VALUE, ?string $parentId = Undefined::VALUE, ?string $vocabularyId = Undefined::VALUE, ?array $metadata = null, ?bool $isActive = null)
+    {
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->type = $type;
+        $this->applicationId = $applicationId;
+        $this->description = $description;
+        $this->parentId = $parentId;
+        $this->vocabularyId = $vocabularyId;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+    }
 
     /**
      * The JSON body: every string field that is not Undefined::VALUE, null

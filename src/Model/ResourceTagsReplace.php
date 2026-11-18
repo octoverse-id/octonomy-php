@@ -22,15 +22,34 @@ namespace Octoverse\Octonomy\Model;
 final class ResourceTagsReplace
 {
     /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @var array<array-key, string>
+     * @readonly
+     */
+    public array $tagIds;
+    /**
+     * @var array<array-key, string>|null
+     * @readonly
+     */
+    public ?array $aliasSlugs = null;
+    /**
+     * @readonly
+     */
+    public ?string $assignedBy = null;
+    /**
      * @param array<array-key, string>      $tagIds
      * @param array<array-key, string>|null $aliasSlugs
      */
-    public function __construct(
-        public readonly string $applicationId,
-        public readonly array $tagIds,
-        public readonly ?array $aliasSlugs = null,
-        public readonly ?string $assignedBy = null,
-    ) {}
+    public function __construct(string $applicationId, array $tagIds, ?array $aliasSlugs = null, ?string $assignedBy = null)
+    {
+        $this->applicationId = $applicationId;
+        $this->tagIds = $tagIds;
+        $this->aliasSlugs = $aliasSlugs;
+        $this->assignedBy = $assignedBy;
+    }
 
     /**
      * @return array<string, mixed>

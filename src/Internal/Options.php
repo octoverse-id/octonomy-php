@@ -29,7 +29,9 @@ final class Options
         'request_factory', 'stream_factory',
     ];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * @throws ConfigurationException when the base URL is blank or not an absolute URL
@@ -49,11 +51,16 @@ final class Options
                 'octonomy: base_url must be an absolute URL, got "%s", which %s. Fix: write it out in full, with'
                 . ' "https://" or "http://", such as "https://octonomy.example.com".',
                 $baseUrl,
-                match (true) {
-                    $parsed === false => 'cannot be parsed as a URL',
-                    !isset($parsed['scheme']) => 'has no scheme',
-                    default => 'has no host',
-                },
+                (function () use ($parsed) {
+                    switch (true) {
+                        case $parsed === false:
+                            return 'cannot be parsed as a URL';
+                        case !isset($parsed['scheme']):
+                            return 'has no scheme';
+                        default:
+                            return 'has no host';
+                    }
+                })(),
             ));
         }
     }
@@ -98,7 +105,7 @@ final class Options
         return new ConfigurationException(sprintf(
             '%s The options also hold %s, which this SDK does not read.',
             $e->getMessage(),
-            implode(', ', array_map(static fn(string $key): string => "'{$key}'", $unread)),
+            implode(', ', array_map(static fn (string $key): string => "'{$key}'", $unread)),
         ), 0, $e);
     }
 
@@ -198,7 +205,10 @@ final class Options
         return (float) $value;
     }
 
-    private static function notAFactory(string $key, string $interface, mixed $value): ConfigurationException
+    /**
+     * @param mixed $value
+     */
+    private static function notAFactory(string $key, string $interface, $value): ConfigurationException
     {
         return new ConfigurationException(sprintf(
             'octonomy: %s must implement %s (PSR-17), got %s. Fix: pass a PSR-17 factory, such as the one your'
@@ -212,9 +222,10 @@ final class Options
 
     /**
      * The type of $value as a message names it: its class, or its PHP type.
+     * @param mixed $value
      */
-    private static function typeOf(mixed $value): string
+    private static function typeOf($value): string
     {
-        return is_object($value) ? $value::class : gettype($value);
+        return is_object($value) ? get_class($value) : gettype($value);
     }
 }

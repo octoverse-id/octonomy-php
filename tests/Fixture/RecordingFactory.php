@@ -19,6 +19,14 @@ use Psr\Http\Message\StreamInterface;
  */
 final class RecordingFactory implements RequestFactoryInterface, StreamFactoryInterface
 {
+    /**
+     * @readonly
+     */
+    private RequestFactoryInterface $requestFactory;
+    /**
+     * @readonly
+     */
+    private StreamFactoryInterface $streamFactory;
     /** The header every request it builds carries, so a test can tell its requests apart. */
     public const MARK = 'X-Test-Built-By';
 
@@ -32,10 +40,11 @@ final class RecordingFactory implements RequestFactoryInterface, StreamFactoryIn
      * Two parameters, not one intersection type, which the PHP 7.4 downgrade
      * cannot express.
      */
-    public function __construct(
-        private readonly RequestFactoryInterface $requestFactory,
-        private readonly StreamFactoryInterface $streamFactory,
-    ) {}
+    public function __construct(RequestFactoryInterface $requestFactory, StreamFactoryInterface $streamFactory)
+    {
+        $this->requestFactory = $requestFactory;
+        $this->streamFactory = $streamFactory;
+    }
 
     public function createRequest(string $method, $uri): RequestInterface
     {

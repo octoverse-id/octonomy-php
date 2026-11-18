@@ -19,11 +19,16 @@ use Octoverse\Octonomy\Internal\Json;
 final class BulkRemoveResult
 {
     /**
+     * @readonly
+     */
+    public int $removed;
+    /**
      * A bulk removal's result as fromArray() reads it from a response.
      */
-    public function __construct(
-        public readonly int $removed,
-    ) {}
+    public function __construct(int $removed)
+    {
+        $this->removed = $removed;
+    }
 
     /**
      * Hydrate the result from the resource object of a response read as
@@ -36,8 +41,8 @@ final class BulkRemoveResult
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            removed: Json::int($data, 'removed'),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::int($data, 'removed'),
         ));
     }
 }

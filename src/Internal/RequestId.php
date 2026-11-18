@@ -41,7 +41,9 @@ namespace Octoverse\Octonomy\Internal;
  */
 final class RequestId
 {
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * $id, when the server would record it as given.

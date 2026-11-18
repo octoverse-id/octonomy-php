@@ -51,21 +51,48 @@ use Psr\Http\Message\StreamFactoryInterface;
  */
 final class Transport
 {
-    private readonly ClientInterface $http;
-    private readonly RequestFactoryInterface $requests;
-    private readonly StreamFactoryInterface $streams;
-    private readonly string $apiVersion;
-    private readonly string $baseUrl;
+    /**
+     * @readonly
+     */
+    private ClientInterface $http;
+    /**
+     * @readonly
+     */
+    private RequestFactoryInterface $requests;
+    /**
+     * @readonly
+     */
+    private StreamFactoryInterface $streams;
+    /**
+     * @readonly
+     */
+    private string $apiVersion;
+    /**
+     * @readonly
+     */
+    private string $baseUrl;
 
-    /** The scheme, host and port of the base URL, as a message names the server. */
-    private readonly string $origin;
+    /**
+     * The scheme, host and port of the base URL, as a message names the server.
+     * @readonly
+     */
+    private string $origin;
 
-    /** Kept apart from the header only so a message can redact it (Redaction::of()). */
-    private readonly string $token;
-    private readonly ?string $actorId;
+    /**
+     * Kept apart from the header only so a message can redact it (Redaction::of()).
+     * @readonly
+     */
+    private string $token;
+    /**
+     * @readonly
+     */
+    private ?string $actorId;
 
-    /** @var array<string, string> */
-    private readonly array $defaultHeaders;
+    /**
+     * @var array<string, string>
+     * @readonly
+     */
+    private array $defaultHeaders;
 
     /**
      * The api_version is read from $config here, once: it is the surface every
@@ -137,8 +164,8 @@ final class Transport
         \Closure $hydrate,
         array $query = [],
         ?array $body = null,
-        ?RequestOptions $options = null,
-    ): mixed {
+        ?RequestOptions $options = null
+    ) {
         $context = $this->context($method, $path, $query, $options);
         [$response, $redaction] = $this->send($context, $body, $options);
         $decoded = $this->decode($context, $response, $redaction);
@@ -178,7 +205,7 @@ final class Transport
         \Closure $hydrate,
         array $query = [],
         ?array $body = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         $context = $this->context($method, $path, $query, $options);
         [$response, $redaction] = $this->send($context, $body, $options);
@@ -205,7 +232,7 @@ final class Transport
 
         return new ResultList(
             $data,
-            $this->hydrate($context, 'pagination', Pagination::fromArray(...), Json::members($pagination), $redaction),
+            $this->hydrate($context, 'pagination', \Closure::fromCallable([Pagination::class, 'fromArray']), Json::members($pagination), $redaction),
         );
     }
 
@@ -226,7 +253,7 @@ final class Transport
         string $path,
         array $query = [],
         ?array $body = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): void {
         $this->send($this->context($method, $path, $query, $options), $body, $options);
     }
@@ -245,7 +272,7 @@ final class Transport
      */
     public function context(string $method, string $path, array $query, ?RequestOptions $options): RequestContext
     {
-        $namespace = $options?->namespace;
+        $namespace = ($nullsafeVariable1 = $options) ? $nullsafeVariable1->namespace : null;
 
         return new RequestContext(
             $this->apiVersion,
@@ -281,7 +308,7 @@ final class Transport
         // Only the caller's own id, never one the SDK mints: without it no
         // header is sent and the server mints its own. Checked again, not
         // trusted from RequestOptions, for the PHP 7.4 line's sake.
-        $requestId = $options?->requestId;
+        $requestId = ($nullsafeVariable2 = $options) ? $nullsafeVariable2->requestId : null;
         if ($requestId !== null) {
             $headers['X-Request-ID'] = RequestId::check($requestId);
         }
@@ -373,7 +400,7 @@ final class Transport
                 $context,
                 $refused
                     ? ErrorMessage::jsonError($e->getCode())
-                    : sprintf('an object in it threw %s from jsonSerialize(), whose message is not shown', $e::class),
+                    : sprintf('an object in it threw %s from jsonSerialize(), whose message is not shown', get_class($e)),
                 $refused
                     ? 'put only what JSON can encode in it: UTF-8 strings, finite numbers, booleans, null, and arrays'
                     . ' or objects of those.'
@@ -388,8 +415,9 @@ final class Transport
      * sent HTML with a 2xx gave no usable response.
      *
      * @throws TransportException when the body is not valid JSON
+     * @return mixed
      */
-    private function decode(RequestContext $context, ResponseInterface $response, Redaction $redaction): mixed
+    private function decode(RequestContext $context, ResponseInterface $response, Redaction $redaction)
     {
         $raw = (string) $response->getBody();
         try {
@@ -469,8 +497,8 @@ final class Transport
         string $at,
         \Closure $hydrate,
         array $object,
-        Redaction $redaction,
-    ): mixed {
+        Redaction $redaction
+    ) {
         try {
             return $hydrate($object, $this->apiVersion);
         } catch (MalformedResponseException $e) {
@@ -507,8 +535,9 @@ final class Transport
      * model as a missing key.
      *
      * @phpstan-assert-if-true \stdClass $value
+     * @param mixed $value
      */
-    private static function isResource(mixed $value): bool
+    private static function isResource($value): bool
     {
         return $value instanceof \stdClass && get_object_vars($value) !== [];
     }

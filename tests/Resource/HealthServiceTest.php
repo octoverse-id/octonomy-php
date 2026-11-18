@@ -32,18 +32,15 @@ final class HealthServiceTest extends SdkTestCase
 
     /**
      * @param \Closure(HealthService): HealthStatus $probe
+     * @dataProvider passingProbes
      */
-    #[DataProvider('passingProbes')]
     public function testAProbeSendsNoCredentialsAndReadsTheBareBody(string $fixture, \Closure $probe, string $path): void
     {
         $client = $this->healthClientWith([self::captured($fixture)]);
-
         $status = $probe($client->health());
-
         self::assertTrue($status->ok);
         self::assertSame(HealthStatus::STATUS_OK, $status->status);
         self::assertSame(self::captured($fixture)->json()['status'], $status->status);
-
         $request = $this->lastRequest();
         self::assertSame('GET', $request->getMethod());
         self::assertSame("https://octonomy.test{$path}", (string) $request->getUri());
@@ -60,8 +57,8 @@ final class HealthServiceTest extends SdkTestCase
      */
     public static function passingProbes(): iterable
     {
-        yield 'live()' => ['health/live', static fn(HealthService $h): HealthStatus => $h->live(), '/health/live'];
-        yield 'ready()' => ['health/ready', static fn(HealthService $h): HealthStatus => $h->ready(), '/health/ready'];
+        yield 'live()' => ['health/live', static fn (HealthService $h): HealthStatus => $h->live(), '/health/live'];
+        yield 'ready()' => ['health/ready', static fn (HealthService $h): HealthStatus => $h->ready(), '/health/ready'];
     }
 
     /**
@@ -85,16 +82,14 @@ final class HealthServiceTest extends SdkTestCase
      * A Client's probe is the HealthClient's request, byte for byte: neither
      * its token, tenant and actor id nor its api_version prefix go out, on v1
      * as on v2.
+     * @dataProvider versions
      */
-    #[DataProvider('versions')]
     public function testAClientsProbeSendsTheSameRequest(string $apiVersion): void
     {
         $this->healthClientWith([self::captured('health/live')])->health()->live();
         $fromHealthClient = $this->lastRequest();
-
         $client = $this->clientWith([self::captured('health/live')], ['api_version' => $apiVersion, 'actor_id' => 'ops-bot']);
         $status = $client->health()->live();
-
         self::assertTrue($status->ok);
         $request = $this->lastRequest();
         self::assertSame((string) $fromHealthClient->getUri(), (string) $request->getUri());
@@ -137,7 +132,7 @@ final class HealthServiceTest extends SdkTestCase
      */
     public function testAPsr18ClientSendsTheProbe(): void
     {
-        $status = $this->healthClientWith([self::captured('health/ready-unavailable')], psr18: true)->health()->ready();
+        $status = $this->healthClientWith([self::captured('health/ready-unavailable')], [], true)->health()->ready();
 
         self::assertFalse($status->ok);
         self::assertSame('https://octonomy.test/health/ready', (string) $this->lastRequest()->getUri());
@@ -190,7 +185,7 @@ final class HealthServiceTest extends SdkTestCase
         $actor = 'actor-secret-42';
         $client = $this->clientWhoseHttpClientThrows(
             ['token' => $token, 'actor_id' => $actor],
-            static fn(): \RuntimeException => new \RuntimeException("client configured with {$token} for {$actor}"),
+            static fn (): \RuntimeException => new \RuntimeException("client configured with {$token} for {$actor}"),
         );
 
         try {
@@ -208,19 +203,18 @@ final class HealthServiceTest extends SdkTestCase
      * Only the probe's own 503 is an answer. One without its {"status": ...}
      * body came from something in front of the server, and stays an
      * ApiException, as any other non-2xx does.
+     * @dataProvider notTheProbesAnswer
      */
-    #[DataProvider('notTheProbesAnswer')]
     public function testANon2xxThatIsNotTheProbesAnswerRaises(int $status, string $body, string $class): void
     {
         $client = $this->healthClientWith([
             self::syntheticNegative(SyntheticNegative::GATEWAY, $status, $body, ['Content-Type' => 'text/html']),
         ]);
-
         try {
             $client->health()->ready();
             self::fail('expected an ApiException');
         } catch (ApiException $e) {
-            self::assertSame($class, $e::class);
+            self::assertSame($class, get_class($e));
             self::assertSame($status, $e->statusCode);
             self::assertStringStartsWith(
                 "octonomy: GET /health/ready failed with HTTP {$status}, and the body is not an Octonomy error envelope",
@@ -255,7 +249,7 @@ final class HealthServiceTest extends SdkTestCase
             $client->health()->live();
             self::fail('expected an ApiException');
         } catch (ApiException $e) {
-            self::assertSame(ApiException::class, $e::class);
+            self::assertSame(ApiException::class, get_class($e));
             self::assertSame(503, $e->statusCode);
             self::assertSame('/health/live', $e->context->path);
         }
@@ -271,7 +265,7 @@ final class HealthServiceTest extends SdkTestCase
             self::syntheticNegativeFrom(
                 'health/ready-unavailable',
                 SyntheticNegative::WRONG_TYPE,
-                static fn(array $body): array => ['status' => false] + $body,
+                static fn (array $body): array => ['status' => false] + $body,
             ),
         ]);
 
@@ -284,8 +278,8 @@ final class HealthServiceTest extends SdkTestCase
      * is no evidence of health.
      *
      * @param non-empty-string $message
+     * @dataProvider malformedPasses
      */
-    #[DataProvider('malformedPasses')]
     public function testAMalformedPassRaises(SyntheticNegative $response, string $message): void
     {
         try {
@@ -293,7 +287,7 @@ final class HealthServiceTest extends SdkTestCase
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
             self::assertStringStartsWith($message, $e->getMessage());
-            self::assertSame('/health/live', $e->context?->path);
+            self::assertSame('/health/live', ($nullsafeVariable1 = $e->context) ? $nullsafeVariable1->path : null);
         }
     }
 
@@ -306,7 +300,7 @@ final class HealthServiceTest extends SdkTestCase
             self::syntheticNegativeFrom(
                 'health/live',
                 SyntheticNegative::MISSING_FIELD,
-                static fn(array $body): array => ['state' => $body['status']],
+                static fn (array $body): array => ['state' => $body['status']],
             ),
             'octonomy: malformed response from GET /health/live: field "status" is missing.',
         ];
@@ -314,7 +308,7 @@ final class HealthServiceTest extends SdkTestCase
             self::syntheticNegativeFrom(
                 'health/live',
                 SyntheticNegative::WRONG_TYPE,
-                static fn(array $body): array => ['status' => true] + $body,
+                static fn (array $body): array => ['status' => true] + $body,
             ),
             'octonomy: malformed response from GET /health/live: field "status" must be a string, got a boolean.',
         ];
@@ -356,7 +350,7 @@ final class HealthServiceTest extends SdkTestCase
      */
     public function testTheClientTheSdkBuildsHasTheTimeout(): void
     {
-        $probe = static fn(array $options): HealthService => (new HealthClient($options))->health();
+        $probe = static fn (array $options): HealthService => (new HealthClient($options))->health();
         self::assertSame(2.5, self::timeoutOfTheClientBuiltFor($probe(['base_url' => 'https://octonomy.test', 'timeout' => 2.5])));
         self::assertSame(30.0, self::timeoutOfTheClientBuiltFor($probe(['base_url' => 'https://octonomy.test'])));
         // A Client's probes are sent with its timeout too.

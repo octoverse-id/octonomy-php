@@ -42,5 +42,7 @@ final class ErrorCode
     /** More than one equally specific tag or alias matched a resolution (400). */
     public const AMBIGUOUS_RESOLUTION = 'ambiguous_resolution';
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 }

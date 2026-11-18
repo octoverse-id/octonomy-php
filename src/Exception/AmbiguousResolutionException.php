@@ -16,4 +16,6 @@ namespace Octoverse\Octonomy\Exception;
  * validation_error instead. The server keeps the code as a guard, so the SDK
  * maps it for the release that reaches it.
  */
-final class AmbiguousResolutionException extends ApiException {}
+final class AmbiguousResolutionException extends ApiException
+{
+}

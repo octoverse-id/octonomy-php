@@ -18,19 +18,57 @@ namespace Octoverse\Octonomy\Model;
 final class TagCreate
 {
     /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @readonly
+     */
+    public string $slug;
+    /**
+     * @readonly
+     */
+    public string $type;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @readonly
+     */
+    public ?string $description = null;
+    /**
+     * @readonly
+     */
+    public ?string $parentId = null;
+    /**
+     * @readonly
+     */
+    public ?string $vocabularyId = null;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly string $name,
-        public readonly string $slug,
-        public readonly string $type,
-        public readonly ?string $applicationId = null,
-        public readonly ?string $description = null,
-        public readonly ?string $parentId = null,
-        public readonly ?string $vocabularyId = null,
-        public readonly ?array $metadata = null,
-        public readonly ?bool $isActive = null,
-    ) {}
+    public function __construct(string $name, string $slug, string $type, ?string $applicationId = null, ?string $description = null, ?string $parentId = null, ?string $vocabularyId = null, ?array $metadata = null, ?bool $isActive = null)
+    {
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->type = $type;
+        $this->applicationId = $applicationId;
+        $this->description = $description;
+        $this->parentId = $parentId;
+        $this->vocabularyId = $vocabularyId;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+    }
 
     /**
      * @return array<string, mixed>

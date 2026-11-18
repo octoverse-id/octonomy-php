@@ -35,7 +35,7 @@ final class SeededCorpusTest extends IntegrationTestCase
 
         // color/red is seeded three times: globally and in each merchant
         // namespace. /api/v1 sees only the global partition, so one row.
-        $page = $client->tags()->list(new TagListParams(slug: 'red', type: 'color'));
+        $page = $client->tags()->list(new TagListParams(null, null, null, null, null, 'red', 'color'));
         self::assertCount(1, $page->data);
         self::assertSame(1, $page->pagination->count);
 
@@ -92,10 +92,10 @@ final class SeededCorpusTest extends IntegrationTestCase
 
         // label tags exist only inside the merchant namespaces (sale in A,
         // clearance in B), and so does the harness's probe vocabulary.
-        self::assertSame([], $client->tags()->list(new TagListParams(type: 'label'))->data);
+        self::assertSame([], $client->tags()->list(new TagListParams(null, null, null, null, null, null, 'label'))->data);
 
         $slugs = array_map(
-            static fn(Vocabulary $v): string => $v->slug,
+            static fn (Vocabulary $v): string => $v->slug,
             $client->vocabularies()->list()->data,
         );
         self::assertNotContains('harness-probe', $slugs);
@@ -125,7 +125,7 @@ final class SeededCorpusTest extends IntegrationTestCase
      */
     private function onlyTag(string $slug, string $type): Tag
     {
-        $page = $this->harnessClient(ApiVersion::V1)->tags()->list(new TagListParams(slug: $slug, type: $type));
+        $page = $this->harnessClient(ApiVersion::V1)->tags()->list(new TagListParams(null, null, null, null, null, $slug, $type));
         self::assertCount(1, $page->data, "expected exactly one global {$type}/{$slug} tag in the seeded corpus");
 
         return $page->data[0];

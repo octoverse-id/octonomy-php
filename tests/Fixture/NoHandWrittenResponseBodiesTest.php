@@ -111,7 +111,7 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
         foreach ($files as $file) {
             \assert($file instanceof \SplFileInfo);
-            $relative = substr($file->getPathname(), strlen($root) + 1);
+            $relative = (string) substr($file->getPathname(), strlen($root) + 1);
             if ($file->getExtension() !== 'php' || in_array($relative, $allowed, true)) {
                 continue;
             }
@@ -120,7 +120,7 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
             self::assertIsString($source);
             if (preg_match_all($pattern, $source, $matches, PREG_OFFSET_CAPTURE) > 0) {
                 foreach ($matches[0] as [, $offset]) {
-                    $offenders[] = $relative . ':' . (substr_count(substr($source, 0, $offset), "\n") + 1);
+                    $offenders[] = $relative . ':' . (substr_count((string) substr($source, 0, $offset), "\n") + 1);
                 }
             }
         }
@@ -139,12 +139,13 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         yield 'the manifest itself' => ['manifest'];
     }
 
-    #[DataProvider('namesOutsideTheManifest')]
+    /**
+     * @dataProvider namesOutsideTheManifest
+     */
     public function testOnlyAManifestListedFixtureLoads(string $name): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("'{$name}' is not a captured fixture");
-
         self::captured($name);
     }
 
@@ -154,13 +155,12 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
      * fail hydration, so the helpers refuse the mismatch outright.
      *
      * @param \Closure(self): mixed $replay
+     * @dataProvider crossVersionReplays
      */
-    #[DataProvider('crossVersionReplays')]
     public function testACaptureReplaysOnlyOnTheApiVersionItCameFrom(\Closure $replay, string $expected): void
     {
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage($expected);
-
         $replay($this);
     }
 
@@ -173,18 +173,18 @@ final class NoHandWrittenResponseBodiesTest extends SdkTestCase
         $v2OnV1 = 'a response captured from api_version v2 cannot be replayed on a v1 client';
 
         yield 'a v1 error on a default client' => [
-            static fn(self $t): mixed => $t->clientWith([self::captured('v1/errors/not-found')]),
+            static fn (self $t) => $t->clientWith([self::captured('v1/errors/not-found')]),
             $v1OnV2,
         ];
         yield 'a v2 204 on a v1 client' => [
-            static fn(self $t): mixed => $t->clientWith([self::captured('v2/tags/delete')], ['api_version' => 'v1']),
+            static fn (self $t) => $t->clientWith([self::captured('v2/tags/delete')], ['api_version' => 'v1']),
             $v2OnV1,
         ];
         yield 'a negative broken from a v1 capture, on a v2 transport' => [
-            static fn(self $t): mixed => $t->transportWith([self::syntheticNegativeFrom(
+            static fn (self $t) => $t->transportWith([self::syntheticNegativeFrom(
                 'v1/tags/get',
                 SyntheticNegative::WRONG_TYPE,
-                static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+                static fn (array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
             )]),
             $v1OnV2,
         ];

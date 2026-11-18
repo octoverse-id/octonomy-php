@@ -17,14 +17,39 @@ namespace Octoverse\Octonomy\Model;
  */
 final class VocabularyListParams
 {
-    public function __construct(
-        public readonly ?string $applicationId = null,
-        public readonly ?bool $includeShared = null,
-        public readonly ?bool $isActive = null,
-        public readonly ?int $limit = null,
-        public readonly ?int $offset = null,
-        public readonly ?bool $includeGlobal = null,
-    ) {}
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @readonly
+     */
+    public ?bool $includeShared = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
+     * @readonly
+     */
+    public ?int $limit = null;
+    /**
+     * @readonly
+     */
+    public ?int $offset = null;
+    /**
+     * @readonly
+     */
+    public ?bool $includeGlobal = null;
+    public function __construct(?string $applicationId = null, ?bool $includeShared = null, ?bool $isActive = null, ?int $limit = null, ?int $offset = null, ?bool $includeGlobal = null)
+    {
+        $this->applicationId = $applicationId;
+        $this->includeShared = $includeShared;
+        $this->isActive = $isActive;
+        $this->limit = $limit;
+        $this->offset = $offset;
+        $this->includeGlobal = $includeGlobal;
+    }
 
     /**
      * @return array<string, string>

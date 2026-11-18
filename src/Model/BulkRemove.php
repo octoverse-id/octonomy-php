@@ -16,14 +16,32 @@ namespace Octoverse\Octonomy\Model;
 final class BulkRemove
 {
     /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @readonly
+     */
+    public string $resourceType;
+    /**
+     * @readonly
+     */
+    public string $resourceId;
+    /**
+     * @var array<array-key, string>
+     * @readonly
+     */
+    public array $tagIds;
+    /**
      * @param array<array-key, string> $tagIds
      */
-    public function __construct(
-        public readonly string $applicationId,
-        public readonly string $resourceType,
-        public readonly string $resourceId,
-        public readonly array $tagIds,
-    ) {}
+    public function __construct(string $applicationId, string $resourceType, string $resourceId, array $tagIds)
+    {
+        $this->applicationId = $applicationId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->tagIds = $tagIds;
+    }
 
     /**
      * @return array<string, mixed>

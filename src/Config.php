@@ -41,6 +41,48 @@ use Psr\Http\Message\StreamFactoryInterface;
 final class Config
 {
     /**
+     * @readonly
+     */
+    public string $baseUrl;
+    /**
+     * @readonly
+     */
+    public string $token;
+    /**
+     * @readonly
+     */
+    public string $tenantId;
+    /**
+     * @readonly
+     */
+    public ?string $actorId = null;
+    /**
+     * @readonly
+     */
+    public ?ClientInterface $httpClient = null;
+    /**
+     * @var float|null
+     * @readonly
+     */
+    public ?float $timeout = null;
+    /**
+     * @readonly
+     */
+    public ?string $userAgent = null;
+    /**
+     * @var string
+     * @readonly
+     */
+    public string $apiVersion = ApiVersion::V2;
+    /**
+     * @readonly
+     */
+    public ?RequestFactoryInterface $requestFactory = null;
+    /**
+     * @readonly
+     */
+    public ?StreamFactoryInterface $streamFactory = null;
+    /**
      * @param float|null $timeout    seconds, for the client the SDK builds when $httpClient is null
      * @param string     $apiVersion an ApiVersion constant
      *
@@ -50,17 +92,27 @@ final class Config
      *                                timeout is given together with an HTTP client
      */
     public function __construct(
-        public readonly string $baseUrl,
-        public readonly string $token,
-        public readonly string $tenantId,
-        public readonly ?string $actorId = null,
-        public readonly ?ClientInterface $httpClient = null,
-        public readonly ?float $timeout = null,
-        public readonly ?string $userAgent = null,
-        public readonly string $apiVersion = ApiVersion::V2,
-        public readonly ?RequestFactoryInterface $requestFactory = null,
-        public readonly ?StreamFactoryInterface $streamFactory = null,
+        string $baseUrl,
+        string $token,
+        string $tenantId,
+        ?string $actorId = null,
+        ?ClientInterface $httpClient = null,
+        ?float $timeout = null,
+        ?string $userAgent = null,
+        string $apiVersion = ApiVersion::V2,
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null
     ) {
+        $this->baseUrl = $baseUrl;
+        $this->token = $token;
+        $this->tenantId = $tenantId;
+        $this->actorId = $actorId;
+        $this->httpClient = $httpClient;
+        $this->timeout = $timeout;
+        $this->userAgent = $userAgent;
+        $this->apiVersion = $apiVersion;
+        $this->requestFactory = $requestFactory;
+        $this->streamFactory = $streamFactory;
         Options::checkBaseUrl($baseUrl);
         if (trim($token) === '') {
             throw new ConfigurationException(
@@ -133,16 +185,16 @@ final class Config
         }
 
         return new self(
-            baseUrl: Options::string($options, 'base_url') ?? '',
-            token: Options::string($options, 'token') ?? '',
-            tenantId: Options::string($options, 'tenant_id') ?? '',
-            actorId: Options::string($options, 'actor_id'),
-            httpClient: $httpClient,
-            timeout: Options::float($options, 'timeout'),
-            userAgent: Options::string($options, 'user_agent'),
-            apiVersion: Options::string($options, 'api_version') ?? ApiVersion::V2,
-            requestFactory: $requestFactory,
-            streamFactory: $streamFactory,
+            Options::string($options, 'base_url') ?? '',
+            Options::string($options, 'token') ?? '',
+            Options::string($options, 'tenant_id') ?? '',
+            Options::string($options, 'actor_id'),
+            $httpClient,
+            Options::float($options, 'timeout'),
+            Options::string($options, 'user_agent'),
+            Options::string($options, 'api_version') ?? ApiVersion::V2,
+            $requestFactory,
+            $streamFactory,
         );
     }
 }

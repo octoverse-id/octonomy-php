@@ -35,7 +35,9 @@ final class Webhook
     /** The header the signature arrives in. */
     public const SIGNATURE_HEADER = 'X-Octonomy-Signature';
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * Whether $rawBody carries a valid Octonomy signature under $secret.
@@ -68,20 +70,19 @@ final class Webhook
      * is decoded first, so its case does not matter; the `sha256=` prefix must
      * be exact, since it names the algorithm.
      *
-     * @param string      $secret          the secret the Octonomy server signs with
-     * @param string|null $signatureHeader the X-Octonomy-Signature header's value as received, or null
+     * @param mixed      $secret          the secret the Octonomy server signs with
+     * @param mixed $signatureHeader the X-Octonomy-Signature header's value as received, or null
      *                                     when the request has none
-     * @param string      $rawBody         the request body, as the exact bytes received, such as
+     * @param mixed      $rawBody         the request body, as the exact bytes received, such as
      *                                     file_get_contents('php://input'); never a parsed or re-encoded
      *                                     one
      *
      * @throws \InvalidArgumentException when an argument is the caller's mistake, as above
      */
     public static function verify(
-        #[\SensitiveParameter]
-        mixed $secret,
-        mixed $signatureHeader,
-        mixed $rawBody,
+        $secret,
+        $signatureHeader,
+        $rawBody
     ): bool {
         // The caller's mistakes first: they are true whatever the sender did.
         if (!is_string($secret)) {

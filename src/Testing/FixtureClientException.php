@@ -16,4 +16,6 @@ use Psr\Http\Client\ClientExceptionInterface;
  * request at all must throw. Through the SDK it arrives as a
  * TransportException whose message quotes this one's.
  */
-final class FixtureClientException extends \RuntimeException implements ClientExceptionInterface {}
+final class FixtureClientException extends \RuntimeException implements ClientExceptionInterface
+{
+}

@@ -19,6 +19,18 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class TagResolution
 {
+    /**
+     * @readonly
+     */
+    public string $matchedType;
+    /**
+     * @readonly
+     */
+    public ?TagAlias $matchedAlias;
+    /**
+     * @readonly
+     */
+    public Tag $tag;
     /** The slug is the tag's own. */
     public const MATCHED_TAG = 'tag';
 
@@ -45,11 +57,12 @@ final class TagResolution
      * MATCHED_TAG or MATCHED_ALIAS, and $matchedAlias is null unless it is
      * MATCHED_ALIAS.
      */
-    public function __construct(
-        public readonly string $matchedType,
-        public readonly ?TagAlias $matchedAlias,
-        public readonly Tag $tag,
-    ) {}
+    public function __construct(string $matchedType, ?TagAlias $matchedAlias, Tag $tag)
+    {
+        $this->matchedType = $matchedType;
+        $this->matchedAlias = $matchedAlias;
+        $this->tag = $tag;
+    }
 
     /**
      * Hydrate a resolution from the resource object of a response read as
@@ -65,10 +78,10 @@ final class TagResolution
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            matchedType: Json::string($data, 'matched_type'),
-            matchedAlias: Json::nullableResource($data, 'matched_alias', TagAlias::fromArray(...), $apiVersion),
-            tag: Json::resource($data, 'tag', Tag::fromArray(...), $apiVersion),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'matched_type'),
+            Json::nullableResource($data, 'matched_alias', \Closure::fromCallable([TagAlias::class, 'fromArray']), $apiVersion),
+            Json::resource($data, 'tag', \Closure::fromCallable([Tag::class, 'fromArray']), $apiVersion),
         ));
     }
 }

@@ -28,7 +28,9 @@ final class VendoredSpecMatchesServerTest extends IntegrationTestCase
         yield 'v2' => ['v2'];
     }
 
-    #[DataProvider('apiVersions')]
+    /**
+     * @dataProvider apiVersions
+     */
     public function testTheSpecIsWhatThePinnedServerServes(string $apiVersion): void
     {
         $url = rtrim(self::harnessBaseUrl(), '/') . "/api/{$apiVersion}/schema/";
@@ -37,7 +39,6 @@ final class VendoredSpecMatchesServerTest extends IntegrationTestCase
         ]));
         self::assertIsString($served, "no response from {$url}");
         self::assertMatchesRegularExpression('#^HTTP/\S+ 200\b#', $http_response_header[0] ?? '', "{$url} did not answer 200");
-
         $spec = VendoredSpec::load($apiVersion);
         self::assertSame(hash('sha256', $served), hash('sha256', $spec->body), "{$spec->file} is not what the pinned server serves at {$url}: re-vendor it");
     }

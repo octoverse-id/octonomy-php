@@ -13,10 +13,20 @@ namespace Octoverse\Octonomy;
 final class ResultList
 {
     /**
+     * @var list<T>
+     * @readonly
+     */
+    public array $data;
+    /**
+     * @readonly
+     */
+    public Pagination $pagination;
+    /**
      * @param list<T> $data
      */
-    public function __construct(
-        public readonly array $data,
-        public readonly Pagination $pagination,
-    ) {}
+    public function __construct(array $data, Pagination $pagination)
+    {
+        $this->data = $data;
+        $this->pagination = $pagination;
+    }
 }

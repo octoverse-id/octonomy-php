@@ -13,15 +13,32 @@ namespace Octoverse\Octonomy\Model;
 final class AssignmentRemove
 {
     /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @readonly
+     */
+    public string $resourceType;
+    /**
+     * @readonly
+     */
+    public string $resourceId;
+    /**
+     * @readonly
+     */
+    public string $tagId;
+    /**
      * Name the assignment to remove: the tag $tagId on the resource
      * $resourceType/$resourceId within $applicationId.
      */
-    public function __construct(
-        public readonly string $applicationId,
-        public readonly string $resourceType,
-        public readonly string $resourceId,
-        public readonly string $tagId,
-    ) {}
+    public function __construct(string $applicationId, string $resourceType, string $resourceId, string $tagId)
+    {
+        $this->applicationId = $applicationId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->tagId = $tagId;
+    }
 
     /**
      * @return array<string, mixed>

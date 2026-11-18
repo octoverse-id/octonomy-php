@@ -19,13 +19,27 @@ use Octoverse\Octonomy\Internal\Json;
 final class ResourceTagsReplaceResult
 {
     /**
+     * @readonly
+     */
+    public int $created;
+    /**
+     * @readonly
+     */
+    public int $removed;
+    /**
+     * @var list<Tag>
+     * @readonly
+     */
+    public array $tags;
+    /**
      * @param list<Tag> $tags
      */
-    public function __construct(
-        public readonly int $created,
-        public readonly int $removed,
-        public readonly array $tags,
-    ) {}
+    public function __construct(int $created, int $removed, array $tags)
+    {
+        $this->created = $created;
+        $this->removed = $removed;
+        $this->tags = $tags;
+    }
 
     /**
      * Hydrate the result from the resource object of a response read as
@@ -40,10 +54,10 @@ final class ResourceTagsReplaceResult
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            created: Json::int($data, 'created'),
-            removed: Json::int($data, 'removed'),
-            tags: Json::resources($data, 'tags', Tag::fromArray(...), $apiVersion),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::int($data, 'created'),
+            Json::int($data, 'removed'),
+            Json::resources($data, 'tags', \Closure::fromCallable([Tag::class, 'fromArray']), $apiVersion),
         ));
     }
 }

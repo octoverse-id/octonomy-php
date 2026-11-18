@@ -78,7 +78,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
         $app = self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID');
         $a = self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID');
 
-        $aliases = $this->harnessClient(ApiVersion::V2)->aliases()->list(new TagAliasListParams(applicationId: $app), self::in($a))->data;
+        $aliases = $this->harnessClient(ApiVersion::V2)->aliases()->list(new TagAliasListParams($app), self::in($a))->data;
 
         self::assertSame(['promo'], array_keys(self::bySlug($aliases)));
         self::assertSame('merchant', $aliases[0]->namespaceType);
@@ -97,14 +97,13 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
 
     /**
      * @param \Closure(Client): TagResolution $resolve
+     * @dataProvider resolutions
      */
-    #[DataProvider('resolutions')]
     public function testASlugResolvesToItsTag(string $apiVersion, \Closure $resolve, string $matchedType, ?string $alias, string $tag, ?string $namespace): void
     {
         $resolution = $resolve($this->harnessClient($apiVersion));
-
         self::assertSame($matchedType, $resolution->matchedType);
-        self::assertSame($alias, $resolution->matchedAlias?->slug);
+        self::assertSame($alias, ($nullsafeVariable1 = $resolution->matchedAlias) ? $nullsafeVariable1->slug : null);
         if ($resolution->matchedAlias !== null) {
             self::assertSame($resolution->tag->id, $resolution->matchedAlias->tagId);
         }
@@ -119,37 +118,28 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
     {
         yield 'a global tag\'s own slug' => [
             ApiVersion::V2,
-            static fn(Client $c): TagResolution => $c->tags()->resolve('red', type: 'color'),
+            static fn (Client $c): TagResolution => $c->tags()->resolve('red', null, 'color'),
             TagResolution::MATCHED_TAG, null, 'red', null,
         ];
         yield 'a global alias' => [
             ApiVersion::V2,
-            static fn(Client $c): TagResolution => $c->tags()->resolve('scarlet'),
+            static fn (Client $c): TagResolution => $c->tags()->resolve('scarlet'),
             TagResolution::MATCHED_ALIAS, 'scarlet', 'red', null,
         ];
         yield 'a global alias on v1' => [
             ApiVersion::V1,
-            static fn(Client $c): TagResolution => $c->tags()->resolve('scarlet'),
+            static fn (Client $c): TagResolution => $c->tags()->resolve('scarlet'),
             TagResolution::MATCHED_ALIAS, 'scarlet', 'red', null,
         ];
         // Merchant A's own red wins over the global one inside its namespace.
         yield 'a namespaced tag over the global one' => [
             ApiVersion::V2,
-            static fn(Client $c): TagResolution => $c->tags()->resolve(
-                'red',
-                self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'),
-                'color',
-                options: self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID')),
-            ),
+            static fn (Client $c): TagResolution => $c->tags()->resolve('red', self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'), 'color', null, null, self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID'))),
             TagResolution::MATCHED_TAG, null, 'red', 'OCTONOMY_TEST_NAMESPACE_A_ID',
         ];
         yield 'a namespaced alias' => [
             ApiVersion::V2,
-            static fn(Client $c): TagResolution => $c->tags()->resolve(
-                'promo',
-                self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'),
-                options: self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID')),
-            ),
+            static fn (Client $c): TagResolution => $c->tags()->resolve('promo', self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID'), null, null, null, self::in(self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID'))),
             TagResolution::MATCHED_ALIAS, 'promo', 'sale', 'OCTONOMY_TEST_NAMESPACE_A_ID',
         ];
     }
@@ -171,8 +161,8 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
      * the SDK put the tag in.
      *
      * @param \Closure(Client, string): mixed $write
+     * @dataProvider refusedWrites
      */
-    #[DataProvider('refusedWrites')]
     public function testAnAssignmentWriteNamingNoTagIsRefusedBeforeWriting(\Closure $write, string $field): void
     {
         try {
@@ -191,26 +181,26 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
     {
         $missing = 'octonomy-php-no-such-alias';
         yield 'create by an unknown tag id' => [
-            static fn(Client $c, string $app): mixed => $c->assignments()->create(
+            static fn (Client $c, string $app) => $c->assignments()->create(
                 AssignmentCreate::forTag($app, 'product', 'sku-001', '00000000-0000-4000-8000-000000000000'),
             ),
             'tag_id',
         ];
         yield 'create by an unknown alias id' => [
-            static fn(Client $c, string $app): mixed => $c->assignments()->create(
+            static fn (Client $c, string $app) => $c->assignments()->create(
                 AssignmentCreate::forAliasId($app, 'product', 'sku-001', '00000000-0000-4000-8000-000000000000'),
             ),
             'alias_id',
         ];
         yield 'create by an unknown alias slug' => [
-            static fn(Client $c, string $app): mixed => $c->assignments()->create(
+            static fn (Client $c, string $app) => $c->assignments()->create(
                 AssignmentCreate::forAliasSlug($app, 'product', 'sku-001', $missing),
             ),
             'alias_slug',
         ];
         yield 'bulk assign by an unknown alias slug' => [
-            static fn(Client $c, string $app): mixed => $c->assignments()->bulkAssign(
-                new BulkAssign($app, 'product', 'sku-001', aliasSlugs: [$missing]),
+            static fn (Client $c, string $app) => $c->assignments()->bulkAssign(
+                new BulkAssign($app, 'product', 'sku-001', null, [$missing]),
             ),
             'alias_slugs',
         ];
@@ -248,7 +238,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
             self::assertSame('octonomy-php-harness', $row->assignedBy);
         }
 
-        $inA = $client->resources()->listTags('product', 'sku-001', $app, options: self::in($a))->data;
+        $inA = $client->resources()->listTags('product', 'sku-001', $app, null, self::in($a))->data;
         self::assertSame(['red', 'sale'], self::tagSlugs($inA));
         foreach ($inA as $row) {
             self::assertSame($a, $row->namespaceId);
@@ -290,7 +280,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
         $red = $this->tag($client, 'red', 'color');
 
         $resources = $client->tags()->listResources($red->id)->data;
-        $ids = array_map(static fn(TagResource $r): string => $r->resourceId, $resources);
+        $ids = array_map(static fn (TagResource $r): string => $r->resourceId, $resources);
         sort($ids);
         self::assertSame(['sku-001', 'sku-002'], $ids);
         foreach ($resources as $resource) {
@@ -299,7 +289,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
             self::assertNull($resource->namespaceId);
         }
 
-        self::assertSame([], $client->tags()->listResources($red->id, new TagResourceListParams(resourceType: 'article'))->data);
+        self::assertSame([], $client->tags()->listResources($red->id, new TagResourceListParams(null, 'article'))->data);
     }
 
     public function testTheAuditLogNarrowsToATagAndToAResource(): void
@@ -307,21 +297,21 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
         $client = $this->harnessClient(ApiVersion::V2);
         $red = $this->tag($client, 'red', 'color');
 
-        $byFilter = $client->auditLogs()->list(new AuditLogListParams(tagId: $red->id))->data;
+        $byFilter = $client->auditLogs()->list(new AuditLogListParams(null, null, null, null, $red->id))->data;
         self::assertNotEmpty($byFilter);
         foreach ($byFilter as $log) {
             self::assertSame($red->id, $log->tagId);
             self::assertNull($log->namespaceId);
             self::assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', $log->operationId);
         }
-        $actions = array_map(static fn(AuditLog $l): string => $l->action, $byFilter);
+        $actions = array_map(static fn (AuditLog $l): string => $l->action, $byFilter);
         self::assertContains('tag.created', $actions);
         self::assertContains('assignment.created', $actions);
 
         // The tag's own list is the same filter.
         self::assertSame(self::ids($byFilter), self::ids($client->tags()->listAuditLogs($red->id)->data));
 
-        $created = array_values(array_filter($byFilter, static fn(AuditLog $l): bool => $l->action === 'tag.created'))[0];
+        $created = array_values(array_filter($byFilter, static fn (AuditLog $l): bool => $l->action === 'tag.created'))[0];
         self::assertInstanceOf(\stdClass::class, $created->changes['after']);
         self::assertSame('red', $created->changes['after']->slug);
 
@@ -337,7 +327,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
     {
         $a = self::harnessEnv('OCTONOMY_TEST_NAMESPACE_A_ID');
         $logs = $this->harnessClient(ApiVersion::V2)->auditLogs()->list(
-            new AuditLogListParams(applicationId: self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID')),
+            new AuditLogListParams(self::harnessEnv('OCTONOMY_TEST_APPLICATION_ID')),
             self::in($a),
         )->data;
 
@@ -350,7 +340,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
 
     private function tag(Client $client, string $slug, string $type): Tag
     {
-        $tags = $client->tags()->list(new TagListParams(slug: $slug, type: $type))->data;
+        $tags = $client->tags()->list(new TagListParams(null, null, null, null, null, $slug, $type))->data;
         self::assertCount(1, $tags, "the global partition holds one {$type}/{$slug}");
 
         return $tags[0];
@@ -358,7 +348,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
 
     private static function in(string $merchant): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', $merchant));
+        return new RequestOptions(null, new NamespaceScope('merchant', $merchant));
     }
 
     /**
@@ -384,7 +374,7 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
      */
     private static function tagSlugs(array $rows): array
     {
-        $slugs = array_map(static fn(ResourceTag $r): string => $r->tag->slug, $rows);
+        $slugs = array_map(static fn (ResourceTag $r): string => $r->tag->slug, $rows);
         sort($slugs);
 
         return $slugs;
@@ -397,6 +387,6 @@ final class ResourceGroupsCorpusTest extends IntegrationTestCase
      */
     private static function ids(array $logs): array
     {
-        return array_map(static fn(AuditLog $l): string => $l->id, $logs);
+        return array_map(static fn (AuditLog $l): string => $l->id, $logs);
     }
 }

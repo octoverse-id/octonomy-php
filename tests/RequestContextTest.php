@@ -32,7 +32,7 @@ final class RequestContextTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         try {
-            $client->tags()->get('tag/1', 'commerce', false, new RequestOptions(namespace: $namespace));
+            $client->tags()->get('tag/1', 'commerce', false, new RequestOptions(null, $namespace));
             self::fail('expected a NotFoundException');
         } catch (NotFoundException $e) {
             self::assertSame(ApiVersion::V2, $e->context->apiVersion);
@@ -55,12 +55,12 @@ final class RequestContextTest extends SdkTestCase
             'tenant_id' => 'tenant-kept-out',
             'actor_id' => 'actor-from-config',
         ]);
-        $input = new TagCreate(name: 'Name From The Body', slug: 'slug-from-the-body', type: 'label', applicationId: 'harness-app');
+        $input = new TagCreate('Name From The Body', 'slug-from-the-body', 'label', 'harness-app');
 
         try {
             $client->tags()->create($input, new RequestOptions(
-                actorId: 'actor-from-the-call',
-                namespace: new NamespaceScope('merchant', 'harness-merchant-a'),
+                'actor-from-the-call',
+                new NamespaceScope('merchant', 'harness-merchant-a'),
             ));
             self::fail('expected a ConflictException');
         } catch (ConflictException $e) {
@@ -91,7 +91,7 @@ final class RequestContextTest extends SdkTestCase
     public function testItsFieldsAreTheFiveThatDescribeWhereTheRequestWent(): void
     {
         $fields = array_map(
-            static fn(\ReflectionProperty $property): string => $property->getName(),
+            static fn (\ReflectionProperty $property): string => $property->getName(),
             (new \ReflectionClass(RequestContext::class))->getProperties(),
         );
 
