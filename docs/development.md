@@ -223,7 +223,8 @@ adding it to that list in the same PR.
 
 ## The PHP 7.4 line
 
-`main` is the only source. The 1.x line for PHP 7.4 (epic #4) was generated from it by Rector, once:
+`main` is the 2.x line, and the source the 1.x line came from. The 1.x line for PHP 7.4 (epic #4) was
+generated from it by Rector, once:
 `support/php7.4` holds that tree, generated from `main` at `c1626d4` and reviewed and committed in
 [#29](https://github.com/octoverse-id/octonomy-php/issues/29). It is never regenerated. From then on
 it is its own code, with its own CI and its own README, CHANGELOG, Makefile and `AGENTS.md` section,
