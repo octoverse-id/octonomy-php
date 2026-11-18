@@ -60,7 +60,8 @@ check:
   `NoHandWrittenResponseBodiesTest` fails on any `GuzzleHttp\` reference outside the fixture helpers,
   so there is no third way in.
 
-Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations. Keep new code covered.
+Name a data provider in a `@dataProvider` annotation: PHPUnit 9 reads no attributes, and PHP 7.4 reads
+`#[DataProvider]` as a comment, so the provider would silently stop. Keep new code covered.
 
 ## Integration tests against a real server
 

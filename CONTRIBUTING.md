@@ -44,10 +44,12 @@ These mirror [AGENTS.md](AGENTS.md):
 - Services read responses only through `Transport::one()` / `many()` / `none()`; never hydrate a
   raw body.
 - Non-2xx responses throw typed exceptions extending `ApiException`; never return error codes.
-- Response models are `readonly` DTOs with `::fromArray($data, $apiVersion)`, reading every field
-  through a strict `Internal\Json` reader that matches its declared type (see
-  [docs/architecture.md](docs/architecture.md#strict-hydration)); input DTOs use nullable promoted
-  properties + `toArray()` that omits nulls.
+- Response models are DTOs with `::fromArray($data, $apiVersion)`, reading every field through a
+  strict `Internal\Json` reader that matches its declared type (see
+  [docs/architecture.md](docs/architecture.md#strict-hydration)); input DTOs use nullable properties +
+  `toArray()` that omits nulls. PHP 7.4 has no `readonly` or constructor promotion, so on this line
+  each property is declared above the constructor, assigned in it, and marked `@readonly` in its
+  docblock, and nothing writes to it afterwards: 2.x makes such a write throw.
 - Keep models faithful to `docs/openapi-v2.yaml` / `docs/openapi.yaml`, except where the server
   sends something else (see the divergence note at the top of each spec); document any deliberate
   divergence.
