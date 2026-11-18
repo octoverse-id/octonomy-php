@@ -21,8 +21,8 @@ final class ConfigTest extends SdkTestCase
 
     /**
      * @param array<string, mixed> $options
+     * @dataProvider refusals
      */
-    #[DataProvider('refusals')]
     public function testARefusalSaysWhatIsWrongAndHowToFixIt(array $options, string $expected): void
     {
         try {
@@ -189,7 +189,7 @@ final class ConfigTest extends SdkTestCase
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage('octonomy: tenant_id is missing or blank.');
 
-        new Config(baseUrl: 'https://octonomy.test', token: 'svc_token', tenantId: '');
+        new Config('https://octonomy.test', 'svc_token', '');
     }
 
     /**
@@ -202,7 +202,7 @@ final class ConfigTest extends SdkTestCase
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage('octonomy: timeout and http_client are both set, and the timeout of 30 seconds would be ignored');
 
-        new Config(baseUrl: 'https://octonomy.test', token: 'svc_token', tenantId: 'acme', httpClient: self::anHttpClient(), timeout: 30.0);
+        new Config('https://octonomy.test', 'svc_token', 'acme', null, self::anHttpClient(), 30.0);
     }
 
     /**
@@ -214,10 +214,13 @@ final class ConfigTest extends SdkTestCase
      */
     public function testAClientChecksTheTimeoutOfTheConfigItIsGiven(): void
     {
-        $valid = new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme', timeout: 5.0);
+        $valid = new Config('https://octonomy.test', 't', 'acme', null, null, 5.0);
         $class = new \ReflectionClass(Config::class);
         $config = $class->newInstanceWithoutConstructor();
         foreach ($class->getProperties() as $property) {
+            if (PHP_VERSION_ID < 80100) {
+                $property->setAccessible(true);
+            }
             $property->setValue($config, $property->getName() === 'httpClient' ? self::anHttpClient() : $property->getValue($valid));
         }
 
@@ -245,8 +248,8 @@ final class ConfigTest extends SdkTestCase
      * given or 30 seconds.
      *
      * @param array<string, mixed> $options
+     * @dataProvider timeouts
      */
-    #[DataProvider('timeouts')]
     public function testTheClientTheSdkBuildsHasTheTimeout(array $options, float $expected): void
     {
         self::assertSame($expected, self::timeoutOfTheClientBuiltFor(new Client($options + self::VALID)));

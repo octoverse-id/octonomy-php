@@ -33,7 +33,9 @@ namespace Octoverse\Octonomy\Internal;
  */
 final class Path
 {
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * The segments, each percent-encoded (RFC 3986), joined by "/".
@@ -42,11 +44,17 @@ final class Path
     {
         $encoded = [];
         foreach ($segments as $segment) {
-            $encoded[] = match ($segment) {
-                '.' => '%2E',
-                '..' => '%2E%2E',
-                default => rawurlencode($segment),
-            };
+            switch ($segment) {
+                case '.':
+                    $encoded[] = '%2E';
+                    break;
+                case '..':
+                    $encoded[] = '%2E%2E';
+                    break;
+                default:
+                    $encoded[] = rawurlencode($segment);
+                    break;
+            }
         }
 
         return implode('/', $encoded);

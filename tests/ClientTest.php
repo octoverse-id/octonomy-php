@@ -23,8 +23,8 @@ final class ClientTest extends SdkTestCase
 {
     /**
      * @param array<string, mixed> $config
+     * @dataProvider invalidConfigProvider
      */
-    #[DataProvider('invalidConfigProvider')]
     public function testInvalidConfigThrows(array $config): void
     {
         $this->expectException(ConfigurationException::class);
@@ -92,22 +92,21 @@ final class ClientTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/get')], ['actor_id' => 'svc-config']);
 
-        $client->tags()->get('tag_1', options: RequestOptions::withActor('svc-call'));
+        $client->tags()->get('tag_1', null, null, RequestOptions::withActor('svc-call'));
 
         self::assertSame('svc-call', $this->lastRequest()->getHeaderLine('X-Actor-ID'));
     }
 
     /**
      * @param class-string<ApiException> $expected
+     * @dataProvider errorProvider
      */
-    #[DataProvider('errorProvider')]
     public function testErrorEnvelopeMapsToException(string $fixture, string $code, string $expected): void
     {
         $captured = CapturedFixture::load($fixture);
         $error = $captured->json()['error'];
         self::assertSame($code, $error['code'], "{$fixture} is not the {$code} envelope");
         $client = $this->clientWith([$captured], ['api_version' => $captured->apiVersion()]);
-
         try {
             $client->tags()->get('tag_1');
             self::fail('expected an ApiException');
@@ -158,17 +157,16 @@ final class ClientTest extends SdkTestCase
      * and a 502 or 503 from one is a bare ApiException. A 503 in particular is
      * not read as the server's namespace_api_disabled flag, which only an
      * enveloped 503 states.
+     * @dataProvider gatewayStatuses
      */
-    #[DataProvider('gatewayStatuses')]
     public function testErrorFallbackForNonEnvelopeBody(int $status): void
     {
         $client = $this->clientWith([self::syntheticNegative(SyntheticNegative::GATEWAY, $status, 'upstream down', [])]);
-
         try {
             $client->tags()->get('tag_1');
             self::fail('expected an ApiException');
         } catch (ApiException $e) {
-            self::assertSame(ApiException::class, $e::class);
+            self::assertSame(ApiException::class, get_class($e));
             self::assertSame($status, $e->statusCode);
             self::assertSame("http_{$status}", $e->errorCode);
             self::assertEquals(new RequestContext('v2', 'GET', '/api/v2/tags/tag_1'), $e->context);

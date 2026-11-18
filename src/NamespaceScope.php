@@ -36,12 +36,22 @@ use Octoverse\Octonomy\Internal\Redaction;
 final class NamespaceScope
 {
     /**
+     * @readonly
+     */
+    public string $type;
+    /**
+     * @readonly
+     */
+    public string $id;
+    /**
      * @throws \InvalidArgumentException when the type or the id is blank or holds a control character
      */
     public function __construct(
-        public readonly string $type,
-        public readonly string $id,
+        string $type,
+        string $id
     ) {
+        $this->type = $type;
+        $this->id = $id;
         if (trim($type) === '') {
             throw new \InvalidArgumentException(
                 'octonomy: a namespace type is required; omit the namespace for the global (tenant-shared) partition',

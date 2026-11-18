@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This is the changelog of the 1.x line, on `support/php7.4`; `main`'s is 2.x's. The line's first release,
+`1.0.0`, carries everything below, generated for PHP 7.4 from `main` at `c1626d4` (#29): the classes and
+methods 2.x has, on PHP 7.4+ and Guzzle 7, with mutable models, and without the named arguments PHP 7.4
+lacks. After `1.0.0` this file records this line's own fixes.
+
 ### Added
+- The 1.x line, for PHP 7.4 to 8.1, on the `support/php7.4` branch: this SDK generated once from the
+  same source by Rector, with the same classes and methods, released as `1.x` beside `2.x`. Two
+  differences reach your code: its models are mutable where 2.x's are `readonly`, and PHP 7.4 has no
+  named arguments. `docs/upgrading-1-to-2.md` covers both and what else changes when you move to 2.x,
+  and the README and the guide link it (#29).
 - `docs/guide.md`, one path through the SDK: what Octonomy keeps, trying it with the dev server, a
   client, each resource group with the example that shows it, namespaces, pagination, errors, audit
   logs, health and webhooks, testing your code (`FixtureClient`, and a PSR-18 client of your own for
@@ -46,7 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty or non-string secret, a header that is not a string or null, a body that is not a string). Its
   parameters are declared `mixed` and checked inside, and what it throws goes through
   `Redaction::scrubAll()`, which removes the arguments of every frame, so the secret reaches no frame of
-  its trace on either PHP line; `#[\SensitiveParameter]` marks it on PHP 8.2+ too. Tested against
+  its trace on either PHP line. (2.x marks it `#[\SensitiveParameter]` too; this line cannot carry the
+  attribute, so the scrub is its whole protection.) Tested against
   octonomy-go's signature vectors, generated from the server's signing code and vendored under
   `tests/fixtures/webhook`. The README and `docs/api.md` say to reject a failed check with anything but a
   2xx, which the server takes as delivered for good (#26).
@@ -149,8 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before sending, without being quoted.
 - `VocabularyService`: create, get, list, update, delete.
 - `TagService`: create, get, list (full filter set), update, delete.
-- `RequestOptions::withActor()`, readonly response models, and `*Create`/`*Update`/`*ListParams`
-  input DTOs.
+- `RequestOptions::withActor()`, response models (`readonly` on 2.x; on this line writable, each
+  property marked `@readonly` in its docblock), and `*Create`/`*Update`/`*ListParams` input DTOs.
 - Tri-state `TagUpdate` and `VocabularyUpdate` (#20). Every string field defaults to the new
   `Undefined::VALUE`, which omits it, so an explicit `null` is now sent: `new TagUpdate(description:
   null)` sends `{"description": null}` and clears the description. A null used to be dropped: beside
@@ -224,10 +235,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A 2xx is read strictly: a body that is not a JSON object with a string `status` throws
     `MalformedResponseException`.
   - `RequestContext::$apiVersion` is null for a probe, which calls no api_version.
-  - `make fixtures` captures the probes, the 503 with the harness database stopped
-    (`scripts/octonomy-harness.sh stop-db`).
+  - `make fixtures` on `main` captures the probes, the 503 with the harness database stopped
+    (`scripts/octonomy-harness.sh stop-db`); this line carries that corpus.
 - Runnable `examples/quickstart.php`, and the vendored contract references `docs/openapi.yaml` (v1) and
   `docs/openapi-v2.yaml` (v2), both the server's own files at tag `v3.2.1`, each with a header listing
   where it diverges from what the server sends (#21).
 
-[Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/main
+[Unreleased]: https://github.com/octoverse-id/octonomy-php/commits/support/php7.4

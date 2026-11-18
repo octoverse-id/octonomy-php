@@ -72,13 +72,13 @@ final class SdkBuiltClientTest extends SdkTestCase
         parent::tearDown();
     }
 
-    #[DataProvider('dotSegmentPaths')]
+    /**
+     * @dataProvider dotSegmentPaths
+     */
     public function testTheClientTheSdkBuildsSendsADotSegmentAsWritten(string $path): void
     {
         $transport = new Transport(new Config($this->baseUrl, 'svc_test', 'acme'), Client::VERSION);
-
         $transport->none('GET', $path);
-
         self::assertSame('GET /api/v2/' . $path, $this->received());
     }
 

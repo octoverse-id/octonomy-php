@@ -19,6 +19,28 @@ use GuzzleHttp\Psr7\Response;
  */
 final class CapturedFixture
 {
+    /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @var array<string, mixed>
+     * @readonly
+     */
+    public array $request;
+    /**
+     * @readonly
+     */
+    public int $status;
+    /**
+     * @var array<string, string>
+     * @readonly
+     */
+    public array $headers;
+    /**
+     * @readonly
+     */
+    public string $body;
     public const ROOT = __DIR__ . '/../../resources/fixtures';
 
     /** @var array<string, self> */
@@ -31,13 +53,14 @@ final class CapturedFixture
      * @param array<string, mixed> $request
      * @param array<string, string> $headers
      */
-    private function __construct(
-        public readonly string $name,
-        public readonly array $request,
-        public readonly int $status,
-        public readonly array $headers,
-        public readonly string $body,
-    ) {}
+    private function __construct(string $name, array $request, int $status, array $headers, string $body)
+    {
+        $this->name = $name;
+        $this->request = $request;
+        $this->status = $status;
+        $this->headers = $headers;
+        $this->body = $body;
+    }
 
     /**
      * Load a fixture by name, such as 'v1/tags/get'.
@@ -113,8 +136,8 @@ final class CapturedFixture
         $fixtures = self::manifest()['fixtures'];
         $names = [];
         foreach (array_keys($fixtures) as $file) {
-            if ($apiVersion === null || str_starts_with($file, "{$apiVersion}/")) {
-                $names[] = substr($file, 0, -strlen('.json'));
+            if ($apiVersion === null || strncmp($file, "{$apiVersion}/", strlen("{$apiVersion}/")) === 0) {
+                $names[] = (string) substr($file, 0, -strlen('.json'));
             }
         }
 

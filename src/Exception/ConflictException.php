@@ -11,4 +11,6 @@ namespace Octoverse\Octonomy\Exception;
  * A row's scope is fixed at creation, so re-create it in the target scope
  * instead. $errorCode says which.
  */
-final class ConflictException extends ApiException {}
+final class ConflictException extends ApiException
+{
+}

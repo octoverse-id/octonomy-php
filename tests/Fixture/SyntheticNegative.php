@@ -18,6 +18,28 @@ use GuzzleHttp\Psr7\Response;
  */
 final class SyntheticNegative
 {
+    /**
+     * @readonly
+     */
+    public string $kind;
+    /**
+     * @readonly
+     */
+    private int $status;
+    /**
+     * @readonly
+     */
+    public string $body;
+    /**
+     * @var array<string, string>
+     * @readonly
+     */
+    private array $headers;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    private ?string $capturedFrom = null;
     /** A 2xx without its {"data": ...} or {"data", "pagination"} envelope. */
     public const MISSING_ENVELOPE = 'missing envelope';
 
@@ -70,12 +92,17 @@ final class SyntheticNegative
      *                                  null for one written from nothing
      */
     public function __construct(
-        public readonly string $kind,
-        private readonly int $status,
-        public readonly string $body,
-        private readonly array $headers,
-        private readonly ?string $capturedFrom = null,
+        string $kind,
+        int $status,
+        string $body,
+        array $headers,
+        ?string $capturedFrom = null
     ) {
+        $this->kind = $kind;
+        $this->status = $status;
+        $this->body = $body;
+        $this->headers = $headers;
+        $this->capturedFrom = $capturedFrom;
         if (!in_array($kind, self::KINDS, true)) {
             throw new \InvalidArgumentException(
                 "'{$kind}' is not a synthetic-negative kind; anything a real server can send must be captured (make fixtures)",

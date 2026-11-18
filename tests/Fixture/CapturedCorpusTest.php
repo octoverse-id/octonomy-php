@@ -124,7 +124,7 @@ final class CapturedCorpusTest extends SdkTestCase
     public function testCorpusHoldsExactlyTheRequiredOperations(): void
     {
         foreach (self::REQUIRED_ONLY_IN as $version => $only) {
-            $expected = array_map(static fn(string $operation): string => "{$version}/{$operation}", [...self::REQUIRED, ...$only]);
+            $expected = array_map(static fn (string $operation): string => "{$version}/{$operation}", array_merge(self::REQUIRED, $only));
             sort($expected);
             $actual = CapturedFixture::names($version);
             sort($actual);
@@ -133,7 +133,7 @@ final class CapturedCorpusTest extends SdkTestCase
 
             foreach ($actual as $name) {
                 $operation = substr($name, strlen("{$version}/"));
-                $status = self::STATUS[$operation] ?? self::STATUS[basename($operation)] ?? (str_starts_with($operation, 'errors/') ? 400 : 200);
+                $status = self::STATUS[$operation] ?? self::STATUS[basename($operation)] ?? (strncmp($operation, 'errors/', strlen('errors/')) === 0 ? 400 : 200);
                 self::assertSame($status, CapturedFixture::load($name)->status, "{$name} was not captured from the call its name says");
             }
         }
@@ -185,7 +185,7 @@ final class CapturedCorpusTest extends SdkTestCase
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(CapturedFixture::ROOT, \FilesystemIterator::SKIP_DOTS));
         foreach ($files as $file) {
             \assert($file instanceof \SplFileInfo);
-            $relative = substr($file->getPathname(), strlen(CapturedFixture::ROOT) + 1);
+            $relative = (string) substr($file->getPathname(), strlen(CapturedFixture::ROOT) + 1);
             if ($relative === 'manifest.json') {
                 continue;
             }
@@ -251,14 +251,13 @@ final class CapturedCorpusTest extends SdkTestCase
     /**
      * Every fixture, both versions, read back through the transport method its
      * shape calls for.
+     * @dataProvider everyFixture
      */
-    #[DataProvider('everyFixture')]
     public function testTransportReadsEveryCapturedResponse(string $name): void
     {
         $captured = CapturedFixture::load($name);
         $body = $captured->json();
         $transport = $this->transportWith([$captured], self::apiVersion($name));
-
         if ($captured->status >= 400) {
             try {
                 $transport->one('GET', 'any', self::asDecoded());
@@ -306,14 +305,21 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedTagHydrates(): void
     {
-        $rows = self::modelRows('tags', static fn(string $operation, mixed $data): array => match (true) {
-            in_array($operation, ['tags/create', 'tags/get', 'tags/list', 'tags/list-page'], true),
-            str_starts_with($operation, 'tags/update'),
-            str_starts_with($operation, 'tags/walk-') => self::oneOrMany($data),
-            str_starts_with($operation, 'tag-resolution/') => [$data->tag],
-            $operation === 'resources/replace' => $data->tags,
-            $operation === 'resources/tags' => array_column($data, 'tag'),
-            default => [],
+        $rows = self::modelRows('tags', static function (string $operation, $data): array {
+            switch (true) {
+                case in_array($operation, ['tags/create', 'tags/get', 'tags/list', 'tags/list-page'], true):
+                case strncmp($operation, 'tags/update', strlen('tags/update')) === 0:
+                case strncmp($operation, 'tags/walk-', strlen('tags/walk-')) === 0:
+                    return self::oneOrMany($data);
+                case strncmp($operation, 'tag-resolution/', strlen('tag-resolution/')) === 0:
+                    return [$data->tag];
+                case $operation === 'resources/replace':
+                    return $data->tags;
+                case $operation === 'resources/tags':
+                    return array_column($data, 'tag');
+                default:
+                    return [];
+            }
         });
         self::assertGreaterThan(20, count($rows));
 
@@ -334,7 +340,7 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame(array_key_exists('vocabulary_id', $row) ? $row['vocabulary_id'] : null, $tag->vocabularyId, $name);
             // Sent back unchanged, metadata is the JSON the server sent (#48).
             self::assertSame(self::json($members['metadata']), self::json(
-                $tag->metadata === null ? null : (new TagUpdate(metadata: $tag->metadata))->toArray()['metadata'],
+                $tag->metadata === null ? null : (new TagUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', $tag->metadata))->toArray()['metadata'],
             ), $name);
             self::assertSame($row['is_active'], $tag->isActive, $name);
             self::assertSame($row['usage_count'], $tag->usageCount, $name);
@@ -345,7 +351,7 @@ final class CapturedCorpusTest extends SdkTestCase
 
     public function testEveryCapturedVocabularyHydrates(): void
     {
-        $rows = self::modelRows('vocabularies', static fn(string $operation, mixed $data): array => str_starts_with($operation, 'vocabularies/')
+        $rows = self::modelRows('vocabularies', static fn (string $operation, $data): array => strncmp($operation, 'vocabularies/', strlen('vocabularies/')) === 0
             ? self::oneOrMany($data)
             : []);
         self::assertGreaterThan(10, count($rows));
@@ -361,7 +367,7 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['description'], $vocabulary->description, $name);
             // Sent back unchanged, metadata is the JSON the server sent (#48).
             self::assertSame(self::json($members['metadata']), self::json(
-                $vocabulary->metadata === null ? null : (new VocabularyUpdate(metadata: $vocabulary->metadata))->toArray()['metadata'],
+                $vocabulary->metadata === null ? null : (new VocabularyUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', $vocabulary->metadata))->toArray()['metadata'],
             ), $name);
             self::assertSame($row['is_active'], $vocabulary->isActive, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $vocabulary->createdAt, $name);
@@ -375,10 +381,16 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedAliasHydrates(): void
     {
-        $rows = self::modelRows('tag aliases', static fn(string $operation, mixed $data): array => match (true) {
-            str_starts_with($operation, 'tag-aliases/'), $operation === 'tags/aliases' => self::oneOrMany($data),
-            str_starts_with($operation, 'tag-resolution/') => $data->matched_alias === null ? [] : [$data->matched_alias],
-            default => [],
+        $rows = self::modelRows('tag aliases', static function (string $operation, $data): array {
+            switch (true) {
+                case strncmp($operation, 'tag-aliases/', strlen('tag-aliases/')) === 0:
+                case $operation === 'tags/aliases':
+                    return self::oneOrMany($data);
+                case strncmp($operation, 'tag-resolution/', strlen('tag-resolution/')) === 0:
+                    return $data->matched_alias === null ? [] : [$data->matched_alias];
+                default:
+                    return [];
+            }
         });
         self::assertGreaterThan(10, count($rows));
 
@@ -393,7 +405,7 @@ final class CapturedCorpusTest extends SdkTestCase
             self::assertSame($row['slug'], $alias->slug, $name);
             // Sent back unchanged, metadata is the JSON the server sent (#48).
             self::assertSame(self::json($members['metadata']), self::json(
-                (new TagAliasUpdate(metadata: $alias->metadata))->toArray()['metadata'],
+                (new TagAliasUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', $alias->metadata))->toArray()['metadata'],
             ), $name);
             self::assertSame($row['is_active'], $alias->isActive, $name);
             self::assertEquals(new \DateTimeImmutable($row['created_at']), $alias->createdAt, $name);
@@ -406,10 +418,15 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedAssignmentHydrates(): void
     {
-        $rows = self::modelRows('assignments', static fn(string $operation, mixed $data): array => match (true) {
-            in_array($operation, ['tag-assignments/create', 'tag-assignments/create-existing'], true) => [$data],
-            $operation === 'tag-assignments/bulk-assign' => $data->assignments,
-            default => [],
+        $rows = self::modelRows('assignments', static function (string $operation, $data): array {
+            switch (true) {
+                case in_array($operation, ['tag-assignments/create', 'tag-assignments/create-existing'], true):
+                    return [$data];
+                case $operation === 'tag-assignments/bulk-assign':
+                    return $data->assignments;
+                default:
+                    return [];
+            }
         });
         self::assertGreaterThan(5, count($rows));
 
@@ -433,8 +450,8 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedResourceRowHydrates(): void
     {
-        $resourceTags = self::modelRows('resource tags', static fn(string $operation, mixed $data): array => $operation === 'resources/tags' ? $data : []);
-        $tagResources = self::modelRows('tag resources', static fn(string $operation, mixed $data): array => $operation === 'tags/resources' ? $data : []);
+        $resourceTags = self::modelRows('resource tags', static fn (string $operation, $data): array => $operation === 'resources/tags' ? $data : []);
+        $tagResources = self::modelRows('tag resources', static fn (string $operation, $data): array => $operation === 'tags/resources' ? $data : []);
         self::assertGreaterThan(2, count($resourceTags));
         self::assertGreaterThan(2, count($tagResources));
 
@@ -463,7 +480,7 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     public function testEveryCapturedAuditLogHydrates(): void
     {
-        $rows = self::modelRows('audit logs', static fn(string $operation, mixed $data): array => str_ends_with($operation, 'audit-logs') || $operation === 'audit-logs/list'
+        $rows = self::modelRows('audit logs', static fn (string $operation, $data): array => substr_compare($operation, 'audit-logs', -strlen('audit-logs')) === 0 || $operation === 'audit-logs/list'
             ? $data
             : []);
         self::assertGreaterThan(10, count($rows));
@@ -497,7 +514,7 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     private static function assertNamespacePair(string $name, array $row, ?string $type, ?string $id): void
     {
-        if (str_starts_with($name, 'v2/')) {
+        if (strncmp($name, 'v2/', strlen('v2/')) === 0) {
             self::assertSame($row['namespace_type'], $type, $name);
             self::assertSame($row['namespace_id'], $id, $name);
 
@@ -515,7 +532,7 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     private static function apiNames(): array
     {
-        return [...CapturedFixture::names('v1'), ...CapturedFixture::names('v2')];
+        return array_merge(CapturedFixture::names('v1'), CapturedFixture::names('v2'));
     }
 
     /**
@@ -523,13 +540,14 @@ final class CapturedCorpusTest extends SdkTestCase
      */
     private static function apiVersion(string $name): string
     {
-        return str_starts_with($name, 'v2/') ? ApiVersion::V2 : ApiVersion::V1;
+        return strncmp($name, 'v2/', strlen('v2/')) === 0 ? ApiVersion::V2 : ApiVersion::V1;
     }
 
     /**
      * $value encoded as Transport encodes a request body.
+     * @param mixed $value
      */
-    private static function json(mixed $value): string
+    private static function json($value): string
     {
         return json_encode($value, JSON_THROW_ON_ERROR);
     }
@@ -554,7 +572,7 @@ final class CapturedCorpusTest extends SdkTestCase
             if ($captured->status >= 300 || $captured->body === '') {
                 continue;
             }
-            $operation = substr($name, strlen('v1/'));
+            $operation = (string) substr($name, strlen('v1/'));
             $decoded = json_decode($captured->body, false, 512, JSON_THROW_ON_ERROR);
             self::assertInstanceOf(\stdClass::class, $decoded, $name);
             foreach ($extract($operation, $decoded->data) as $row) {
@@ -576,8 +594,9 @@ final class CapturedCorpusTest extends SdkTestCase
      * A single resource as a one-row list, or a list's rows as they are.
      *
      * @return array<array-key, mixed>
+     * @param mixed $data
      */
-    private static function oneOrMany(mixed $data): array
+    private static function oneOrMany($data): array
     {
         return is_array($data) ? $data : [$data];
     }
@@ -597,7 +616,7 @@ final class CapturedCorpusTest extends SdkTestCase
                 $keys[] = $key;
             }
             if (is_array($item)) {
-                $keys = [...$keys, ...self::keysAnywhere($item)];
+                $keys = array_merge($keys, self::keysAnywhere($item));
             }
         }
 
@@ -617,12 +636,28 @@ final class CapturedCorpusTest extends SdkTestCase
     private static function rows(array $value): array
     {
         $rows = [];
-        if (!array_is_list($value) && array_intersect(['id', 'assignment_id', 'resource_id'], array_keys($value)) !== []) {
+        $arrayIsListFunction = function (array $array): bool {
+            if (function_exists('array_is_list')) {
+                return array_is_list($array);
+            }
+            if ($array === []) {
+                return true;
+            }
+            $current_key = 0;
+            foreach ($array as $key => $noop) {
+                if ($key !== $current_key) {
+                    return false;
+                }
+                ++$current_key;
+            }
+            return true;
+        };
+        if (!$arrayIsListFunction($value) && array_intersect(['id', 'assignment_id', 'resource_id'], array_keys($value)) !== []) {
             $rows[] = $value;
         }
         foreach ($value as $key => $item) {
             if (is_array($item) && $key !== 'changes' && $key !== 'metadata') {
-                $rows = [...$rows, ...self::rows($item)];
+                $rows = array_merge($rows, self::rows($item));
             }
         }
 

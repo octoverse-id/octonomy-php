@@ -152,16 +152,14 @@ final class DevServerTest extends TestCase
      * tokens rejected as invalid by the replacement.
      *
      * @param array<string, string> $docker
+     * @dataProvider serversHeldElsewhere
      */
-    #[DataProvider('serversHeldElsewhere')]
     public function testRunRefusesToBootOverAServerHeldByAnotherInstallation(array $docker): void
     {
         $this->writeProbe($this->work . '/probe.php');
-
         [$code, $out, $err] = $this->devServer(self::checkoutBin(), ['run', 'probe.php'], $this->work, [
             'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
         ] + $docker);
-
         self::assertSame(1, $code);
         self::assertSame('', $out, 'the script never ran');
         self::assertStringContainsString(
@@ -174,14 +172,13 @@ final class DevServerTest extends TestCase
 
     /**
      * @param array<string, string> $docker
+     * @dataProvider serversHeldElsewhere
      */
-    #[DataProvider('serversHeldElsewhere')]
     public function testUpRefusesAServerHeldByAnotherInstallation(array $docker): void
     {
         [$code, , $err] = $this->devServer(self::checkoutBin(), ['up'], $this->work, [
             'OCTONOMY_HARNESS_ENV_FILE' => $this->work . '/dev.env',
         ] + $docker);
-
         self::assertSame(1, $code);
         self::assertStringContainsString('already exists, but this installation\'s env file', $err);
         self::assertNotContains('info', $this->dockerCalls(), 'nothing booted');
@@ -324,7 +321,7 @@ final class DevServerTest extends TestCase
                 continue;
             }
             self::assertSame(1, preg_match('/^OCTONOMY_TEST_([A-Z0-9_]+)=\$\{[A-Z_]+\}$/', $line), $line);
-            $names[] = substr($line, strlen('OCTONOMY_TEST_'), (int) strpos($line, '=') - strlen('OCTONOMY_TEST_'));
+            $names[] = (string) substr($line, strlen('OCTONOMY_TEST_'), (int) strpos($line, '=') - strlen('OCTONOMY_TEST_'));
         }
         foreach (['BASE_URL', 'TOKEN', 'TENANT_ID'] as $required) {
             self::assertContains($required, $names);

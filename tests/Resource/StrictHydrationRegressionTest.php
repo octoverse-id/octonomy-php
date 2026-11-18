@@ -81,8 +81,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * the server always emits them; description is nullable.
      *
      * @param \Closure(Client): object $call
+     * @dataProvider getCalls
      */
-    #[DataProvider('getCalls')]
     public function testAnAbsentNullableKeyRaisesNamingTheFieldAndEndpoint(string $fixture, string $path, \Closure $call): void
     {
         self::assertArrayHasKey('description', self::capturedData($fixture));
@@ -91,7 +91,6 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
             return $body;
         })], ['api_version' => ApiVersion::V1]);
-
         try {
             $call($client);
             self::fail('expected a MalformedResponseException');
@@ -112,19 +111,17 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * yields null. Read from a captured list, since a real server sends these.
      *
      * @param \Closure(Client): list<Tag|Vocabulary> $list
+     * @dataProvider listCalls
      */
-    #[DataProvider('listCalls')]
     public function testAnExplicitNullOnANullableFieldYieldsNull(string $fixture, string $slug, string $key, \Closure $list): void
     {
         $rows = array_column(self::capturedData($fixture), null, 'slug');
         self::assertArrayHasKey($key, $rows[$slug], "{$fixture} must send {$slug}'s {$key} for this test to mean anything");
         self::assertNull($rows[$slug][$key]);
-
         $bySlug = [];
         foreach ($list($this->clientWith([self::captured($fixture)], ['api_version' => ApiVersion::V1])) as $model) {
             $bySlug[$model->slug] = $model;
         }
-
         self::assertNull($bySlug[$slug]->{self::property($key)});
     }
 
@@ -133,8 +130,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      */
     public static function listCalls(): iterable
     {
-        $tags = static fn(Client $c): array => $c->tags()->list()->data;
-        $vocabularies = static fn(Client $c): array => $c->vocabularies()->list()->data;
+        $tags = static fn (Client $c): array => $c->tags()->list()->data;
+        $vocabularies = static fn (Client $c): array => $c->vocabularies()->list()->data;
 
         yield 'tag application_id' => ['v1/tags/list', 'green', 'application_id', $tags];
         yield 'tag description' => ['v1/tags/list', 'green', 'description', $tags];
@@ -150,26 +147,24 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * on v1, which v1 does not declare.
      *
      * @param class-string $model
+     * @dataProvider requiredFields
      */
-    #[DataProvider('requiredFields')]
     public function testEveryRequiredFieldMustBePresent(string $model, string $apiVersion, string $key): void
     {
         $fixture = self::fixture($model, $apiVersion);
         $row = self::row($model, self::capturedData($fixture));
         self::assertArrayHasKey($key, $row);
-        $transport = $this->transportWith([self::syntheticNegativeFrom($fixture, SyntheticNegative::MISSING_FIELD, static fn(array $body): array => self::editRow($model, $body, static function (array $row) use ($key): array {
+        $transport = $this->transportWith([self::syntheticNegativeFrom($fixture, SyntheticNegative::MISSING_FIELD, static fn (array $body): array => self::editRow($model, $body, static function (array $row) use ($key): array {
             unset($row[$key]);
 
             return $row;
         }))], $apiVersion);
-
         $this->expectException(MalformedResponseException::class);
         // A model with one field (BulkRemoveResult) is left empty, which the
         // envelope check refuses before the model reads it.
         $this->expectExceptionMessage(count($row) === 1
             ? sprintf('(api_version %s): expected a non-empty JSON object under "data"', $apiVersion)
             : sprintf('(api_version %s): field "%s.%s" is missing', $apiVersion, self::placeOf($model), $key));
-
         self::read($transport, $model);
     }
 
@@ -178,23 +173,22 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * than its declared one, null included where the field is not nullable.
      *
      * @param class-string $model
+     * @dataProvider mistypedFields
+     * @param mixed $value
      */
-    #[DataProvider('mistypedFields')]
-    public function testEveryDeclaredFieldRejectsAnotherType(string $model, string $key, mixed $value, string $expected): void
+    public function testEveryDeclaredFieldRejectsAnotherType(string $model, string $key, $value, string $expected): void
     {
         $transport = $this->transportWith([self::syntheticNegativeFrom(
             self::fixture($model, ApiVersion::V2),
             SyntheticNegative::WRONG_TYPE,
-            static fn(array $body): array => self::editRow($model, $body, static function (array $row) use ($key, $value): array {
+            static fn (array $body): array => self::editRow($model, $body, static function (array $row) use ($key, $value): array {
                 $row[$key] = $value;
 
                 return $row;
             }),
         )], ApiVersion::V2);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(sprintf('field "%s.%s" must be %s', self::placeOf($model), $key, $expected));
-
         self::read($transport, $model);
     }
 
@@ -220,8 +214,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     /**
      * Strings that are no RFC 3339 timestamp. Before #14 these became 1970-01-01;
      * "yesterday" and "now" would also pass a bare \DateTimeImmutable parse.
+     * @dataProvider unparseableTimestamps
      */
-    #[DataProvider('unparseableTimestamps')]
     public function testAnUnparseableTimestampRaises(string $timestamp): void
     {
         $client = $this->clientWith([self::syntheticNegativeFrom('v1/tags/get', SyntheticNegative::WRONG_TYPE, static function (array $body) use ($timestamp): array {
@@ -229,10 +223,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
             return $body;
         })], ['api_version' => ApiVersion::V1]);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(sprintf('field "data.created_at" must be an RFC 3339 timestamp, got "%s"', $timestamp));
-
         $client->tags()->get('tag_1');
     }
 
@@ -256,8 +248,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * it), so a v1 body that carries it, even as nulls, is drift.
      *
      * @param array{namespace_type: string|null, namespace_id: string|null} $pair
+     * @dataProvider namespacePairs
      */
-    #[DataProvider('namespacePairs')]
     public function testAV1ResponseCarryingTheNamespacePairRaises(array $pair): void
     {
         $client = $this->clientWith([self::syntheticNegativeFrom('v1/tags/get', SyntheticNegative::UNDECLARED_FIELD, static function (array $body) use ($pair): array {
@@ -265,12 +257,10 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
             return $body;
         })], ['api_version' => ApiVersion::V1]);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
             'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): field "data.namespace_type" is not part of an api_version v1 response',
         );
-
         $client->tags()->get('tag_1');
     }
 
@@ -288,26 +278,24 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * is drift. (testEveryRequiredFieldMustBePresent removes each half alone.)
      *
      * @param class-string $model
+     * @dataProvider models
      */
-    #[DataProvider('models')]
     public function testAV2ResponseMissingTheNamespacePairRaises(string $model): void
     {
         $transport = $this->transportWith([self::syntheticNegativeFrom(
             self::fixture($model, ApiVersion::V2),
             SyntheticNegative::MISSING_FIELD,
-            static fn(array $body): array => self::editRow($model, $body, static function (array $row): array {
+            static fn (array $body): array => self::editRow($model, $body, static function (array $row): array {
                 unset($row['namespace_type'], $row['namespace_id']);
 
                 return $row;
             }),
         )], ApiVersion::V2);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(sprintf(
             'octonomy: malformed response from GET /api/v2/any (api_version v2): field "%s.namespace_type" is missing',
             self::placeOf($model),
         ));
-
         self::read($transport, $model);
     }
 
@@ -315,15 +303,13 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      * A v1 response without the pair is correct, and the model reads null.
      *
      * @param class-string $model
+     * @dataProvider models
      */
-    #[DataProvider('models')]
     public function testAV1ResponseWithoutTheNamespacePairHydrates(string $model): void
     {
         $fixture = self::fixture($model, ApiVersion::V1);
         self::assertSame([], array_intersect(self::NAMESPACE_PAIR, array_keys(self::row($model, self::capturedData($fixture)))));
-
         $hydrated = self::read($this->transportWith([self::captured($fixture)], ApiVersion::V1), $model);
-
         self::assertTrue(property_exists($hydrated, 'namespaceType') && property_exists($hydrated, 'namespaceId'));
         self::assertNull($hydrated->namespaceType);
         self::assertNull($hydrated->namespaceId);
@@ -340,9 +326,9 @@ final class StrictHydrationRegressionTest extends SdkTestCase
         self::assertArrayNotHasKey('parent_id', $rows['sale']);
         self::assertArrayNotHasKey('vocabulary_id', $rows['sale']);
 
-        $page = $this->transportWith([self::captured('v2/tags/list')], ApiVersion::V2)->many('GET', 'tags', Tag::fromArray(...));
+        $page = $this->transportWith([self::captured('v2/tags/list')], ApiVersion::V2)->many('GET', 'tags', \Closure::fromCallable([Tag::class, 'fromArray']));
 
-        $sale = array_values(array_filter($page->data, static fn(Tag $t): bool => $t->slug === 'sale'))[0];
+        $sale = array_values(array_filter($page->data, static fn (Tag $t): bool => $t->slug === 'sale'))[0];
         self::assertNull($sale->parentId);
         self::assertNull($sale->vocabularyId);
     }
@@ -350,15 +336,13 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     /**
      * A model hydrated outside a request reports the field by its key alone,
      * with the api_version it was read as, whichever reader rejected it.
+     * @dataProvider directFaults
      */
-    #[DataProvider('directFaults')]
     public function testAModelHydratedDirectlyNamesTheFieldAndApiVersion(string $kind, \Closure $break, string $expected): void
     {
         $members = self::members(self::syntheticNegativeFrom('v1/tags/get', $kind, $break));
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response (api_version v1): ' . $expected);
-
         Tag::fromArray($members, ApiVersion::V1);
     }
 
@@ -397,7 +381,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
 
         $page = $this->clientWith([$captured], ['api_version' => ApiVersion::V1])->tags()->list();
 
-        $green = array_values(array_filter($page->data, static fn(Tag $t): bool => $t->slug === 'green'))[0];
+        $green = array_values(array_filter($page->data, static fn (Tag $t): bool => $t->slug === 'green'))[0];
         self::assertSame([], $green->metadata);
     }
 
@@ -414,8 +398,8 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      */
     public static function getCalls(): iterable
     {
-        yield 'tags()->get()' => ['v1/tags/get', '/api/v1/tags/tag_1', static fn(Client $c): Tag => $c->tags()->get('tag_1')];
-        yield 'vocabularies()->get()' => ['v1/vocabularies/get', '/api/v1/vocabularies/voc_1', static fn(Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
+        yield 'tags()->get()' => ['v1/tags/get', '/api/v1/tags/tag_1', static fn (Client $c): Tag => $c->tags()->get('tag_1')];
+        yield 'vocabularies()->get()' => ['v1/vocabularies/get', '/api/v1/vocabularies/voc_1', static fn (Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
     }
 
     /**
@@ -426,7 +410,7 @@ final class StrictHydrationRegressionTest extends SdkTestCase
     public static function models(): iterable
     {
         foreach (array_keys(self::MODELS) as $model) {
-            $keys = array_map(static fn(\ReflectionParameter $p): string => self::key($p->getName()), self::parameters($model));
+            $keys = array_map(static fn (\ReflectionParameter $p): string => self::key($p->getName()), self::parameters($model));
             if (array_intersect(self::NAMESPACE_PAIR, $keys) !== []) {
                 yield (new \ReflectionClass($model))->getShortName() => [$model];
             }
@@ -472,16 +456,32 @@ final class StrictHydrationRegressionTest extends SdkTestCase
                 if ($declared === 'array' && in_array(self::key($parameter->getName()), self::LIST_FIELDS[$model] ?? [], true)) {
                     $declared = 'list';
                 }
-                [$expected, $wrong] = match ($declared) {
-                    'string' => ['a string', [5, true, ['x' => 1]]],
-                    'int' => ['an integer', ['5', 5.0, true]],
-                    'bool' => ['a boolean', ['true', 1, 0]],
-                    'array' => ['an object', [['not-an-object'], [], '{}', 1]],
-                    'list' => ['a list', [['x' => 1], 'x', 1, true]],
-                    \DateTimeImmutable::class => ['an RFC 3339 timestamp', [1767225600, true]],
-                    Tag::class, TagAlias::class => ['an object', [['not-an-object'], [], 'x', 1, true]],
-                    default => throw new \LogicException("no wrong values for {$declared}: add them here"),
-                };
+                switch ($declared) {
+                    case 'string':
+                        [$expected, $wrong] = ['a string', [5, true, ['x' => 1]]];
+                        break;
+                    case 'int':
+                        [$expected, $wrong] = ['an integer', ['5', 5.0, true]];
+                        break;
+                    case 'bool':
+                        [$expected, $wrong] = ['a boolean', ['true', 1, 0]];
+                        break;
+                    case 'array':
+                        [$expected, $wrong] = ['an object', [['not-an-object'], [], '{}', 1]];
+                        break;
+                    case 'list':
+                        [$expected, $wrong] = ['a list', [['x' => 1], 'x', 1, true]];
+                        break;
+                    case \DateTimeImmutable::class:
+                        [$expected, $wrong] = ['an RFC 3339 timestamp', [1767225600, true]];
+                        break;
+                    case Tag::class:
+                    case TagAlias::class:
+                        [$expected, $wrong] = ['an object', [['not-an-object'], [], 'x', 1, true]];
+                        break;
+                    default:
+                        throw new \LogicException("no wrong values for {$declared}: add them here");
+                }
                 if ($type->allowsNull()) {
                     $expected .= ' or null';
                 } else {
@@ -585,20 +585,43 @@ final class StrictHydrationRegressionTest extends SdkTestCase
      */
     private static function read(Transport $transport, string $model): object
     {
-        $hydrate = match ($model) {
-            Tag::class => Tag::fromArray(...),
-            Vocabulary::class => Vocabulary::fromArray(...),
-            TagAlias::class => TagAlias::fromArray(...),
-            TagResolution::class => TagResolution::fromArray(...),
-            Assignment::class => Assignment::fromArray(...),
-            BulkAssignResult::class => BulkAssignResult::fromArray(...),
-            BulkRemoveResult::class => BulkRemoveResult::fromArray(...),
-            ResourceTagsReplaceResult::class => ResourceTagsReplaceResult::fromArray(...),
-            ResourceTag::class => ResourceTag::fromArray(...),
-            TagResource::class => TagResource::fromArray(...),
-            AuditLog::class => AuditLog::fromArray(...),
-            default => throw new \LogicException("no hydrator for {$model}: add it here and to MODELS"),
-        };
+        switch ($model) {
+            case Tag::class:
+                $hydrate = \Closure::fromCallable([Tag::class, 'fromArray']);
+                break;
+            case Vocabulary::class:
+                $hydrate = \Closure::fromCallable([Vocabulary::class, 'fromArray']);
+                break;
+            case TagAlias::class:
+                $hydrate = \Closure::fromCallable([TagAlias::class, 'fromArray']);
+                break;
+            case TagResolution::class:
+                $hydrate = \Closure::fromCallable([TagResolution::class, 'fromArray']);
+                break;
+            case Assignment::class:
+                $hydrate = \Closure::fromCallable([Assignment::class, 'fromArray']);
+                break;
+            case BulkAssignResult::class:
+                $hydrate = \Closure::fromCallable([BulkAssignResult::class, 'fromArray']);
+                break;
+            case BulkRemoveResult::class:
+                $hydrate = \Closure::fromCallable([BulkRemoveResult::class, 'fromArray']);
+                break;
+            case ResourceTagsReplaceResult::class:
+                $hydrate = \Closure::fromCallable([ResourceTagsReplaceResult::class, 'fromArray']);
+                break;
+            case ResourceTag::class:
+                $hydrate = \Closure::fromCallable([ResourceTag::class, 'fromArray']);
+                break;
+            case TagResource::class:
+                $hydrate = \Closure::fromCallable([TagResource::class, 'fromArray']);
+                break;
+            case AuditLog::class:
+                $hydrate = \Closure::fromCallable([AuditLog::class, 'fromArray']);
+                break;
+            default:
+                throw new \LogicException("no hydrator for {$model}: add it here and to MODELS");
+        }
         if (self::MODELS[$model][1] === 'one') {
             $one = $transport->one('GET', 'any', $hydrate);
             self::assertIsObject($one);

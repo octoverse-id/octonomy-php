@@ -17,6 +17,14 @@ use Psr\Http\Message\ResponseInterface;
  */
 final class ReplayingClient implements ClientInterface
 {
+    /**
+     * @var list<CapturedFixture|SyntheticNegative>
+     */
+    private array $responses;
+    /**
+     * @var \Closure(RequestInterface): \Throwable|null
+     */
+    private ?\Closure $throw = null;
     /** @var list<RequestInterface> */
     private array $sent = [];
 
@@ -24,7 +32,11 @@ final class ReplayingClient implements ClientInterface
      * @param list<CapturedFixture|SyntheticNegative>   $responses
      * @param (\Closure(RequestInterface): \Throwable)|null $throw
      */
-    public function __construct(private array $responses, private ?\Closure $throw = null) {}
+    public function __construct(array $responses, ?\Closure $throw = null)
+    {
+        $this->responses = $responses;
+        $this->throw = $throw;
+    }
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {

@@ -14,4 +14,6 @@ namespace Octoverse\Octonomy\Exception;
  * correct the input: namespace_not_supported (UnsupportedApiVersionException)
  * and ambiguous_resolution (AmbiguousResolutionException).
  */
-final class ValidationException extends ApiException {}
+final class ValidationException extends ApiException
+{
+}

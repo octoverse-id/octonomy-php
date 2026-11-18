@@ -21,20 +21,19 @@ final class HealthTest extends IntegrationTestCase
 {
     /**
      * @param \Closure(HealthService): HealthStatus $probe
+     * @dataProvider probes
      */
-    #[DataProvider('probes')]
     public function testAHealthClientWithNoCredentialsProbesTheServer(\Closure $probe): void
     {
         $status = $probe((new HealthClient(['base_url' => self::harnessBaseUrl(), 'timeout' => 10]))->health());
-
         self::assertTrue($status->ok);
         self::assertSame(HealthStatus::STATUS_OK, $status->status);
     }
 
     /**
      * @param \Closure(HealthService): HealthStatus $probe
+     * @dataProvider probes
      */
-    #[DataProvider('probes')]
     public function testAClientProbesTheServerOnEitherVersion(\Closure $probe): void
     {
         foreach ([ApiVersion::V1, ApiVersion::V2] as $apiVersion) {
@@ -50,7 +49,7 @@ final class HealthTest extends IntegrationTestCase
      */
     public static function probes(): iterable
     {
-        yield 'live()' => [static fn(HealthService $h): HealthStatus => $h->live()];
-        yield 'ready()' => [static fn(HealthService $h): HealthStatus => $h->ready()];
+        yield 'live()' => [static fn (HealthService $h): HealthStatus => $h->live()];
+        yield 'ready()' => [static fn (HealthService $h): HealthStatus => $h->ready()];
     }
 }

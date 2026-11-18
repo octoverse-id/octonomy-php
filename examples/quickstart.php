@@ -76,14 +76,14 @@ $application = $env['OCTONOMY_APPLICATION_ID'];
 // A namespace is chosen per request, never for the whole client.
 function merchant(string $id): RequestOptions
 {
-    return new RequestOptions(namespace: new NamespaceScope('merchant', $id));
+    return new RequestOptions(null, new NamespaceScope('merchant', $id));
 }
 
 // The quickstart's tag, as a merchant holds it: one active tag per (type, slug),
 // so another type's `featured`, or a deactivated one, is not it.
 function featuredLabel(string $application): TagListParams
 {
-    return new TagListParams(applicationId: $application, isActive: true, slug: 'featured', type: 'label');
+    return new TagListParams($application, null, true, null, null, 'featured', 'label');
 }
 
 /**
@@ -95,7 +95,7 @@ function featuredTag(Client $client, string $application, string $merchant): Tag
 {
     try {
         $tag = $client->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label', applicationId: $application),
+            new TagCreate('Featured', 'featured', 'label', $application),
             merchant($merchant),
         );
         $how = 'created';
@@ -129,7 +129,7 @@ try {
 
     // Not even by id: as far as globex can tell, acme's tag does not exist.
     try {
-        $client->tags()->get($acme->id, applicationId: $application, options: merchant('globex'));
+        $client->tags()->get($acme->id, $application, null, merchant('globex'));
         fwrite(STDERR, "quickstart: merchant:globex read merchant:acme's tag by id, so this server is not isolating namespaces\n");
         exit(1);
     } catch (NotFoundException $e) {

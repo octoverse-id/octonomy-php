@@ -26,6 +26,31 @@ use Octoverse\Octonomy\RequestContext;
 final class MalformedResponseException extends OctonomyException
 {
     /**
+     * @var string
+     * @readonly
+     */
+    private string $problem;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    public ?string $field = null;
+    /**
+     * @var RequestContext|null
+     * @readonly
+     */
+    public ?RequestContext $context = null;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    private ?string $apiVersion = null;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    private ?string $got = null;
+    /**
      * What follows the fault in every message. A body that breaks the contract
      * can come from a server release this SDK does not support, from something
      * in front of the API, or from an SDK defect, and the body alone does not
@@ -47,13 +72,18 @@ final class MalformedResponseException extends OctonomyException
      *                                        any; kept apart so it can be redacted once the request is known
      */
     public function __construct(
-        private readonly string $problem,
-        public readonly ?string $field = null,
-        public readonly ?RequestContext $context = null,
-        private readonly ?string $apiVersion = null,
+        string $problem,
+        ?string $field = null,
+        ?RequestContext $context = null,
+        ?string $apiVersion = null,
         ?\Throwable $previous = null,
-        private readonly ?string $got = null,
+        ?string $got = null
     ) {
+        $this->problem = $problem;
+        $this->field = $field;
+        $this->context = $context;
+        $this->apiVersion = $apiVersion;
+        $this->got = $got;
         $version = $context === null ? $apiVersion : $context->apiVersion;
         $problem .= $got === null ? '' : ", got \"{$got}\"";
         parent::__construct(sprintf(

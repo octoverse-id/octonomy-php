@@ -37,7 +37,7 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/resources/tags')]);
         $rows = self::capturedData('v2/resources/tags');
 
-        $page = $client->resources()->listTags('product', 'sku-001', 'harness-app', options: self::merchantA());
+        $page = $client->resources()->listTags('product', 'sku-001', 'harness-app', null, self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('GET', $request->getMethod());
@@ -68,7 +68,7 @@ final class ResourceServiceTest extends SdkTestCase
             'product',
             'sku-001',
             'harness-app',
-            new ResourceTagListParams(type: 'label'),
+            new ResourceTagListParams(null, 'label'),
             self::merchantA(),
         ));
 
@@ -81,7 +81,7 @@ final class ResourceServiceTest extends SdkTestCase
         self::assertSame(array_keys($rows), array_keys($walked));
         self::assertSame(
             array_column($rows, 'assignment_id'),
-            array_map(static fn(ResourceTag $t): string => $t->assignmentId, $walked),
+            array_map(static fn (ResourceTag $t): string => $t->assignmentId, $walked),
         );
     }
 
@@ -90,11 +90,11 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/resources/tags')]);
 
         $client->resources()->listTags('product', 'sku-001', 'harness-app', new ResourceTagListParams(
-            includeInactive: true,
-            type: 'label',
-            limit: 10,
-            offset: 20,
-            includeGlobal: true,
+            true,
+            'label',
+            10,
+            20,
+            true,
         ), self::merchantA());
 
         self::assertSame([
@@ -134,7 +134,7 @@ final class ResourceServiceTest extends SdkTestCase
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('field "data[1].tag.usage_count" is missing');
 
-        $client->resources()->listTags('product', 'sku-001', 'harness-app', options: self::merchantA());
+        $client->resources()->listTags('product', 'sku-001', 'harness-app', null, self::merchantA());
     }
 
     /**
@@ -146,7 +146,7 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/validation-error')]);
 
         $this->expectException(ValidationException::class);
-        $client->resources()->listTags('product', 'sku-001', '', options: self::merchantA());
+        $client->resources()->listTags('product', 'sku-001', '', null, self::merchantA());
     }
 
     public function testListTagsNotFoundThrows(): void
@@ -154,7 +154,7 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
-        $client->resources()->listTags('product', 'sku-001', 'harness-app', options: self::merchantA());
+        $client->resources()->listTags('product', 'sku-001', 'harness-app', null, self::merchantA());
     }
 
     public function testReplaceTags(): void
@@ -162,11 +162,7 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/resources/replace')]);
         $data = self::capturedData('v2/resources/replace');
 
-        $result = $client->resources()->replaceTags('product', 'sku-004', new ResourceTagsReplace(
-            applicationId: 'harness-app',
-            tagIds: [$data['tags'][0]['id']],
-            assignedBy: 'octonomy-php-capture',
-        ), self::merchantA());
+        $result = $client->resources()->replaceTags('product', 'sku-004', new ResourceTagsReplace('harness-app', [$data['tags'][0]['id']], null, 'octonomy-php-capture'), self::merchantA());
 
         $request = $this->lastRequest();
         self::assertSame('POST', $request->getMethod());
@@ -250,11 +246,11 @@ final class ResourceServiceTest extends SdkTestCase
         $rows = self::capturedData('v2/tags/resources');
 
         $page = $client->tags()->listResources('tag_1', new TagResourceListParams(
-            applicationId: 'harness-app',
-            resourceType: 'product',
-            limit: 5,
-            offset: 0,
-            includeGlobal: false,
+            'harness-app',
+            'product',
+            5,
+            0,
+            false,
         ), self::merchantA());
 
         $request = $this->lastRequest();
@@ -287,7 +283,7 @@ final class ResourceServiceTest extends SdkTestCase
 
         $walked = iterator_to_array($client->tags()->walkResources(
             'tag_1',
-            new TagResourceListParams(applicationId: 'harness-app', resourceType: 'product'),
+            new TagResourceListParams('harness-app', 'product'),
             self::merchantA(),
         ));
 
@@ -300,7 +296,7 @@ final class ResourceServiceTest extends SdkTestCase
         self::assertSame(array_keys($rows), array_keys($walked));
         self::assertSame(
             array_column($rows, 'resource_id'),
-            array_map(static fn(TagResource $r): string => $r->resourceId, $walked),
+            array_map(static fn (TagResource $r): string => $r->resourceId, $walked),
         );
     }
 
@@ -321,7 +317,7 @@ final class ResourceServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/not-found')]);
 
         $this->expectException(NotFoundException::class);
-        $client->tags()->listResources('missing', new TagResourceListParams(applicationId: 'harness-app'), self::merchantA());
+        $client->tags()->listResources('missing', new TagResourceListParams('harness-app'), self::merchantA());
     }
 
     /**
@@ -348,7 +344,7 @@ final class ResourceServiceTest extends SdkTestCase
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('octonomy: include_global requires api_version v2');
 
-        $client->resources()->listTags('product', 'sku-001', 'harness-app', new ResourceTagListParams(includeGlobal: true));
+        $client->resources()->listTags('product', 'sku-001', 'harness-app', new ResourceTagListParams(null, null, null, null, true));
     }
 
     /**
@@ -356,6 +352,6 @@ final class ResourceServiceTest extends SdkTestCase
      */
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

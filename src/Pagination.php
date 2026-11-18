@@ -13,13 +13,34 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class Pagination
 {
-    public function __construct(
-        public readonly int $limit,
-        public readonly int $offset,
-        public readonly int $count,
-        public readonly ?string $next,
-        public readonly ?string $previous,
-    ) {}
+    /**
+     * @readonly
+     */
+    public int $limit;
+    /**
+     * @readonly
+     */
+    public int $offset;
+    /**
+     * @readonly
+     */
+    public int $count;
+    /**
+     * @readonly
+     */
+    public ?string $next;
+    /**
+     * @readonly
+     */
+    public ?string $previous;
+    public function __construct(int $limit, int $offset, int $count, ?string $next, ?string $previous)
+    {
+        $this->limit = $limit;
+        $this->offset = $offset;
+        $this->count = $count;
+        $this->next = $next;
+        $this->previous = $previous;
+    }
 
     /**
      * Hydrate the "pagination" object of a list response. Every field must be
@@ -32,11 +53,11 @@ final class Pagination
     public static function fromArray(array $data): self
     {
         return new self(
-            limit: Json::int($data, 'limit'),
-            offset: Json::int($data, 'offset'),
-            count: Json::int($data, 'count'),
-            next: Json::nullableString($data, 'next'),
-            previous: Json::nullableString($data, 'previous'),
+            Json::int($data, 'limit'),
+            Json::int($data, 'offset'),
+            Json::int($data, 'count'),
+            Json::nullableString($data, 'next'),
+            Json::nullableString($data, 'previous'),
         );
     }
 }

@@ -2,22 +2,19 @@
 
 declare(strict_types=1);
 
+// The PHP 7.4 line's style config. Rector's output is not @PER-CS clean (it de-promotes
+// constructors and writes switch blocks), so this line is held to @PSR12 instead.
+// no_unused_imports drops the `use` lines the downgrade leaves behind, such as the one for
+// PHPUnit's DataProvider attribute once it has become an annotation.
+
 $finder = PhpCsFixer\Finder::create()
     ->in(__DIR__ . '/src')
     ->in(__DIR__ . '/tests')
-    ->in(__DIR__ . '/examples')
-    ->in(__DIR__ . '/scripts')
-    ->in(__DIR__ . '/tools/rector')
-    ->exclude('vendor');
+    ->in(__DIR__ . '/examples');
 
 return (new PhpCsFixer\Config())
-    ->setRiskyAllowed(true)
     ->setRules([
-        '@PER-CS2.0' => true,
-        'declare_strict_types' => true,
-        'ordered_imports' => ['sort_algorithm' => 'alpha'],
+        '@PSR12' => true,
         'no_unused_imports' => true,
-        'single_quote' => true,
-        'trailing_comma_in_multiline' => ['elements' => ['arrays', 'arguments', 'parameters']],
     ])
     ->setFinder($finder);

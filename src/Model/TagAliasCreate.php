@@ -19,16 +19,42 @@ namespace Octoverse\Octonomy\Model;
 final class TagAliasCreate
 {
     /**
+     * @readonly
+     */
+    public string $tagId;
+    /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @readonly
+     */
+    public string $slug;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly string $tagId,
-        public readonly string $name,
-        public readonly string $slug,
-        public readonly ?string $applicationId = null,
-        public readonly ?array $metadata = null,
-        public readonly ?bool $isActive = null,
-    ) {}
+    public function __construct(string $tagId, string $name, string $slug, ?string $applicationId = null, ?array $metadata = null, ?bool $isActive = null)
+    {
+        $this->tagId = $tagId;
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->applicationId = $applicationId;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+    }
 
     /**
      * @return array<string, mixed>

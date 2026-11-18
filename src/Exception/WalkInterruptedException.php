@@ -39,14 +39,20 @@ use Octoverse\Octonomy\Internal\ErrorMessage;
 final class WalkInterruptedException extends OctonomyException
 {
     /**
+     * @var int
+     * @readonly
+     */
+    public int $reachedOffset;
+    /**
      * @param int               $reachedOffset the offset the failed page was asked for, where the walk's
      *                                         yielded items end
      * @param OctonomyException $previous      why the request for that page failed
      */
     public function __construct(
-        public readonly int $reachedOffset,
-        OctonomyException $previous,
+        int $reachedOffset,
+        OctonomyException $previous
     ) {
+        $this->reachedOffset = $reachedOffset;
         parent::__construct(ErrorMessage::walkInterrupted($reachedOffset, $previous->getMessage()), 0, $previous);
     }
 }

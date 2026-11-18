@@ -37,8 +37,8 @@ final class ApiExceptionTest extends TestCase
 {
     /**
      * @param class-string<ApiException> $expected
+     * @dataProvider mappings
      */
-    #[DataProvider('mappings')]
     public function testClassForMapsACodeAndStatusToItsException(string $code, int $status, string $expected): void
     {
         self::assertSame($expected, ApiException::classFor($code, $status));

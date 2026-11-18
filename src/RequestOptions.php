@@ -27,6 +27,19 @@ use Octoverse\Octonomy\Internal\RequestId;
 final class RequestOptions
 {
     /**
+     * @readonly
+     */
+    public ?string $actorId = null;
+    /**
+     * @readonly
+     */
+    public ?NamespaceScope $namespace = null;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    public ?string $requestId = null;
+    /**
      * @param string|null $requestId sent as X-Request-ID, or null to send none and let the server mint
      *                               one; see withRequestId()
      *
@@ -35,10 +48,13 @@ final class RequestOptions
      *                                   printable ASCII, or begins or ends with a space
      */
     public function __construct(
-        public readonly ?string $actorId = null,
-        public readonly ?NamespaceScope $namespace = null,
-        public readonly ?string $requestId = null,
+        ?string $actorId = null,
+        ?NamespaceScope $namespace = null,
+        ?string $requestId = null
     ) {
+        $this->actorId = $actorId;
+        $this->namespace = $namespace;
+        $this->requestId = $requestId;
         // Refused here, never quoted: Guzzle would refuse it on sending with an
         // error that quotes it, and the actor id is never shown (Redaction).
         if ($actorId !== null && !Redaction::isHeaderSafe($actorId)) {
@@ -55,7 +71,7 @@ final class RequestOptions
      */
     public static function withActor(string $actorId): self
     {
-        return new self(actorId: $actorId);
+        return new self($actorId);
     }
 
     /**
@@ -90,6 +106,6 @@ final class RequestOptions
      */
     public static function withRequestId(string $id): self
     {
-        return new self(requestId: $id);
+        return new self(null, null, $id);
     }
 }

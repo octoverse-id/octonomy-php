@@ -19,15 +19,44 @@ namespace Octoverse\Octonomy\Model;
  */
 final class AssignmentCreate
 {
-    private function __construct(
-        public readonly string $applicationId,
-        public readonly string $resourceType,
-        public readonly string $resourceId,
-        public readonly ?string $tagId,
-        public readonly ?string $aliasId,
-        public readonly ?string $aliasSlug,
-        public readonly ?string $assignedBy,
-    ) {}
+    /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @readonly
+     */
+    public string $resourceType;
+    /**
+     * @readonly
+     */
+    public string $resourceId;
+    /**
+     * @readonly
+     */
+    public ?string $tagId;
+    /**
+     * @readonly
+     */
+    public ?string $aliasId;
+    /**
+     * @readonly
+     */
+    public ?string $aliasSlug;
+    /**
+     * @readonly
+     */
+    public ?string $assignedBy;
+    private function __construct(string $applicationId, string $resourceType, string $resourceId, ?string $tagId, ?string $aliasId, ?string $aliasSlug, ?string $assignedBy)
+    {
+        $this->applicationId = $applicationId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->tagId = $tagId;
+        $this->aliasId = $aliasId;
+        $this->aliasSlug = $aliasSlug;
+        $this->assignedBy = $assignedBy;
+    }
 
     /**
      * Assign the tag with id $tagId.
@@ -37,7 +66,7 @@ final class AssignmentCreate
         string $resourceType,
         string $resourceId,
         string $tagId,
-        ?string $assignedBy = null,
+        ?string $assignedBy = null
     ): self {
         return new self($applicationId, $resourceType, $resourceId, $tagId, null, null, $assignedBy);
     }
@@ -50,7 +79,7 @@ final class AssignmentCreate
         string $resourceType,
         string $resourceId,
         string $aliasId,
-        ?string $assignedBy = null,
+        ?string $assignedBy = null
     ): self {
         return new self($applicationId, $resourceType, $resourceId, null, $aliasId, null, $assignedBy);
     }
@@ -64,7 +93,7 @@ final class AssignmentCreate
         string $resourceType,
         string $resourceId,
         string $aliasSlug,
-        ?string $assignedBy = null,
+        ?string $assignedBy = null
     ): self {
         return new self($applicationId, $resourceType, $resourceId, null, null, $aliasSlug, $assignedBy);
     }

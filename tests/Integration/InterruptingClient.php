@@ -23,16 +23,25 @@ use Psr\Http\Message\ResponseInterface;
  */
 final class InterruptingClient implements ClientInterface
 {
+    /**
+     * @var int|null
+     * @readonly
+     */
+    private ?int $failOn = null;
     /** @var list<RequestInterface> */
     private array $sent = [];
 
-    private readonly GuzzleClient $server;
+    /**
+     * @readonly
+     */
+    private GuzzleClient $server;
 
     /**
      * @param int|null $failOn the number of the request to fail, counting from 1; null to fail none
      */
-    public function __construct(private readonly ?int $failOn = null)
+    public function __construct(?int $failOn = null)
     {
+        $this->failOn = $failOn;
         $this->server = new GuzzleClient();
     }
 

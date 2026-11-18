@@ -10,4 +10,6 @@ namespace Octoverse\Octonomy\Exception;
  * namespaced_writes_disabled is a deployment flag rather than a missing grant,
  * and is a FeatureDisabledException instead.
  */
-final class ForbiddenException extends ApiException {}
+final class ForbiddenException extends ApiException
+{
+}

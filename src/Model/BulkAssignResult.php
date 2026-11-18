@@ -21,14 +21,32 @@ use Octoverse\Octonomy\Internal\Json;
 final class BulkAssignResult
 {
     /**
+     * @readonly
+     */
+    public int $created;
+    /**
+     * @readonly
+     */
+    public int $existing;
+    /**
+     * @readonly
+     */
+    public int $skipped;
+    /**
+     * @var list<Assignment>
+     * @readonly
+     */
+    public array $assignments;
+    /**
      * @param list<Assignment> $assignments
      */
-    public function __construct(
-        public readonly int $created,
-        public readonly int $existing,
-        public readonly int $skipped,
-        public readonly array $assignments,
-    ) {}
+    public function __construct(int $created, int $existing, int $skipped, array $assignments)
+    {
+        $this->created = $created;
+        $this->existing = $existing;
+        $this->skipped = $skipped;
+        $this->assignments = $assignments;
+    }
 
     /**
      * Hydrate the result from the resource object of a response read as
@@ -43,11 +61,11 @@ final class BulkAssignResult
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            created: Json::int($data, 'created'),
-            existing: Json::int($data, 'existing'),
-            skipped: Json::int($data, 'skipped'),
-            assignments: Json::resources($data, 'assignments', Assignment::fromArray(...), $apiVersion),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::int($data, 'created'),
+            Json::int($data, 'existing'),
+            Json::int($data, 'skipped'),
+            Json::resources($data, 'assignments', \Closure::fromCallable([Assignment::class, 'fromArray']), $apiVersion),
         ));
     }
 }

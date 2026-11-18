@@ -34,17 +34,17 @@ final class VendoredSpecTest extends TestCase
         yield 'v2' => ['v2'];
     }
 
-    #[DataProvider('apiVersions')]
+    /**
+     * @dataProvider apiVersions
+     */
     public function testTheBodyIsTheServerFileTheHeaderNames(string $apiVersion): void
     {
         $spec = VendoredSpec::load($apiVersion);
-
         self::assertStringContainsString("for api_version {$apiVersion} (/api/{$apiVersion})", $spec->header);
         self::assertNotNull($spec->commit(), "{$spec->file}'s header names no server commit");
         self::assertSame($spec->recordedSha256(), hash('sha256', $spec->body), "{$spec->file} was edited below its header: re-vendor it from the server tag instead");
         self::assertNotNull($spec->tag(), "{$spec->file}'s header names no server tag");
         self::assertSame(ltrim((string) $spec->tag(), 'v'), $spec->infoVersion(), "{$spec->file}'s info.version is not the tag its header names");
-
         preg_match_all('/^  (\/\S*):$/m', $spec->body, $paths);
         self::assertNotSame([], $paths[1]);
         foreach ($paths[1] as $path) {
@@ -72,11 +72,12 @@ final class VendoredSpecTest extends TestCase
         self::assertStringContainsString("`{$pinned}`", $versioning, 'docs/versioning.md must name the tag the specs track');
     }
 
-    #[DataProvider('apiVersions')]
+    /**
+     * @dataProvider apiVersions
+     */
     public function testTheHeaderRecordsEveryKnownDivergence(string $apiVersion): void
     {
         $spec = VendoredSpec::load($apiVersion);
-
         foreach ([
             'KNOWN DIVERGENCES',
             '1. Neither response envelope is modelled',

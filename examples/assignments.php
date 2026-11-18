@@ -36,13 +36,13 @@ $type = 'book';
 $isbn = '9780441013593';
 
 try {
-    $staffPick = ensureTag($client, new TagCreate(name: 'Staff pick', slug: 'staff-pick', type: 'label', applicationId: $application));
-    $awardWinner = ensureTag($client, new TagCreate(name: 'Award winner', slug: 'award-winner', type: 'label', applicationId: $application));
-    ensureAlias($client, new TagAliasCreate(tagId: $staffPick->id, name: "Editor's choice", slug: 'editors-choice', applicationId: $application));
+    $staffPick = ensureTag($client, new TagCreate('Staff pick', 'staff-pick', 'label', $application));
+    $awardWinner = ensureTag($client, new TagCreate('Award winner', 'award-winner', 'label', $application));
+    ensureAlias($client, new TagAliasCreate($staffPick->id, "Editor's choice", 'editors-choice', $application));
 
     // By tag id. assignedBy is free text recorded on the assignment.
     $assignment = $client->assignments()->create(
-        AssignmentCreate::forTag($application, $type, $isbn, $staffPick->id, assignedBy: 'assignments-example'),
+        AssignmentCreate::forTag($application, $type, $isbn, $staffPick->id, 'assignments-example'),
     );
     printf("%s/%s tagged '%s'\n", $type, $isbn, $staffPick->slug);
 
@@ -60,16 +60,16 @@ try {
     );
 
     // Several at once, by id and by alias slug, with a count of what changed.
-    $bulk = $client->assignments()->bulkAssign(new BulkAssign($application, $type, $isbn, tagIds: [$awardWinner->id], aliasSlugs: ['editors-choice']));
+    $bulk = $client->assignments()->bulkAssign(new BulkAssign($application, $type, $isbn, [$awardWinner->id], ['editors-choice']));
     printf("  in bulk, two more: %d created, %d already there\n\n", $bulk->created, $bulk->existing);
 
     // From the resource: its tags, each with the assignment that put it there.
     $tags = $client->resources()->listTags($type, $isbn, $application);
-    printf("%s/%s has: %s\n", $type, $isbn, implode(', ', array_map(fn($row) => $row->tag->slug, $tags->data)));
+    printf("%s/%s has: %s\n", $type, $isbn, implode(', ', array_map(fn ($row) => $row->tag->slug, $tags->data)));
 
     // From the tag: the resources that carry it.
-    $books = $client->tags()->listResources($staffPick->id, new TagResourceListParams(applicationId: $application, resourceType: $type));
-    printf("'%s' is on: %s\n\n", $staffPick->slug, implode(', ', array_map(fn($row) => "{$row->resourceType}/{$row->resourceId}", $books->data)));
+    $books = $client->tags()->listResources($staffPick->id, new TagResourceListParams($application, $type));
+    printf("'%s' is on: %s\n\n", $staffPick->slug, implode(', ', array_map(fn ($row) => "{$row->resourceType}/{$row->resourceId}", $books->data)));
 
     // Removing a tag the resource does not have is not an error either.
     $client->assignments()->remove(new AssignmentRemove($application, $type, $isbn, $awardWinner->id));

@@ -30,10 +30,17 @@ use Octoverse\Octonomy\ResultList;
 final class ResourceService
 {
     /**
+     * @readonly
+     */
+    private Transport $transport;
+    /**
      * Built by Client::resources(), over the client's one Transport; reach the
      * service there rather than constructing it.
      */
-    public function __construct(private readonly Transport $transport) {}
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * List a page of the tags on a resource within $applicationId
@@ -48,13 +55,13 @@ final class ResourceService
         string $resourceId,
         string $applicationId,
         ?ResourceTagListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         return $this->transport->many(
             'GET',
             Path::of('resources', $resourceType, $resourceId, 'tags'),
-            ResourceTag::fromArray(...),
-            ['application_id' => $applicationId] + ($params?->toQuery() ?? []),
+            \Closure::fromCallable([ResourceTag::class, 'fromArray']),
+            ['application_id' => $applicationId] + ((($nullsafeVariable1 = $params) ? $nullsafeVariable1->toQuery() : null) ?? []),
             null,
             $options,
         );
@@ -84,14 +91,14 @@ final class ResourceService
         string $resourceId,
         string $applicationId,
         ?ResourceTagListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): \Generator {
         return Walker::walk(
             $this->transport,
             Path::of('resources', $resourceType, $resourceId, 'tags'),
-            ResourceTag::fromArray(...),
-            ['application_id' => $applicationId] + ($params?->toQuery() ?? []),
-            $params?->offset,
+            \Closure::fromCallable([ResourceTag::class, 'fromArray']),
+            ['application_id' => $applicationId] + ((($nullsafeVariable2 = $params) ? $nullsafeVariable2->toQuery() : null) ?? []),
+            ($nullsafeVariable3 = $params) ? $nullsafeVariable3->offset : null,
             $options,
         );
     }
@@ -106,12 +113,12 @@ final class ResourceService
         string $resourceType,
         string $resourceId,
         ResourceTagsReplace $input,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResourceTagsReplaceResult {
         return $this->transport->one(
             'POST',
             Path::of('resources', $resourceType, $resourceId, 'tags'),
-            ResourceTagsReplaceResult::fromArray(...),
+            \Closure::fromCallable([ResourceTagsReplaceResult::class, 'fromArray']),
             [],
             $input->toArray(),
             $options,
@@ -129,13 +136,13 @@ final class ResourceService
         string $resourceType,
         string $resourceId,
         ?AuditLogListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): ResultList {
         return $this->transport->many(
             'GET',
             Path::of('resources', $resourceType, $resourceId, 'audit-logs'),
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable4 = $params) ? $nullsafeVariable4->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -165,14 +172,14 @@ final class ResourceService
         string $resourceType,
         string $resourceId,
         ?AuditLogListParams $params = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): \Generator {
         return Walker::walk(
             $this->transport,
             Path::of('resources', $resourceType, $resourceId, 'audit-logs'),
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable5 = $params) ? $nullsafeVariable5->toQuery() : null) ?? [],
+            ($nullsafeVariable6 = $params) ? $nullsafeVariable6->offset : null,
             $options,
         );
     }

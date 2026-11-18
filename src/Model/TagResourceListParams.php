@@ -20,16 +20,37 @@ namespace Octoverse\Octonomy\Model;
 final class TagResourceListParams
 {
     /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @readonly
+     */
+    public ?string $resourceType = null;
+    /**
+     * @readonly
+     */
+    public ?int $limit = null;
+    /**
+     * @readonly
+     */
+    public ?int $offset = null;
+    /**
+     * @readonly
+     */
+    public ?bool $includeGlobal = null;
+    /**
      * Every argument is optional and sets the filter of the same name; null
      * leaves it out of the query string.
      */
-    public function __construct(
-        public readonly ?string $applicationId = null,
-        public readonly ?string $resourceType = null,
-        public readonly ?int $limit = null,
-        public readonly ?int $offset = null,
-        public readonly ?bool $includeGlobal = null,
-    ) {}
+    public function __construct(?string $applicationId = null, ?string $resourceType = null, ?int $limit = null, ?int $offset = null, ?bool $includeGlobal = null)
+    {
+        $this->applicationId = $applicationId;
+        $this->resourceType = $resourceType;
+        $this->limit = $limit;
+        $this->offset = $offset;
+        $this->includeGlobal = $includeGlobal;
+    }
 
     /**
      * @return array<string, string>

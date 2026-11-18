@@ -29,10 +29,17 @@ use Octoverse\Octonomy\RequestOptions;
 final class AssignmentService
 {
     /**
+     * @readonly
+     */
+    private Transport $transport;
+    /**
      * Built by Client::assignments(), over the client's one Transport; reach
      * the service there rather than constructing it.
      */
-    public function __construct(private readonly Transport $transport) {}
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * Assign a tag to a resource (POST /tag-assignments). Assigning a tag the
@@ -42,7 +49,7 @@ final class AssignmentService
      */
     public function create(AssignmentCreate $input, ?RequestOptions $options = null): Assignment
     {
-        return $this->transport->one('POST', 'tag-assignments', Assignment::fromArray(...), [], $input->toArray(), $options);
+        return $this->transport->one('POST', 'tag-assignments', \Closure::fromCallable([Assignment::class, 'fromArray']), [], $input->toArray(), $options);
     }
 
     /**
@@ -66,7 +73,7 @@ final class AssignmentService
         return $this->transport->one(
             'POST',
             'tag-assignments/bulk-assign',
-            BulkAssignResult::fromArray(...),
+            \Closure::fromCallable([BulkAssignResult::class, 'fromArray']),
             [],
             $input->toArray(),
             $options,
@@ -83,7 +90,7 @@ final class AssignmentService
         return $this->transport->one(
             'POST',
             'tag-assignments/bulk-remove',
-            BulkRemoveResult::fromArray(...),
+            \Closure::fromCallable([BulkRemoveResult::class, 'fromArray']),
             [],
             $input->toArray(),
             $options,

@@ -31,7 +31,14 @@ use Psr\Http\Message\RequestInterface;
  */
 final class PathAsIsCurlFactory implements CurlFactoryInterface
 {
-    public function __construct(private readonly CurlFactoryInterface $factory) {}
+    /**
+     * @readonly
+     */
+    private CurlFactoryInterface $factory;
+    public function __construct(CurlFactoryInterface $factory)
+    {
+        $this->factory = $factory;
+    }
 
     /**
      * The handle Guzzle's factory makes for $request, set to send its path as written.
@@ -46,7 +53,7 @@ final class PathAsIsCurlFactory implements CurlFactoryInterface
         // Rector's downgrade (DowngradePhp80ResourceReturnToObjectRector) widens
         // this check to accept one. Anything else is left as Guzzle made it.
         $handle = $easy->handle;
-        if ($handle instanceof \CurlHandle) {
+        if (is_resource($handle) || $handle instanceof \CurlHandle) {
             // Set again on every handle: the factory curl_reset()s a handle it
             // keeps for reuse, which clears the option.
             curl_setopt($handle, \CURLOPT_PATH_AS_IS, true);

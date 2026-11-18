@@ -28,8 +28,8 @@ final class RequestIdTest extends SdkTestCase
 
     /**
      * @param \Closure(Client, ?RequestOptions): mixed $call
+     * @dataProvider calls
      */
-    #[DataProvider('calls')]
     public function testNoRequestIdIsSentUnlessTheCallerSuppliesOne(string $operation, \Closure $call): void
     {
         foreach ([null, new RequestOptions(), RequestOptions::withActor('svc-call')] as $options) {
@@ -43,14 +43,12 @@ final class RequestIdTest extends SdkTestCase
 
     /**
      * @param \Closure(Client, ?RequestOptions): mixed $call
+     * @dataProvider calls
      */
-    #[DataProvider('calls')]
     public function testASuppliedRequestIdIsSentAsXRequestId(string $operation, \Closure $call): void
     {
         $client = $this->clientWith([self::captured("v2/{$operation}")]);
-
         $call($client, RequestOptions::withRequestId(self::REQUEST_ID));
-
         $request = $this->lastRequest();
         self::assertSame([self::REQUEST_ID], $request->getHeader('X-Request-ID'));
         // Beside the credentials, not in place of them.
@@ -64,7 +62,7 @@ final class RequestIdTest extends SdkTestCase
      */
     public function testWithRequestIdTakesTheIdByName(): void
     {
-        self::assertSame(self::REQUEST_ID, RequestOptions::withRequestId(id: self::REQUEST_ID)->requestId);
+        self::assertSame(self::REQUEST_ID, RequestOptions::withRequestId(self::REQUEST_ID)->requestId);
     }
 
     /**
@@ -75,7 +73,7 @@ final class RequestIdTest extends SdkTestCase
     {
         $client = $this->psr18ClientWith([self::captured('v2/tags/get')]);
 
-        $client->tags()->get('tag_1', options: RequestOptions::withRequestId(self::REQUEST_ID));
+        $client->tags()->get('tag_1', null, null, RequestOptions::withRequestId(self::REQUEST_ID));
 
         self::assertSame([self::REQUEST_ID], $this->lastRequest()->getHeader('X-Request-ID'));
     }
@@ -88,10 +86,10 @@ final class RequestIdTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/get')]);
 
-        $client->tags()->get('tag_1', 'harness-app', options: new RequestOptions(
-            actorId: 'svc-call',
-            namespace: new NamespaceScope('merchant', 'harness-merchant-a'),
-            requestId: self::REQUEST_ID,
+        $client->tags()->get('tag_1', 'harness-app', null, new RequestOptions(
+            'svc-call',
+            new NamespaceScope('merchant', 'harness-merchant-a'),
+            self::REQUEST_ID,
         ));
 
         $request = $this->lastRequest();
@@ -108,7 +106,7 @@ final class RequestIdTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/get'), self::captured('v2/tags/get')]);
 
-        $client->tags()->get('tag_1', options: RequestOptions::withRequestId(self::REQUEST_ID));
+        $client->tags()->get('tag_1', null, null, RequestOptions::withRequestId(self::REQUEST_ID));
         $client->tags()->get('tag_1');
 
         self::assertFalse($this->lastRequest()->hasHeader('X-Request-ID'));
@@ -136,17 +134,19 @@ final class RequestIdTest extends SdkTestCase
         $long = str_repeat('r', 150);
         $client = $this->clientWith([self::captured('v2/tags/get')]);
 
-        $client->tags()->get('tag_1', options: RequestOptions::withRequestId($long));
+        $client->tags()->get('tag_1', null, null, RequestOptions::withRequestId($long));
 
         self::assertSame($long, $this->lastRequest()->getHeaderLine('X-Request-ID'));
     }
 
-    #[DataProvider('unusableIds')]
+    /**
+     * @dataProvider unusableIds
+     */
     public function testAnUnusableRequestIdIsRefusedWhenOptionsAreBuilt(string $id, string $message): void
     {
         foreach ([
-            'withRequestId()' => static fn(): RequestOptions => RequestOptions::withRequestId($id),
-            'the constructor' => static fn(): RequestOptions => new RequestOptions(requestId: $id),
+            'withRequestId()' => static fn (): RequestOptions => RequestOptions::withRequestId($id),
+            'the constructor' => static fn (): RequestOptions => new RequestOptions(null, null, $id),
         ] as $how => $build) {
             try {
                 $build();
@@ -163,8 +163,8 @@ final class RequestIdTest extends SdkTestCase
      * after RequestOptions checked it. Transport checks it again, refuses it
      * before anything is sent, and removes the arguments of the SDK's frames,
      * which hold the request body.
+     * @dataProvider unusableIds
      */
-    #[DataProvider('unusableIds')]
     public function testARequestIdChangedAfterItsCheckIsRefusedBeforeSending(string $id, string $message): void
     {
         // Built without its constructor, as RedactionTest builds one: bound to
@@ -176,9 +176,8 @@ final class RequestIdTest extends SdkTestCase
             }
         }, null, RequestOptions::class)($options, ['actorId' => null, 'namespace' => null, 'requestId' => $id]);
         $client = $this->clientWith([]);
-
         try {
-            $client->tags()->create(new TagCreate(name: 'Featured', slug: 'featured', type: 'label'), $options);
+            $client->tags()->create(new TagCreate('Featured', 'featured', 'label'), $options);
             self::fail('expected an \InvalidArgumentException');
         } catch (\InvalidArgumentException $e) {
             self::assertSame($message, $e->getMessage());
@@ -187,7 +186,7 @@ final class RequestIdTest extends SdkTestCase
             foreach ($e->getTrace() as $frame) {
                 $name = ($frame['class'] ?? '') . '::' . $frame['function'];
                 $frames[] = $name;
-                if (str_starts_with($name, 'Octoverse\\Octonomy\\')) {
+                if (strncmp($name, 'Octoverse\\Octonomy\\', strlen('Octoverse\\Octonomy\\')) === 0) {
                     self::assertArrayNotHasKey('args', $frame, "{$name} kept its arguments");
                 }
             }
@@ -203,7 +202,7 @@ final class RequestIdTest extends SdkTestCase
         $blank = 'octonomy: requestId is blank, and the server reads an empty X-Request-ID as absent. Fix: pass'
             . ' the id you log for this call, such as a UUID or your trace id, or leave requestId null to have'
             . ' the server mint one.';
-        $byte = static fn(string $hex, int $offset): string => "octonomy: requestId holds byte 0x{$hex} at offset {$offset},"
+        $byte = static fn (string $hex, int $offset): string => "octonomy: requestId holds byte 0x{$hex} at offset {$offset},"
             . ' outside printable ASCII (0x20 to 0x7E), which is all a request id may hold. A header cannot carry a'
             . ' control character other than a tab, and the server reads a byte above 0x7E as Latin-1, so it would'
             . ' record an id other than the one you logged. Fix: pass a printable ASCII id, such as a UUID, and'
@@ -237,19 +236,15 @@ final class RequestIdTest extends SdkTestCase
      */
     public static function calls(): iterable
     {
-        yield 'create(), a write' => ['tags/create', static fn(Client $c, ?RequestOptions $o): mixed => $c->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label'),
+        yield 'create(), a write' => ['tags/create', static fn (Client $c, ?RequestOptions $o) => $c->tags()->create(
+            new TagCreate('Featured', 'featured', 'label'),
             $o,
         )];
-        yield 'get(), through one()' => ['tags/get', static fn(Client $c, ?RequestOptions $o): mixed => $c->tags()->get('tag_1', options: $o)];
-        yield 'list(), through many()' => ['tags/list', static fn(Client $c, ?RequestOptions $o): mixed => $c->tags()->list(new TagListParams(), $o)];
-        yield 'update(), a write' => ['tags/update', static fn(Client $c, ?RequestOptions $o): mixed => $c->tags()->update(
-            'tag_1',
-            new TagUpdate(description: 'Hand-picked by the merchandising team'),
-            options: $o,
-        )];
-        yield 'delete(), through none()' => ['tags/delete', static function (Client $c, ?RequestOptions $o): mixed {
-            $c->tags()->delete('tag_1', options: $o);
+        yield 'get(), through one()' => ['tags/get', static fn (Client $c, ?RequestOptions $o) => $c->tags()->get('tag_1', null, null, $o)];
+        yield 'list(), through many()' => ['tags/list', static fn (Client $c, ?RequestOptions $o) => $c->tags()->list(new TagListParams(), $o)];
+        yield 'update(), a write' => ['tags/update', static fn (Client $c, ?RequestOptions $o) => $c->tags()->update('tag_1', new TagUpdate(' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', ' octonomy:undefined', 'Hand-picked by the merchandising team'), null, $o)];
+        yield 'delete(), through none()' => ['tags/delete', static function (Client $c, ?RequestOptions $o) {
+            $c->tags()->delete('tag_1', null, $o);
 
             return null;
         }];

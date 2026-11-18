@@ -21,8 +21,10 @@ at, and by nothing else.
 | 2.x | `main` | `>=8.2` | `main` |
 | 1.x | `support/php7.4` | `>=7.4` | `support/php7.4` |
 
-`support/php7.4` does not exist until [#29](https://github.com/octoverse-id/octonomy-php/issues/29)
-generates it. No line publishes `0.x`, and later majors (`3.x`) are `main`'s.
+`support/php7.4` was generated from `main` once
+([#29](https://github.com/octoverse-id/octonomy-php/issues/29)) and is never regenerated. It has its
+own CI, which a 1.x release PR runs there. No line publishes `0.x`, and later majors (`3.x`) are
+`main`'s.
 
 ## Pre-release gate
 

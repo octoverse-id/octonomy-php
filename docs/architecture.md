@@ -118,7 +118,10 @@ Two named rules sit on top (issue #14):
   `{data: {...}}` (`octonomy/core/responses.py` upstream) and every list in `{data, pagination}`
   (`octonomy/core/pagination.py`). The SDK follows the server, enforces both envelopes in
   `Transport`, and notes the divergence in code. No SDK code reads the specs.
-- **Immutability:** response models and input DTOs are `readonly`. Input DTOs send only the fields the
+- **Immutability:** on 2.x, response models and input DTOs are `readonly`. On this line PHP 7.4 has no
+  `readonly`, so their properties are writable and marked `@readonly` in their docblocks; the SDK
+  never writes to one after construction, and code that does breaks on 2.x
+  ([upgrading-1-to-2.md](upgrading-1-to-2.md#models-are-read-only)). Input DTOs send only the fields the
   caller set (PATCH-friendly) via `toArray()`. An Update DTO's string fields default to
   `Undefined::VALUE` rather than `null`, so an explicit `null` is sent and a PATCH can clear a field.
 - **No hidden behavior:** the client never retries, logs, or mutates global state. Retries, timeouts,
@@ -137,7 +140,9 @@ isolation and namespace grants.
 
 ## Extending the client
 
-To add a resource, follow `Resource/TagService.php`:
+The 1.x line takes no new resources: they ship on 2.x ([roadmap.md](roadmap.md)). This is how `main`
+adds one, kept here because a fix on this line follows the same shape. To add a resource, follow
+`Resource/TagService.php`:
 
 1. Read the matching schema(s) in `docs/openapi-v2.yaml` (and `docs/openapi.yaml` for v1), and the
    divergence note at the top of each.
@@ -147,4 +152,4 @@ To add a resource, follow `Resource/TagService.php`:
 4. Add `MockHandler`-based tests that replay captured fixtures, list the model in
    `StrictHydrationRegressionTest::MODELS`, and add a CHANGELOG entry.
 
-Every endpoint of the server's contract is implemented; [roadmap.md](roadmap.md) keeps the recipe.
+Every endpoint of the server's contract is implemented; `main`'s roadmap keeps the recipe.

@@ -25,7 +25,7 @@ final class GuideTest extends TestCase
         $missing = [];
         foreach (glob(self::ROOT . '/examples/*.php') ?: [] as $example) {
             $name = basename($example);
-            if (!str_contains($guide, "](../examples/{$name})")) {
+            if (strpos($guide, "](../examples/{$name})") === false) {
                 $missing[] = $name;
             }
         }
@@ -43,8 +43,8 @@ final class GuideTest extends TestCase
                 continue; // an absolute URL
             }
             $hash = strpos($target, '#');
-            $path = $hash === false ? $target : substr($target, 0, $hash);
-            $anchor = $hash === false ? null : substr($target, $hash + 1);
+            $path = $hash === false ? $target : (string) substr($target, 0, $hash);
+            $anchor = $hash === false ? null : (string) substr($target, $hash + 1);
             $file = $path === '' ? 'docs/guide.md' : self::normalize('docs/' . $path);
             if (!is_file(self::ROOT . '/' . $file)) {
                 $broken[] = "{$target}: no file {$file}";
@@ -141,7 +141,7 @@ final class GuideTest extends TestCase
         preg_match_all('/^#{1,6}\s+(.+?)\s*$/m', $text, $headings);
 
         return array_map(
-            static fn(string $heading): string => str_replace(' ', '-', preg_replace('/[^\p{L}\p{N} _-]/u', '', strtolower($heading)) ?? ''),
+            static fn (string $heading): string => str_replace(' ', '-', preg_replace('/[^\p{L}\p{N} _-]/u', '', strtolower($heading)) ?? ''),
             $headings[1],
         );
     }

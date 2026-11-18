@@ -25,10 +25,17 @@ use Octoverse\Octonomy\ResultList;
 final class AuditLogService
 {
     /**
+     * @readonly
+     */
+    private Transport $transport;
+    /**
      * Built by Client::auditLogs(), over the client's one Transport; reach the
      * service there rather than constructing it.
      */
-    public function __construct(private readonly Transport $transport) {}
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * List a page of audit log entries (GET /audit-logs), newest first.
@@ -40,8 +47,8 @@ final class AuditLogService
         return $this->transport->many(
             'GET',
             'audit-logs',
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable1 = $params) ? $nullsafeVariable1->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -76,9 +83,9 @@ final class AuditLogService
         return Walker::walk(
             $this->transport,
             'audit-logs',
-            AuditLog::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([AuditLog::class, 'fromArray']),
+            (($nullsafeVariable2 = $params) ? $nullsafeVariable2->toQuery() : null) ?? [],
+            ($nullsafeVariable3 = $params) ? $nullsafeVariable3->offset : null,
             $options,
         );
     }

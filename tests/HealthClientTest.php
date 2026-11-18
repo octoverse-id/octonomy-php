@@ -78,7 +78,7 @@ final class HealthClientTest extends SdkTestCase
     public function testAHealthConfigBuildsAHealthClient(): void
     {
         $factory = self::recordingFactory();
-        $config = new HealthConfig(baseUrl: 'https://octonomy.example.com', timeout: 1.5, requestFactory: $factory);
+        $config = new HealthConfig('https://octonomy.example.com', null, 1.5, null, $factory);
 
         $client = new HealthClient($config);
 
@@ -88,8 +88,8 @@ final class HealthClientTest extends SdkTestCase
     /**
      * @param array<string, mixed> $options
      * @param non-empty-string     $expected
+     * @dataProvider refusedOptions
      */
-    #[DataProvider('refusedOptions')]
     public function testAnOptionIsRefusedInConfigsWords(array $options, string $expected): void
     {
         $configMessage = null;
@@ -98,7 +98,6 @@ final class HealthClientTest extends SdkTestCase
         } catch (ConfigurationException $e) {
             $configMessage = $e->getMessage();
         }
-
         try {
             new HealthClient($options);
             self::fail('expected a ConfigurationException');

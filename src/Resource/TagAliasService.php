@@ -28,10 +28,17 @@ use Octoverse\Octonomy\ResultList;
 final class TagAliasService
 {
     /**
+     * @readonly
+     */
+    private Transport $transport;
+    /**
      * Built by Client::aliases(), over the client's one Transport; reach the
      * service there rather than constructing it.
      */
-    public function __construct(private readonly Transport $transport) {}
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * Create an alias for a tag (POST /tag-aliases). An alias of a tag that
@@ -39,7 +46,7 @@ final class TagAliasService
      */
     public function create(TagAliasCreate $input, ?RequestOptions $options = null): TagAlias
     {
-        return $this->transport->one('POST', 'tag-aliases', TagAlias::fromArray(...), [], $input->toArray(), $options);
+        return $this->transport->one('POST', 'tag-aliases', \Closure::fromCallable([TagAlias::class, 'fromArray']), [], $input->toArray(), $options);
     }
 
     /**
@@ -52,12 +59,12 @@ final class TagAliasService
         string $id,
         ?string $applicationId = null,
         ?bool $includeGlobal = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): TagAlias {
         return $this->transport->one(
             'GET',
             Path::of('tag-aliases', $id),
-            TagAlias::fromArray(...),
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
             ScopeQuery::of($applicationId, $includeGlobal),
             null,
             $options,
@@ -75,8 +82,8 @@ final class TagAliasService
         return $this->transport->many(
             'GET',
             'tag-aliases',
-            TagAlias::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
+            (($nullsafeVariable1 = $params) ? $nullsafeVariable1->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -113,9 +120,9 @@ final class TagAliasService
         return Walker::walk(
             $this->transport,
             'tag-aliases',
-            TagAlias::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
+            (($nullsafeVariable2 = $params) ? $nullsafeVariable2->toQuery() : null) ?? [],
+            ($nullsafeVariable3 = $params) ? $nullsafeVariable3->offset : null,
             $options,
         );
     }
@@ -131,12 +138,12 @@ final class TagAliasService
         string $id,
         TagAliasUpdate $input,
         ?string $applicationId = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): TagAlias {
         return $this->transport->one(
             'PATCH',
             Path::of('tag-aliases', $id),
-            TagAlias::fromArray(...),
+            \Closure::fromCallable([TagAlias::class, 'fromArray']),
             ScopeQuery::of($applicationId),
             $input->toArray(),
             $options,

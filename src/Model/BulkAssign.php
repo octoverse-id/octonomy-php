@@ -18,17 +18,44 @@ namespace Octoverse\Octonomy\Model;
 final class BulkAssign
 {
     /**
+     * @readonly
+     */
+    public string $applicationId;
+    /**
+     * @readonly
+     */
+    public string $resourceType;
+    /**
+     * @readonly
+     */
+    public string $resourceId;
+    /**
+     * @var array<array-key, string>|null
+     * @readonly
+     */
+    public ?array $tagIds = null;
+    /**
+     * @var array<array-key, string>|null
+     * @readonly
+     */
+    public ?array $aliasSlugs = null;
+    /**
+     * @readonly
+     */
+    public ?string $assignedBy = null;
+    /**
      * @param array<array-key, string>|null $tagIds
      * @param array<array-key, string>|null $aliasSlugs
      */
-    public function __construct(
-        public readonly string $applicationId,
-        public readonly string $resourceType,
-        public readonly string $resourceId,
-        public readonly ?array $tagIds = null,
-        public readonly ?array $aliasSlugs = null,
-        public readonly ?string $assignedBy = null,
-    ) {}
+    public function __construct(string $applicationId, string $resourceType, string $resourceId, ?array $tagIds = null, ?array $aliasSlugs = null, ?string $assignedBy = null)
+    {
+        $this->applicationId = $applicationId;
+        $this->resourceType = $resourceType;
+        $this->resourceId = $resourceId;
+        $this->tagIds = $tagIds;
+        $this->aliasSlugs = $aliasSlugs;
+        $this->assignedBy = $assignedBy;
+    }
 
     /**
      * @return array<string, mixed>

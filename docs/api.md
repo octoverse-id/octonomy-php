@@ -551,7 +551,8 @@ No exception the SDK throws carries the token, the `Authorization` header, the r
   `verify()` through a function of the caller's that took it as an argument. Its message names a wrong
   argument's type, never its value. Its parameters are declared `mixed` and checked inside, so a wrong
   type is that exception, not a `TypeError` raised at the call, whose trace would hold the secret in
-  every frame before the SDK could remove it. `#[\SensitiveParameter]` marks the secret on PHP 8.2+ too.
+  every frame before the SDK could remove it. On 2.x, `#[\SensitiveParameter]` marks the secret too; the
+  1.x line cannot carry the attribute, which the downgrade removes, and relies on the scrub alone.
 
 Two failures are not HTTP errors and do not extend `ApiException`:
 

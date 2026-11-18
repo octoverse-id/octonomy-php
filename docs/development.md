@@ -3,19 +3,21 @@
 ## Setup
 
 ```bash
-git clone https://github.com/octoverse-id/octonomy-php.git
+git clone --branch support/php7.4 https://github.com/octoverse-id/octonomy-php.git
 cd octonomy-php
 composer install
 make test
 ```
 
-Requires PHP 8.2+. Guzzle is the only runtime dependency that ships code, beside the PSR HTTP interface
-packages it implements; dev tools (PHPUnit, PHPStan, php-cs-fixer) are installed via `composer install`.
+This is the 1.x line, on `support/php7.4` ([this branch](#this-branch-the-1x-line)). It requires
+PHP 7.4+, and so do its dev tools. Guzzle is the only runtime dependency that ships code, beside the PSR
+HTTP interface packages it implements; dev tools (PHPUnit 9.6, PHPStan, php-cs-fixer) are installed via
+`composer install`, resolved for PHP 7.4 whichever PHP runs it (`config.platform.php` is 7.4.33).
 
 ## Quality gates
 
 ```bash
-make cs        # php-cs-fixer --dry-run (PSR-12 / PER-CS)
+make cs        # php-cs-fixer --dry-run (@PSR12)
 make cs-fix    # apply style fixes
 make stan      # phpstan analyse (level in phpstan.neon.dist)
 make test      # phpunit
@@ -58,7 +60,8 @@ check:
   `NoHandWrittenResponseBodiesTest` fails on any `GuzzleHttp\` reference outside the fixture helpers,
   so there is no third way in.
 
-Use PHPUnit attributes (`#[DataProvider]`), not doc-comment annotations. Keep new code covered.
+Name a data provider in a `@dataProvider` annotation: PHPUnit 9 reads no attributes, and PHP 7.4 reads
+`#[DataProvider]` as a comment, so the provider would silently stop. Keep new code covered.
 
 ## Integration tests against a real server
 
@@ -191,6 +194,11 @@ exist:
 
 ### Refreshing
 
+The fixtures are captured on `main`, and this branch has no `make fixtures`: its corpus is `main`'s from
+the commit it was generated from. A refresh reaches 1.x, when one has to, as a pull request that copies
+`resources/fixtures`, the harness pin in `scripts/octonomy-harness.sh` and the vendored specs from
+`main` together, since `CapturedCorpusTest` ties the three to each other. On `main`:
+
 ```bash
 make fixtures    # boot a fresh harness, capture, tear it down
 ```
@@ -221,47 +229,50 @@ file is added or lost, if the manifest names a different image than the harness 
 corpus stops holding exactly the operations it lists as required. Capturing a new operation means
 adding it to that list in the same PR.
 
-## The PHP 7.4 line
+## This branch: the 1.x line
 
-`main` is the only source. The 1.x line for PHP 7.4 (epic #4) is generated from it by Rector, and CI
-proves on every PR and every push to `main` that the generated tree works on a real PHP 7.4. The
-proof runs in a throwaway directory and commits nothing. `support/php7.4` does not exist yet: P5
-generates it once with the same script, reviews it, and freezes it.
+`support/php7.4` holds the 1.x line: the tree `scripts/php74-downgrade.sh` wrote from `main` at
+`c1626d4`, reviewed and committed in [#29](https://github.com/octoverse-id/octonomy-php/issues/29), and
+never regenerated. The Rector setup that produced it (`tools/rector/`, `compat/`, the downgrade and
+check scripts, and `main`'s `php74` CI job) stays on `main`; this branch carries none of it.
 
-```bash
-make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
-```
+What differs from `main`:
 
-`make php74` takes about a minute and needs Docker. The pieces, which CI's `php74` job runs one by one:
+| On this branch | On `main` | Why |
+| -------------- | --------- | --- |
+| PHP 7.4+; Guzzle `^7.8` | PHP 8.2+; Guzzle `^7.8 \|\| ^8.0` | `composer.json`, which `compat/composer.json` on `main` supplied |
+| Models and DTOs are mutable, each property marked `@readonly` in its docblock | `readonly` | The downgrade deletes the keyword ([upgrading-1-to-2.md](upgrading-1-to-2.md)) |
+| PHPUnit 9.6, `@dataProvider` annotations, `phpunit.xml.dist` on the 9.x schema | PHPUnit 11, `#[DataProvider]` | PHP 7.4 reads an attribute as a comment |
+| php-cs-fixer at `@PSR12` | `@PER-CS2.0` | Rector's output (de-promoted constructors, `switch` blocks) is not `@PER-CS` clean |
+| PHPStan level 8 at `phpVersion: 70400`, with the ignores below | level 8 | |
+| CI: `static` on 7.4, `test` on 7.4 to 8.4, the integration suite and the dev server on 7.4, and the release-line guard | the 8.x matrix, the downgrade proof, and the same integration, dev-server and guard jobs on 8.3 | This tree is proven where it runs |
+| No `make php74` or `make fixtures` | both | Generation stopped; capture happens on `main` |
 
-| Piece | What it is |
-| ----- | ---------- |
-| `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. The PHPStan Rector runs on is pinned exactly too: Rector's own range (`^2.3.0` for 2.7.0) would float to a PHPStan it was not released with, and PHPStan 2.3.4 makes Rector 2.7.0 and 2.8.1 fail on every file. Bump the two together, in a PR of their own; Dependabot opens one for the pair, and does not auto-merge it, since the `php74` job that proves it is not a required check. Merge it by hand once that job is green. |
-| `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8` and the PSR HTTP interfaces, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
-| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness and dev-server scripts, and the vendored specs with the Markdown tests read (`docs/versioning.md`, and for `GuideTest` the guide, `docs/api.md`, `README.md` and `CHANGELOG.md`) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
-| `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, each with the same outcome (passed, skipped or failed), compared through each run's JUnit log. It reports every failing check, not just the first. |
+PHPStan ignores two kinds of error, each checked for staleness so it fails once the cause goes.
+`property.readOnlyByPhpDocDefaultValue`: Rector keeps a promoted parameter's default on the property it
+de-promotes, beside the `@readonly` tag, and the constructor always assigns it. And `class.notFound`
+with `argument.type` in `src/Http/PathAsIsCurlFactory.php`: PHPStan for 7.4 knows no `\CurlHandle`,
+which the downgraded handle check names for PHP 8's sake.
 
-`phpVersion: 70400` applies to the downgraded tree only. On `main` it would flag every 8.x construct
-`main` deliberately uses.
+**Writing code here.** PHP 7.4 syntax only: no union types, named arguments, `match`, nullsafe
+operator, constructor promotion, `readonly`, enums or attributes. A data provider is named in a
+`@dataProvider` annotation, since PHPUnit 9 reads no attributes. PHPStan at `phpVersion: 70400` and the
+PHP 7.4 jobs reject what slips through.
 
-**What `main` must not do.** Rector downgrades most of 8.2, but not everything:
+### Changing the 1.x line
 
-- **No enums.** Rector turns an enum case into a plain string constant, so code that tells a case
-  apart by type stops working, and it crashes on a named-argument call that skips an enum default
-  (#5). Use a class of string constants, like `ApiVersion`.
-- **No behavior that depends on a union type, `readonly`, or another 8.x-only check.** The downgrade
-  deletes union types and the `readonly` keyword, so on 7.4 a wrong type passes and a model's
-  properties can be written. When a test asserts a refusal, make the check explicit, as
-  `SdkTestCase::mockedHttpClient()` does.
-- **No PHPUnit attribute but `#[DataProvider]`.** PHPUnit 9 reads annotations only, and the stock
-  downgrade deletes an attribute it is not configured for, or writes a bare `@dataProvider` without
-  the method name. `tools/rector/src/DataProviderAttributeToAnnotationRector.php` writes the
-  annotation with the name, and fails the run on any other PHPUnit attribute (`#[Test]`, `#[Depends]`,
-  ...) rather than let it be deleted. Teach that rule a new attribute before using it.
+`support/php7.4` takes what `main` ships for the current `/api/v2` until its `1.0.0`, and after that
+security fixes and major bug fixes only; features ship on 2.x alone
+([#33](https://github.com/octoverse-id/octonomy-php/issues/33)). Every change reaches it the same way:
 
-PHPStan on the 7.4 tree ignores exactly one error, `property.readOnlyByPhpDocDefaultValue`. Rector
-keeps a promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. The
-ignore is checked for staleness, so it fails once Rector stops doing this.
+1. Branch from `support/php7.4` as usual (`fix/<issue>-...`) and open the pull request against it.
+   Its CI runs PHP 7.4 to 8.4, PHPStan at `phpVersion: 70400`, the integration suite and the dev
+   server on PHP 7.4, and the release-line guard.
+2. A fix both lines need lands on `main` first. Carry it across by cherry-picking when it applies
+   cleanly. When it does not, run `scripts/php74-downgrade.sh` from `main` into a temp dir and copy
+   only the files the fix changed, so the 7.4 form is Rector's rather than written by hand.
+3. Never regenerate the whole branch over itself: its README, CHANGELOG, Makefile, CI and
+   `AGENTS.md` section are its own, and copying the full tree would revert them.
 
 ## Running against your own Octonomy
 
@@ -302,6 +313,10 @@ every `examples/*.php`, and fails on any link in the guide whose file or heading
 YAML outside its testing and framework sections, where it would duplicate an example.
 
 ## Keeping the contract current
+
+On this branch the contract does not move: the 1.x line stays on the `/api/v2` contract of its `1.0.0`,
+and support for later API changes ships on 2.x only
+([#33](https://github.com/octoverse-id/octonomy-php/issues/33)). The steps below are `main`'s.
 
 `docs/openapi.yaml` (v1) and `docs/openapi-v2.yaml` (v2) are vendored from the Octonomy server at the
 release the harness pins, the same one the fixtures are captured from. Each is the server's file byte

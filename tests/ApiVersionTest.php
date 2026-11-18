@@ -25,7 +25,7 @@ final class ApiVersionTest extends SdkTestCase
 
         self::assertSame(ApiVersion::V2, $client->apiVersion());
         self::assertSame('/api/v2/tags/tag_1', $this->lastRequest()->getUri()->getPath());
-        self::assertSame(ApiVersion::V2, (new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme'))->apiVersion);
+        self::assertSame(ApiVersion::V2, (new Config('https://octonomy.test', 't', 'acme'))->apiVersion);
     }
 
     public function testV1IsChosenAtConstruction(): void
@@ -42,26 +42,28 @@ final class ApiVersionTest extends SdkTestCase
 
     public function testAConfigObjectCarriesTheApiVersionToTheClient(): void
     {
-        $client = new Client(new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme', apiVersion: ApiVersion::V1));
+        $client = new Client(new Config('https://octonomy.test', 't', 'acme', null, null, null, null, ApiVersion::V1));
 
         self::assertSame(ApiVersion::V1, $client->apiVersion());
     }
 
-    #[DataProvider('unknownApiVersions')]
+    /**
+     * @dataProvider unknownApiVersions
+     */
     public function testAnUnknownApiVersionThrowsAtConstruction(string $apiVersion): void
     {
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage(sprintf('octonomy: api_version must be "v1" or "v2", got "%s"', $apiVersion));
-
         new Client(['base_url' => 'https://octonomy.test', 'token' => 't', 'tenant_id' => 'acme', 'api_version' => $apiVersion]);
     }
 
-    #[DataProvider('unknownApiVersions')]
+    /**
+     * @dataProvider unknownApiVersions
+     */
     public function testAConfigRefusesAnUnknownApiVersion(string $apiVersion): void
     {
         $this->expectException(ConfigurationException::class);
-
-        new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme', apiVersion: $apiVersion);
+        new Config('https://octonomy.test', 't', 'acme', null, null, null, null, $apiVersion);
     }
 
     /**
@@ -106,10 +108,13 @@ final class ApiVersionTest extends SdkTestCase
      */
     public function testAClientChecksTheApiVersionOfTheConfigItIsGiven(): void
     {
-        $valid = new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme');
+        $valid = new Config('https://octonomy.test', 't', 'acme');
         $class = new \ReflectionClass(Config::class);
         $config = $class->newInstanceWithoutConstructor();
         foreach ($class->getProperties() as $property) {
+            if (PHP_VERSION_ID < 80100) {
+                $property->setAccessible(true);
+            }
             $property->setValue($config, $property->getName() === 'apiVersion' ? 'v3' : $property->getValue($valid));
         }
 
@@ -130,6 +135,9 @@ final class ApiVersionTest extends SdkTestCase
         // Nothing on a Client can set it: every public method but the
         // constructor takes no argument.
         foreach ((new \ReflectionClass(Client::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            if (PHP_VERSION_ID < 80100) {
+                $method->setAccessible(true);
+            }
             if ($method->isConstructor()) {
                 continue;
             }
@@ -139,14 +147,14 @@ final class ApiVersionTest extends SdkTestCase
         // Nor can a single request: RequestOptions has no api_version.
         $constructor = (new \ReflectionClass(RequestOptions::class))->getConstructor();
         self::assertNotNull($constructor);
-        $options = array_map(static fn(\ReflectionParameter $p): string => strtolower($p->getName()), $constructor->getParameters());
+        $options = array_map(static fn (\ReflectionParameter $p): string => strtolower($p->getName()), $constructor->getParameters());
         self::assertNotContains('apiversion', $options);
 
         // Nor can the Config it was built from. PHP 8.2 refuses this write
         // (readonly); the PHP 7.4 line, whose downgrade drops readonly, lets it
         // through. Either way the client keeps the version it read at
         // construction, which is the behavior under test, not readonly.
-        $config = new Config(baseUrl: 'https://octonomy.test', token: 't', tenantId: 'acme', apiVersion: ApiVersion::V1);
+        $config = new Config('https://octonomy.test', 't', 'acme', null, null, null, null, ApiVersion::V1);
         $client = new Client($config);
         try {
             (new \ReflectionProperty(Config::class, 'apiVersion'))->setValue($config, ApiVersion::V2);

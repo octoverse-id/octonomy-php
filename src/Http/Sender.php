@@ -33,7 +33,9 @@ final class Sender
     /** Seconds, for the client the SDK builds when none is injected. */
     private const DEFAULT_TIMEOUT = 30.0;
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * The client to send through: $httpClient when one was given, or a Guzzle
@@ -139,7 +141,7 @@ final class Sender
         RequestContext $context,
         string $origin,
         \Throwable $e,
-        Redaction $redaction,
+        Redaction $redaction
     ): TransportException {
         $sent = $e instanceof RequestExceptionInterface || $e instanceof NetworkExceptionInterface ? $e->getRequest() : null;
 
@@ -189,7 +191,7 @@ final class Sender
         }
         try {
             $response = $getResponse();
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
             return null;
         }
 

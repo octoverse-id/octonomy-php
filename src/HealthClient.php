@@ -29,7 +29,10 @@ use Octoverse\Octonomy\Resource\HealthService;
  */
 final class HealthClient
 {
-    private readonly HealthService $health;
+    /**
+     * @readonly
+     */
+    private HealthService $health;
 
     /**
      * @param array<string, mixed>|HealthConfig $config an options array (see HealthConfig::fromArray) or a
@@ -37,7 +40,7 @@ final class HealthClient
      *
      * @throws Exception\ConfigurationException when the configuration is invalid
      */
-    public function __construct(array|HealthConfig $config)
+    public function __construct($config)
     {
         $resolved = $config instanceof HealthConfig ? $config : HealthConfig::fromArray($config);
         // A Client's options may hold its token and actor id. A probe sends

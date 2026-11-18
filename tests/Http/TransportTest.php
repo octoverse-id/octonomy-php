@@ -42,22 +42,22 @@ final class TransportTest extends SdkTestCase
 
         // Still a \stdClass, so the field's reader can tell an object from a
         // list; array decoding would have made {} and [] the same.
-        $metadata = $transport->one('GET', 'tags/tag_1', static fn(array $members): mixed => $members['metadata']);
+        $metadata = $transport->one('GET', 'tags/tag_1', static fn (array $members) => $members['metadata']);
 
         self::assertInstanceOf(\stdClass::class, $metadata);
         self::assertSame(['color' => 'red'], get_object_vars($metadata));
     }
 
-    #[DataProvider('bodiesWithoutDataObject')]
+    /**
+     * @dataProvider bodiesWithoutDataObject
+     */
     public function testOneRejectsABodyWithoutADataObject(string $kind, string $raw): void
     {
         $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
             'octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): expected a non-empty JSON object under "data"',
         );
-
         $transport->one('GET', 'tags/tag_1', self::asDecoded());
     }
 
@@ -127,7 +127,7 @@ final class TransportTest extends SdkTestCase
                 self::asDecoded(),
                 ['application_id' => 'app-1', 'include_global' => 'false'],
                 null,
-                new RequestOptions(namespace: $namespace),
+                new RequestOptions(null, $namespace),
             );
             self::fail('expected a NotFoundException');
         } catch (NotFoundException $e) {
@@ -180,7 +180,7 @@ final class TransportTest extends SdkTestCase
     {
         $transport = $this->transportWith([self::captured('v2/tags/get')], ApiVersion::V2);
 
-        $tag = $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+        $tag = $transport->one('GET', 'tags/tag_1', \Closure::fromCallable([Tag::class, 'fromArray']));
 
         self::assertSame('/api/v2/tags/tag_1', $this->lastRequest()->getUri()->getPath());
         self::assertSame(self::capturedData('v2/tags/get')['namespace_type'], $tag->namespaceType);
@@ -192,11 +192,11 @@ final class TransportTest extends SdkTestCase
         $transport = $this->transportWith([self::syntheticNegativeFrom(
             'v1/tags/get',
             SyntheticNegative::WRONG_TYPE,
-            static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+            static fn (array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
         )], ApiVersion::V1);
 
         try {
-            $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+            $transport->one('GET', 'tags/tag_1', \Closure::fromCallable([Tag::class, 'fromArray']));
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
             self::assertSame(
@@ -248,14 +248,14 @@ final class TransportTest extends SdkTestCase
         self::assertSame(0, $page->pagination->count);
     }
 
-    #[DataProvider('bodiesWithBadData')]
+    /**
+     * @dataProvider bodiesWithBadData
+     */
     public function testManyRejectsDataThatIsNotAListOfObjects(string $kind, string $raw, string $expected): void
     {
         $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
-
         $transport->many('GET', 'tags', self::asDecoded());
     }
 
@@ -297,14 +297,13 @@ final class TransportTest extends SdkTestCase
     /**
      * Every malformed-response message ends with the same admission and fix,
      * whatever broke: the envelope, a field's type, or a timestamp.
+     * @dataProvider malformedBodies
      */
-    #[DataProvider('malformedBodies')]
     public function testAMalformedResponseSaysItCannotTellWhyAndGivesTheFix(SyntheticNegative $body): void
     {
         $transport = $this->transportWith([$body], ApiVersion::V1);
-
         try {
-            $transport->one('GET', 'tags/tag_1', Tag::fromArray(...));
+            $transport->one('GET', 'tags/tag_1', \Closure::fromCallable([Tag::class, 'fromArray']));
             self::fail('expected a MalformedResponseException');
         } catch (MalformedResponseException $e) {
             self::assertStringStartsWith('octonomy: malformed response from GET /api/v1/tags/tag_1 (api_version v1): ', $e->getMessage());
@@ -326,12 +325,12 @@ final class TransportTest extends SdkTestCase
         yield 'a field of the wrong type' => [self::syntheticNegativeFrom(
             'v1/tags/get',
             SyntheticNegative::WRONG_TYPE,
-            static fn(array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
+            static fn (array $body): array => array_replace_recursive($body, ['data' => ['usage_count' => '5']]),
         )];
         yield 'a timestamp that does not parse' => [self::syntheticNegativeFrom(
             'v1/tags/get',
             SyntheticNegative::WRONG_TYPE,
-            static fn(array $body): array => array_replace_recursive($body, ['data' => ['created_at' => 'yesterday']]),
+            static fn (array $body): array => array_replace_recursive($body, ['data' => ['created_at' => 'yesterday']]),
         )];
     }
 
@@ -347,16 +346,16 @@ final class TransportTest extends SdkTestCase
         }
     }
 
-    #[DataProvider('bodiesWithBadPagination')]
+    /**
+     * @dataProvider bodiesWithBadPagination
+     */
     public function testManyRejectsMissingOrInvalidPagination(string $kind, string $raw): void
     {
         $transport = $this->transportWith([self::syntheticNegative($kind, 200, $raw)], ApiVersion::V1);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage(
             'octonomy: malformed response from GET /api/v1/tags (api_version v1): expected a JSON object under "pagination"',
         );
-
         $transport->many('GET', 'tags', self::asDecoded());
     }
 
@@ -388,20 +387,18 @@ final class TransportTest extends SdkTestCase
             'octonomy: malformed response from GET /api/v1/tags (api_version v1): field "data[2].slug" is missing',
         );
 
-        $transport->many('GET', 'tags', Tag::fromArray(...));
+        $transport->many('GET', 'tags', \Closure::fromCallable([Tag::class, 'fromArray']));
     }
 
     /**
      * @param \Closure(array<array-key, mixed>): array<array-key, mixed> $break
+     * @dataProvider incompletePaginations
      */
-    #[DataProvider('incompletePaginations')]
     public function testManyRejectsAPaginationFieldThatIsAbsentOrMistyped(string $kind, \Closure $break, string $expected): void
     {
         $transport = $this->transportWith([self::syntheticNegativeFrom('v1/tags/list', $kind, $break)], ApiVersion::V1);
-
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('octonomy: malformed response from GET /api/v1/tags (api_version v1): ' . $expected);
-
         $transport->many('GET', 'tags', self::asDecoded());
     }
 
@@ -410,12 +407,12 @@ final class TransportTest extends SdkTestCase
      */
     public static function incompletePaginations(): iterable
     {
-        $without = static fn(string $key): \Closure => static function (array $body) use ($key): array {
+        $without = static fn (string $key): \Closure => static function (array $body) use ($key): array {
             unset($body['pagination'][$key]);
 
             return $body;
         };
-        $with = static fn(string $key, mixed $value): \Closure => static fn(array $body): array => array_replace_recursive(
+        $with = static fn (string $key, $value): \Closure => static fn (array $body): array => array_replace_recursive(
             $body,
             ['pagination' => [$key => $value]],
         );
@@ -444,7 +441,7 @@ final class TransportTest extends SdkTestCase
         $this->expectException(MalformedResponseException::class);
         $this->expectExceptionMessage('expected a JSON object under "pagination"');
 
-        $transport->many('GET', 'tags', Tag::fromArray(...));
+        $transport->many('GET', 'tags', \Closure::fromCallable([Tag::class, 'fromArray']));
     }
 
     public function testNoneSendsTheRequestAndReturnsNothing(): void
@@ -459,13 +456,13 @@ final class TransportTest extends SdkTestCase
         self::assertSame(['tag_id' => 'tag_1', 'resource_id' => 'r1'], $this->lastJsonBody());
     }
 
-    #[DataProvider('unexpectedSuccessBodies')]
+    /**
+     * @dataProvider unexpectedSuccessBodies
+     */
     public function testNoneIgnoresAnUnexpectedSuccessBody(int $status, string $raw): void
     {
         $transport = $this->transportWith([self::syntheticNegative(SyntheticNegative::STRAY_BODY, $status, $raw, [])], ApiVersion::V1);
-
         $transport->none('DELETE', 'tags/tag_1');
-
         self::assertSame('DELETE', $this->lastRequest()->getMethod());
     }
 

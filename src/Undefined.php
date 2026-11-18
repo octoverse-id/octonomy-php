@@ -32,5 +32,7 @@ final class Undefined
 {
     public const VALUE = "\0octonomy:undefined";
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 }

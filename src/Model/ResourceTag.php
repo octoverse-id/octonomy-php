@@ -17,18 +17,43 @@ use Octoverse\Octonomy\Internal\Json;
 final class ResourceTag
 {
     /**
+     * @readonly
+     */
+    public string $assignmentId;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceType;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceId;
+    /**
+     * @readonly
+     */
+    public ?string $assignedBy;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $assignedAt;
+    /**
+     * @readonly
+     */
+    public Tag $tag;
+    /**
      * A tag on a resource as fromArray() reads it from a response: each
      * argument is the field of the same name, in snake_case on the wire, and
      * $tag the nested tag.
      */
-    public function __construct(
-        public readonly string $assignmentId,
-        public readonly ?string $namespaceType,
-        public readonly ?string $namespaceId,
-        public readonly ?string $assignedBy,
-        public readonly \DateTimeImmutable $assignedAt,
-        public readonly Tag $tag,
-    ) {}
+    public function __construct(string $assignmentId, ?string $namespaceType, ?string $namespaceId, ?string $assignedBy, \DateTimeImmutable $assignedAt, Tag $tag)
+    {
+        $this->assignmentId = $assignmentId;
+        $this->namespaceType = $namespaceType;
+        $this->namespaceId = $namespaceId;
+        $this->assignedBy = $assignedBy;
+        $this->assignedAt = $assignedAt;
+        $this->tag = $tag;
+    }
 
     /**
      * Hydrate a resource tag from one row of a response read as $apiVersion.
@@ -43,13 +68,13 @@ final class ResourceTag
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            assignmentId: Json::string($data, 'assignment_id'),
-            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
-            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
-            assignedBy: Json::nullableString($data, 'assigned_by'),
-            assignedAt: Json::dateTime($data, 'assigned_at'),
-            tag: Json::resource($data, 'tag', Tag::fromArray(...), $apiVersion),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'assignment_id'),
+            Json::namespaceField($data, 'namespace_type', $apiVersion),
+            Json::namespaceField($data, 'namespace_id', $apiVersion),
+            Json::nullableString($data, 'assigned_by'),
+            Json::dateTime($data, 'assigned_at'),
+            Json::resource($data, 'tag', \Closure::fromCallable([Tag::class, 'fromArray']), $apiVersion),
         ));
     }
 }

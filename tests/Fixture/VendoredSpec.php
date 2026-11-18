@@ -12,16 +12,29 @@ namespace Octoverse\Octonomy\Tests\Fixture;
  */
 final class VendoredSpec
 {
+    /**
+     * @readonly
+     */
+    public string $file;
+    /**
+     * @readonly
+     */
+    public string $header;
+    /**
+     * @readonly
+     */
+    public string $body;
     /** Each spec, by the api_version it describes. */
     public const FILES = ['v1' => 'docs/openapi.yaml', 'v2' => 'docs/openapi-v2.yaml'];
 
     private const ROOT = __DIR__ . '/../..';
 
-    private function __construct(
-        public readonly string $file,
-        public readonly string $header,
-        public readonly string $body,
-    ) {}
+    private function __construct(string $file, string $header, string $body)
+    {
+        $this->file = $file;
+        $this->header = $header;
+        $this->body = $body;
+    }
 
     /**
      * Read the spec for $apiVersion, split at the end of its leading comment

@@ -33,7 +33,9 @@ final class Walker
      */
     public const DEFAULT_LIMIT = 200;
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * Walk GET $path from $offset, sending $query, the list's own params, on
@@ -56,7 +58,7 @@ final class Walker
         \Closure $hydrate,
         array $query,
         ?int $offset,
-        ?RequestOptions $options,
+        ?RequestOptions $options
     ): \Generator {
         $query['limit'] ??= (string) self::DEFAULT_LIMIT;
         $offset ??= 0;

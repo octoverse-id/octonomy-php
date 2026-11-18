@@ -26,7 +26,14 @@ use Octoverse\Octonomy\ResultList;
  */
 final class VocabularyService
 {
-    public function __construct(private readonly Transport $transport) {}
+    /**
+     * @readonly
+     */
+    private Transport $transport;
+    public function __construct(Transport $transport)
+    {
+        $this->transport = $transport;
+    }
 
     /**
      * Create a vocabulary (POST /vocabularies).
@@ -36,7 +43,7 @@ final class VocabularyService
         return $this->transport->one(
             'POST',
             'vocabularies',
-            Vocabulary::fromArray(...),
+            \Closure::fromCallable([Vocabulary::class, 'fromArray']),
             [],
             $input->toArray(),
             $options,
@@ -53,12 +60,12 @@ final class VocabularyService
         string $id,
         ?string $applicationId = null,
         ?bool $includeGlobal = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): Vocabulary {
         return $this->transport->one(
             'GET',
             Path::of('vocabularies', $id),
-            Vocabulary::fromArray(...),
+            \Closure::fromCallable([Vocabulary::class, 'fromArray']),
             ScopeQuery::of($applicationId, $includeGlobal),
             null,
             $options,
@@ -75,8 +82,8 @@ final class VocabularyService
         return $this->transport->many(
             'GET',
             'vocabularies',
-            Vocabulary::fromArray(...),
-            $params?->toQuery() ?? [],
+            \Closure::fromCallable([Vocabulary::class, 'fromArray']),
+            (($nullsafeVariable1 = $params) ? $nullsafeVariable1->toQuery() : null) ?? [],
             null,
             $options,
         );
@@ -112,9 +119,9 @@ final class VocabularyService
         return Walker::walk(
             $this->transport,
             'vocabularies',
-            Vocabulary::fromArray(...),
-            $params?->toQuery() ?? [],
-            $params?->offset,
+            \Closure::fromCallable([Vocabulary::class, 'fromArray']),
+            (($nullsafeVariable2 = $params) ? $nullsafeVariable2->toQuery() : null) ?? [],
+            ($nullsafeVariable3 = $params) ? $nullsafeVariable3->offset : null,
             $options,
         );
     }
@@ -129,12 +136,12 @@ final class VocabularyService
         string $id,
         VocabularyUpdate $input,
         ?string $applicationId = null,
-        ?RequestOptions $options = null,
+        ?RequestOptions $options = null
     ): Vocabulary {
         return $this->transport->one(
             'PATCH',
             Path::of('vocabularies', $id),
-            Vocabulary::fromArray(...),
+            \Closure::fromCallable([Vocabulary::class, 'fromArray']),
             ScopeQuery::of($applicationId),
             $input->toArray(),
             $options,

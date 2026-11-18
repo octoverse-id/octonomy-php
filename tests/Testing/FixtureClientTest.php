@@ -47,7 +47,7 @@ final class FixtureClientTest extends SdkTestCase
     public function testItMocksTheSdkInThreeLinesWithoutGuzzle(): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'http_client' => $fake]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => $fake]));
 
         self::assertSame(self::capturedData('v2/tags/get')['slug'], $client->tags()->get('t1')->slug);
         $request = $fake->assertSent('GET', 'tags/t1');
@@ -106,13 +106,11 @@ final class FixtureClientTest extends SdkTestCase
         }
     }
 
-    #[DataProvider('endpointsOnEachApiVersion')]
-    public function testEachEndpointIsAnsweredWithTheResponseCapturedForItOnItsApiVersion(
-        string $version,
-        string $method,
-        string $template,
-        string $fixture,
-    ): void {
+    /**
+     * @dataProvider endpointsOnEachApiVersion
+     */
+    public function testEachEndpointIsAnsweredWithTheResponseCapturedForItOnItsApiVersion(string $version, string $method, string $template, string $fixture): void
+    {
         $captured = self::captured("{$version}/{$fixture}");
         // The capture really is this endpoint's, so the route names the right one.
         self::assertSame($method, $captured->request['method']);
@@ -120,15 +118,13 @@ final class FixtureClientTest extends SdkTestCase
             '#^/api/' . $version . '/' . str_replace('\*', '[^/]+', preg_quote($template, '#')) . '$#',
             $captured->request['path'],
         );
-
         $response = FixtureClient::withCapturedFixtures()->sendRequest(self::request(
             $method,
             "https://octonomy.test/api/{$version}/" . str_replace('*', 'not-a-captured-id', $template),
         ));
-
         self::assertSame($captured->status, $response->getStatusCode());
         self::assertSame($captured->headers, array_map(
-            static fn(array $values): string => implode(', ', $values),
+            static fn (array $values): string => implode(', ', $values),
             $response->getHeaders(),
         ));
         self::assertSame($captured->body, (string) $response->getBody());
@@ -143,35 +139,35 @@ final class FixtureClientTest extends SdkTestCase
      */
     public static function sdkCalls(): iterable
     {
-        yield 'tags create' => [static fn(Client $c) => $c->tags()->create(new TagCreate('Featured', 'featured', 'label')), Tag::class];
-        yield 'tags get' => [static fn(Client $c) => $c->tags()->get('t1'), Tag::class];
-        yield 'tags list' => [static fn(Client $c) => $c->tags()->list(), ResultList::class];
-        yield 'tags update' => [static fn(Client $c) => $c->tags()->update('t1', new TagUpdate(name: 'Renamed')), Tag::class];
-        yield 'tags delete' => [static fn(Client $c) => $c->tags()->delete('t1'), null];
-        yield 'tags resolve' => [static fn(Client $c) => $c->tags()->resolve('red'), TagResolution::class];
-        yield 'tags listAliases' => [static fn(Client $c) => $c->tags()->listAliases('t1'), ResultList::class];
-        yield 'tags listResources' => [static fn(Client $c) => $c->tags()->listResources('t1'), ResultList::class];
-        yield 'tags listAuditLogs' => [static fn(Client $c) => $c->tags()->listAuditLogs('t1'), ResultList::class];
-        yield 'vocabularies create' => [static fn(Client $c) => $c->vocabularies()->create(new VocabularyCreate('Colors', 'colors')), Vocabulary::class];
-        yield 'vocabularies get' => [static fn(Client $c) => $c->vocabularies()->get('v1'), Vocabulary::class];
-        yield 'vocabularies list' => [static fn(Client $c) => $c->vocabularies()->list(), ResultList::class];
-        yield 'vocabularies update' => [static fn(Client $c) => $c->vocabularies()->update('v1', new VocabularyUpdate(name: 'Hues')), Vocabulary::class];
-        yield 'vocabularies delete' => [static fn(Client $c) => $c->vocabularies()->delete('v1'), null];
-        yield 'aliases create' => [static fn(Client $c) => $c->aliases()->create(new TagAliasCreate('t1', 'Scarlet', 'scarlet')), TagAlias::class];
-        yield 'aliases get' => [static fn(Client $c) => $c->aliases()->get('a1'), TagAlias::class];
-        yield 'aliases list' => [static fn(Client $c) => $c->aliases()->list(), ResultList::class];
-        yield 'aliases update' => [static fn(Client $c) => $c->aliases()->update('a1', new TagAliasUpdate(name: 'Crimson')), TagAlias::class];
-        yield 'aliases delete' => [static fn(Client $c) => $c->aliases()->delete('a1'), null];
-        yield 'assignments create' => [static fn(Client $c) => $c->assignments()->create(AssignmentCreate::forTag('app', 'product', 'sku-1', 't1')), Assignment::class];
-        yield 'assignments remove' => [static fn(Client $c) => $c->assignments()->remove(new AssignmentRemove('app', 'product', 'sku-1', 't1')), null];
-        yield 'assignments bulkAssign' => [static fn(Client $c) => $c->assignments()->bulkAssign(new BulkAssign('app', 'product', 'sku-1', tagIds: ['t1'])), BulkAssignResult::class];
-        yield 'assignments bulkRemove' => [static fn(Client $c) => $c->assignments()->bulkRemove(new BulkRemove('app', 'product', 'sku-1', ['t1'])), BulkRemoveResult::class];
-        yield 'resources listTags' => [static fn(Client $c) => $c->resources()->listTags('product', 'sku-1', 'app'), ResultList::class];
-        yield 'resources replaceTags' => [static fn(Client $c) => $c->resources()->replaceTags('product', 'sku-1', new ResourceTagsReplace('app', ['t1'])), ResourceTagsReplaceResult::class];
-        yield 'resources listAuditLogs' => [static fn(Client $c) => $c->resources()->listAuditLogs('product', 'sku-1'), ResultList::class];
-        yield 'auditLogs list' => [static fn(Client $c) => $c->auditLogs()->list(), ResultList::class];
-        yield 'health live' => [static fn(Client $c) => $c->health()->live(), HealthStatus::class];
-        yield 'health ready' => [static fn(Client $c) => $c->health()->ready(), HealthStatus::class];
+        yield 'tags create' => [static fn (Client $c) => $c->tags()->create(new TagCreate('Featured', 'featured', 'label')), Tag::class];
+        yield 'tags get' => [static fn (Client $c) => $c->tags()->get('t1'), Tag::class];
+        yield 'tags list' => [static fn (Client $c) => $c->tags()->list(), ResultList::class];
+        yield 'tags update' => [static fn (Client $c) => $c->tags()->update('t1', new TagUpdate('Renamed')), Tag::class];
+        yield 'tags delete' => [static fn (Client $c) => $c->tags()->delete('t1'), null];
+        yield 'tags resolve' => [static fn (Client $c) => $c->tags()->resolve('red'), TagResolution::class];
+        yield 'tags listAliases' => [static fn (Client $c) => $c->tags()->listAliases('t1'), ResultList::class];
+        yield 'tags listResources' => [static fn (Client $c) => $c->tags()->listResources('t1'), ResultList::class];
+        yield 'tags listAuditLogs' => [static fn (Client $c) => $c->tags()->listAuditLogs('t1'), ResultList::class];
+        yield 'vocabularies create' => [static fn (Client $c) => $c->vocabularies()->create(new VocabularyCreate('Colors', 'colors')), Vocabulary::class];
+        yield 'vocabularies get' => [static fn (Client $c) => $c->vocabularies()->get('v1'), Vocabulary::class];
+        yield 'vocabularies list' => [static fn (Client $c) => $c->vocabularies()->list(), ResultList::class];
+        yield 'vocabularies update' => [static fn (Client $c) => $c->vocabularies()->update('v1', new VocabularyUpdate('Hues')), Vocabulary::class];
+        yield 'vocabularies delete' => [static fn (Client $c) => $c->vocabularies()->delete('v1'), null];
+        yield 'aliases create' => [static fn (Client $c) => $c->aliases()->create(new TagAliasCreate('t1', 'Scarlet', 'scarlet')), TagAlias::class];
+        yield 'aliases get' => [static fn (Client $c) => $c->aliases()->get('a1'), TagAlias::class];
+        yield 'aliases list' => [static fn (Client $c) => $c->aliases()->list(), ResultList::class];
+        yield 'aliases update' => [static fn (Client $c) => $c->aliases()->update('a1', new TagAliasUpdate(' octonomy:undefined', 'Crimson')), TagAlias::class];
+        yield 'aliases delete' => [static fn (Client $c) => $c->aliases()->delete('a1'), null];
+        yield 'assignments create' => [static fn (Client $c) => $c->assignments()->create(AssignmentCreate::forTag('app', 'product', 'sku-1', 't1')), Assignment::class];
+        yield 'assignments remove' => [static fn (Client $c) => $c->assignments()->remove(new AssignmentRemove('app', 'product', 'sku-1', 't1')), null];
+        yield 'assignments bulkAssign' => [static fn (Client $c) => $c->assignments()->bulkAssign(new BulkAssign('app', 'product', 'sku-1', ['t1'])), BulkAssignResult::class];
+        yield 'assignments bulkRemove' => [static fn (Client $c) => $c->assignments()->bulkRemove(new BulkRemove('app', 'product', 'sku-1', ['t1'])), BulkRemoveResult::class];
+        yield 'resources listTags' => [static fn (Client $c) => $c->resources()->listTags('product', 'sku-1', 'app'), ResultList::class];
+        yield 'resources replaceTags' => [static fn (Client $c) => $c->resources()->replaceTags('product', 'sku-1', new ResourceTagsReplace('app', ['t1'])), ResourceTagsReplaceResult::class];
+        yield 'resources listAuditLogs' => [static fn (Client $c) => $c->resources()->listAuditLogs('product', 'sku-1'), ResultList::class];
+        yield 'auditLogs list' => [static fn (Client $c) => $c->auditLogs()->list(), ResultList::class];
+        yield 'health live' => [static fn (Client $c) => $c->health()->live(), HealthStatus::class];
+        yield 'health ready' => [static fn (Client $c) => $c->health()->ready(), HealthStatus::class];
     }
 
     /**
@@ -189,14 +185,12 @@ final class FixtureClientTest extends SdkTestCase
     /**
      * @param \Closure(Client): mixed $call
      * @param class-string|null       $returns
+     * @dataProvider sdkCallsOnEachApiVersion
      */
-    #[DataProvider('sdkCallsOnEachApiVersion')]
     public function testEverySdkCallIsAnsweredAndHydrates(string $version, \Closure $call, ?string $returns): void
     {
-        $client = new Client([...self::CONFIG, 'api_version' => $version, 'http_client' => FixtureClient::withCapturedFixtures()]);
-
+        $client = new Client(array_merge(self::CONFIG, ['api_version' => $version, 'http_client' => FixtureClient::withCapturedFixtures()]));
         $result = $call($client);
-
         if ($returns === null) {
             self::assertNull($result);
         } else {
@@ -206,7 +200,7 @@ final class FixtureClientTest extends SdkTestCase
 
     public function testEachRequestGetsAResponseOfItsOwn(): void
     {
-        $client = new Client([...self::CONFIG, 'http_client' => FixtureClient::withCapturedFixtures()]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => FixtureClient::withCapturedFixtures()]));
 
         // A replayed body is a stream; a second read of a shared one would be empty.
         self::assertSame($client->tags()->get('t1')->id, $client->tags()->get('t1')->id);
@@ -214,14 +208,14 @@ final class FixtureClientTest extends SdkTestCase
 
     public function testAWalkReadsACapturedPageThatIsTheLast(): void
     {
-        $client = new Client([...self::CONFIG, 'http_client' => FixtureClient::withCapturedFixtures()]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => FixtureClient::withCapturedFixtures()]));
 
         self::assertCount(count(self::capturedData('v2/tags/list')), iterator_to_array($client->tags()->walk()));
     }
 
     public function testAWalkStopsWhereTheCapturedPageSaysMoreFollowSinceItDoesNotPage(): void
     {
-        $client = new Client([...self::CONFIG, 'http_client' => FixtureClient::withCapturedFixtures()]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => FixtureClient::withCapturedFixtures()]));
         $page = self::captured('v2/audit-logs/list')->json()['pagination'];
         self::assertIsArray($page);
         self::assertNotNull($page['next'], 'the captured audit log page no longer says more follow; pick another');
@@ -252,20 +246,20 @@ final class FixtureClientTest extends SdkTestCase
         yield 'a probe the server does not serve' => ['GET', 'https://octonomy.test/health/started'];
     }
 
-    #[DataProvider('unmatchedRequests')]
+    /**
+     * @dataProvider unmatchedRequests
+     */
     public function testAnUnmatchedRequestThrowsNamingItsMethodAndPath(string $method, string $uri): void
     {
         $path = (string) parse_url($uri, PHP_URL_PATH);
-
         $this->expectException(FixtureClientException::class);
         $this->expectExceptionMessage("octonomy: FixtureClient has no captured response for {$method} {$path}.");
-
         FixtureClient::withCapturedFixtures()->sendRequest(self::request($method, $uri));
     }
 
     public function testAnUnmatchedRequestReachesTheCallerThroughTheSdkStillNamed(): void
     {
-        $client = new Client([...self::CONFIG, 'http_client' => FixtureClient::withCapturedFixtures()]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => FixtureClient::withCapturedFixtures()]));
 
         try {
             $client->tags()->get('');
@@ -287,7 +281,7 @@ final class FixtureClientTest extends SdkTestCase
         } catch (FixtureClientException $e) {
             $frames = array_values(array_filter(
                 $e->getTrace(),
-                static fn(array $frame): bool => ($frame['class'] ?? '') === FixtureClient::class && $frame['function'] === 'sendRequest',
+                static fn (array $frame): bool => ($frame['class'] ?? '') === FixtureClient::class && $frame['function'] === 'sendRequest',
             ));
             self::assertCount(1, $frames);
             // The request, Authorization header and all, is sendRequest()'s argument.
@@ -311,14 +305,14 @@ final class FixtureClientTest extends SdkTestCase
         yield 'one ending in the other api prefix' => ['/api/v1'];
     }
 
-    #[DataProvider('basePaths')]
+    /**
+     * @dataProvider basePaths
+     */
     public function testABaseUrlWithAPathOfItsOwnIsSkippedEvenWhenItLooksLikeTheApi(string $basePath): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'base_url' => "https://octonomy.test{$basePath}", 'http_client' => $fake]);
-
+        $client = new Client(array_merge(self::CONFIG, ['base_url' => "https://octonomy.test{$basePath}", 'http_client' => $fake]));
         self::assertSame(self::capturedData('v2/tags/get')['id'], $client->tags()->get('t1')->id);
-
         $request = $fake->assertSent('GET', 'tags/t1');
         self::assertSame("{$basePath}/api/v2/tags/t1", $request->getUri()->getPath());
     }
@@ -333,23 +327,22 @@ final class FixtureClientTest extends SdkTestCase
     {
         yield 'a base_url ending in /api/v2/resources, listing tags' => [
             'https://octonomy.test/api/v2/resources',
-            static fn(Client $c) => $c->tags()->list(),
+            static fn (Client $c) => $c->tags()->list(),
         ];
         yield "the tags of a resource of type 'api' and id 'v2'" => [
             'https://octonomy.test',
-            static fn(Client $c) => $c->resources()->listTags('api', 'v2', 'app'),
+            static fn (Client $c) => $c->resources()->listTags('api', 'v2', 'app'),
         ];
     }
 
     /**
      * @param \Closure(Client): mixed $call
+     * @dataProvider pathsWithTwoReadings
      */
-    #[DataProvider('pathsWithTwoReadings')]
     public function testAPathWithTwoReadingsIsRefusedNamingBothRatherThanGuessed(string $baseUrl, \Closure $call): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'base_url' => $baseUrl, 'http_client' => $fake]);
-
+        $client = new Client(array_merge(self::CONFIG, ['base_url' => $baseUrl, 'http_client' => $fake]));
         try {
             $call($client);
             self::fail('the path is the tag list or a resource\'s tags, and the request does not say which');
@@ -360,7 +353,6 @@ final class FixtureClientTest extends SdkTestCase
                 $e->getMessage(),
             );
         }
-
         $this->expectException(\AssertionError::class);
         $this->expectExceptionMessage('It answered no request at all.');
         $fake->assertSent('GET', 'tags');
@@ -369,7 +361,7 @@ final class FixtureClientTest extends SdkTestCase
     public function testAssertSentIgnoresPercentEncodingOnBothSides(): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'http_client' => $fake]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => $fake]));
 
         $client->tags()->get('a b');
         $client->tags()->get('.');
@@ -382,10 +374,10 @@ final class FixtureClientTest extends SdkTestCase
     public function testAssertSentReturnsTheLastMatchingRequest(): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'http_client' => $fake]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => $fake]));
 
         $client->tags()->get('t1');
-        $client->tags()->get('t1', applicationId: 'commerce');
+        $client->tags()->get('t1', 'commerce');
 
         self::assertSame('application_id=commerce', $fake->assertSent('GET', 'tags/t1')->getUri()->getQuery());
     }
@@ -393,7 +385,7 @@ final class FixtureClientTest extends SdkTestCase
     public function testAssertSentFailsNamingWhatWasAnswered(): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        $client = new Client([...self::CONFIG, 'http_client' => $fake]);
+        $client = new Client(array_merge(self::CONFIG, ['http_client' => $fake]));
         $client->tags()->get('t2');
         $client->tags()->create(new TagCreate('Featured', 'featured', 'label'));
 
@@ -406,7 +398,7 @@ final class FixtureClientTest extends SdkTestCase
     public function testAssertSentFailsOnTheMethodAlone(): void
     {
         $fake = FixtureClient::withCapturedFixtures();
-        (new Client([...self::CONFIG, 'http_client' => $fake]))->tags()->delete('t1');
+        (new Client(array_merge(self::CONFIG, ['http_client' => $fake])))->tags()->delete('t1');
 
         $this->expectException(\AssertionError::class);
         $this->expectExceptionMessage('answered no GET request for tags/t1. It answered: DELETE tags/t1.');
@@ -427,7 +419,7 @@ final class FixtureClientTest extends SdkTestCase
         $fake = FixtureClient::withCapturedFixtures();
         try {
             $fake->sendRequest(self::request('PUT', 'https://octonomy.test/api/v2/tags/t1'));
-        } catch (FixtureClientException) {
+        } catch (FixtureClientException $exception) {
         }
 
         $this->expectException(\AssertionError::class);
@@ -451,7 +443,7 @@ final class FixtureClientTest extends SdkTestCase
         $class = new \ReflectionClass(FixtureClient::class);
         $constructor = $class->getConstructor();
         $public = array_map(
-            static fn(\ReflectionMethod $method): string => $method->getName(),
+            static fn (\ReflectionMethod $method): string => $method->getName(),
             $class->getMethods(\ReflectionMethod::IS_PUBLIC),
         );
         sort($public);

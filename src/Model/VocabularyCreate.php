@@ -19,16 +19,42 @@ namespace Octoverse\Octonomy\Model;
 final class VocabularyCreate
 {
     /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @readonly
+     */
+    public string $slug;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId = null;
+    /**
+     * @readonly
+     */
+    public ?string $description = null;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata = null;
+    /**
+     * @readonly
+     */
+    public ?bool $isActive = null;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly string $name,
-        public readonly string $slug,
-        public readonly ?string $applicationId = null,
-        public readonly ?string $description = null,
-        public readonly ?array $metadata = null,
-        public readonly ?bool $isActive = null,
-    ) {}
+    public function __construct(string $name, string $slug, ?string $applicationId = null, ?string $description = null, ?array $metadata = null, ?bool $isActive = null)
+    {
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->applicationId = $applicationId;
+        $this->description = $description;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+    }
 
     /**
      * @return array<string, mixed>

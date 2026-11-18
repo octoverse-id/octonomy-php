@@ -10,17 +10,17 @@
         "source": "https://github.com/octoverse-id/octonomy-php"
     },
     "require": {
-        "php": ">=8.2",
+        "php": ">=7.4",
         "ext-json": "*",
-        "guzzlehttp/guzzle": "^7.8 || ^8.0",
+        "guzzlehttp/guzzle": "^7.8",
         "psr/http-client": "^1.0",
         "psr/http-factory": "^1.0",
         "psr/http-message": "^1.1 || ^2.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.0",
+        "friendsofphp/php-cs-fixer": "^3.64",
         "phpstan/phpstan": "^2.0",
-        "friendsofphp/php-cs-fixer": "^3.64"
+        "phpunit/phpunit": "^9.6"
     },
     "bin": [
         "scripts/octonomy-dev-server"
@@ -47,6 +47,9 @@
         ]
     },
     "config": {
+        "platform": {
+            "php": "7.4.33"
+        },
         "sort-packages": true,
         "allow-plugins": {}
     },

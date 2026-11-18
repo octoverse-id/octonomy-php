@@ -41,8 +41,8 @@ final class WrappedResponseRegressionTest extends SdkTestCase
 {
     /**
      * @param \Closure(Client): Tag $call
+     * @dataProvider tagCalls
      */
-    #[DataProvider('tagCalls')]
     public function testTagMethodHydratesEveryFieldFromTheWrappedShape(string $fixture, \Closure $call): void
     {
         $row = self::capturedData($fixture);
@@ -51,10 +51,8 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         }
         self::assertNotEmpty($row['metadata']);
         self::assertTrue($row['is_active']);
-
         $captured = self::captured($fixture);
         $tag = $call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()]));
-
         self::assertSame($row['id'], $tag->id);
         self::assertSame($row['tenant_id'], $tag->tenantId);
         self::assertSame($row['application_id'], $tag->applicationId);
@@ -80,23 +78,23 @@ final class WrappedResponseRegressionTest extends SdkTestCase
     public static function tagCalls(): iterable
     {
         foreach (['v1', 'v2'] as $v) {
-            yield "{$v} tags()->create()" => ["{$v}/tags/create", static fn(Client $c): Tag => $c->tags()->create(
-                new TagCreate(name: 'Featured', slug: 'featured', type: 'label'),
+            yield "{$v} tags()->create()" => ["{$v}/tags/create", static fn (Client $c): Tag => $c->tags()->create(
+                new TagCreate('Featured', 'featured', 'label'),
             )];
             // Captured once the tag is assigned, so usage_count is not the zero
             // value either.
-            yield "{$v} tags()->get()" => ["{$v}/tags/get", static fn(Client $c): Tag => $c->tags()->get('tag_1')];
-            yield "{$v} tags()->update()" => ["{$v}/tags/update", static fn(Client $c): Tag => $c->tags()->update(
+            yield "{$v} tags()->get()" => ["{$v}/tags/get", static fn (Client $c): Tag => $c->tags()->get('tag_1')];
+            yield "{$v} tags()->update()" => ["{$v}/tags/update", static fn (Client $c): Tag => $c->tags()->update(
                 'tag_1',
-                new TagUpdate(name: 'Featured'),
+                new TagUpdate('Featured'),
             )];
         }
     }
 
     /**
      * @param \Closure(Client): Vocabulary $call
+     * @dataProvider vocabularyCalls
      */
-    #[DataProvider('vocabularyCalls')]
     public function testVocabularyMethodHydratesEveryFieldFromTheWrappedShape(string $fixture, \Closure $call): void
     {
         $row = self::capturedData($fixture);
@@ -105,10 +103,8 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         }
         self::assertNotEmpty($row['metadata']);
         self::assertTrue($row['is_active']);
-
         $captured = self::captured($fixture);
         $vocabulary = $call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()]));
-
         self::assertSame($row['id'], $vocabulary->id);
         self::assertSame($row['tenant_id'], $vocabulary->tenantId);
         self::assertSame($row['application_id'], $vocabulary->applicationId);
@@ -129,31 +125,29 @@ final class WrappedResponseRegressionTest extends SdkTestCase
     public static function vocabularyCalls(): iterable
     {
         foreach (['v1', 'v2'] as $v) {
-            yield "{$v} vocabularies()->create()" => ["{$v}/vocabularies/create", static fn(Client $c): Vocabulary => $c->vocabularies()->create(
-                new VocabularyCreate(name: 'Labels', slug: 'labels'),
+            yield "{$v} vocabularies()->create()" => ["{$v}/vocabularies/create", static fn (Client $c): Vocabulary => $c->vocabularies()->create(
+                new VocabularyCreate('Labels', 'labels'),
             )];
-            yield "{$v} vocabularies()->get()" => ["{$v}/vocabularies/get", static fn(Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
-            yield "{$v} vocabularies()->update()" => ["{$v}/vocabularies/update", static fn(Client $c): Vocabulary => $c->vocabularies()->update(
+            yield "{$v} vocabularies()->get()" => ["{$v}/vocabularies/get", static fn (Client $c): Vocabulary => $c->vocabularies()->get('voc_1')];
+            yield "{$v} vocabularies()->update()" => ["{$v}/vocabularies/update", static fn (Client $c): Vocabulary => $c->vocabularies()->update(
                 'voc_1',
-                new VocabularyUpdate(name: 'Labels'),
+                new VocabularyUpdate('Labels'),
             )];
         }
     }
 
     /**
      * @param \Closure(Client): TagAlias $call
+     * @dataProvider aliasCalls
      */
-    #[DataProvider('aliasCalls')]
     public function testAliasMethodHydratesEveryFieldFromTheWrappedShape(string $fixture, \Closure $call): void
     {
         $row = self::capturedData($fixture);
         self::assertIsString($row['application_id'], "{$fixture} must set application_id for this test to mean anything");
         self::assertNotEmpty($row['metadata']);
         self::assertTrue($row['is_active']);
-
         $captured = self::captured($fixture);
         $alias = $call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()]));
-
         self::assertSame($row['id'], $alias->id);
         self::assertSame($row['tenant_id'], $alias->tenantId);
         self::assertSame($row['application_id'], $alias->applicationId);
@@ -174,13 +168,13 @@ final class WrappedResponseRegressionTest extends SdkTestCase
     public static function aliasCalls(): iterable
     {
         foreach (['v1', 'v2'] as $v) {
-            yield "{$v} aliases()->create()" => ["{$v}/tag-aliases/create", static fn(Client $c): TagAlias => $c->aliases()->create(
-                new TagAliasCreate(tagId: 'tag_1', name: 'Staff Pick', slug: 'staff-pick'),
+            yield "{$v} aliases()->create()" => ["{$v}/tag-aliases/create", static fn (Client $c): TagAlias => $c->aliases()->create(
+                new TagAliasCreate('tag_1', 'Staff Pick', 'staff-pick'),
             )];
-            yield "{$v} aliases()->get()" => ["{$v}/tag-aliases/get", static fn(Client $c): TagAlias => $c->aliases()->get('alias_1')];
-            yield "{$v} aliases()->update()" => ["{$v}/tag-aliases/update", static fn(Client $c): TagAlias => $c->aliases()->update(
+            yield "{$v} aliases()->get()" => ["{$v}/tag-aliases/get", static fn (Client $c): TagAlias => $c->aliases()->get('alias_1')];
+            yield "{$v} aliases()->update()" => ["{$v}/tag-aliases/update", static fn (Client $c): TagAlias => $c->aliases()->update(
                 'alias_1',
-                new TagAliasUpdate(name: 'Staff Picks'),
+                new TagAliasUpdate(' octonomy:undefined', 'Staff Picks'),
             )];
         }
     }
@@ -188,18 +182,16 @@ final class WrappedResponseRegressionTest extends SdkTestCase
     /**
      * Assigning returns the assignment the server wraps, new (201) or
      * existing (200) alike.
+     * @dataProvider assignmentFixtures
      */
-    #[DataProvider('assignmentFixtures')]
     public function testAssignmentCreateHydratesEveryFieldFromTheWrappedShape(string $fixture): void
     {
         $row = self::capturedData($fixture);
         self::assertIsString($row['assigned_by'], "{$fixture} must set assigned_by for this test to mean anything");
-
         $captured = self::captured($fixture);
         $assignment = $this->clientWith([$captured], ['api_version' => $captured->apiVersion()])->assignments()->create(
             AssignmentCreate::forTag('harness-app', 'product', 'sku-003', 'tag_1'),
         );
-
         self::assertInstanceOf(Assignment::class, $assignment);
         self::assertSame($row['id'], $assignment->id);
         self::assertSame($row['tenant_id'], $assignment->tenantId);
@@ -230,12 +222,11 @@ final class WrappedResponseRegressionTest extends SdkTestCase
      *
      * @param \Closure(Client): object $call
      * @param \Closure(object, array<array-key, mixed>): void $check
+     * @dataProvider summaryCalls
      */
-    #[DataProvider('summaryCalls')]
     public function testSummaryMethodHydratesFromTheWrappedShape(string $fixture, \Closure $call, \Closure $check): void
     {
         $captured = self::captured($fixture);
-
         $check($call($this->clientWith([$captured], ['api_version' => $captured->apiVersion()])), self::capturedData($fixture));
     }
 
@@ -247,17 +238,17 @@ final class WrappedResponseRegressionTest extends SdkTestCase
         foreach (['v1', 'v2'] as $v) {
             yield "{$v} assignments()->bulkAssign()" => [
                 "{$v}/tag-assignments/bulk-assign",
-                static fn(Client $c): BulkAssignResult => $c->assignments()->bulkAssign(new BulkAssign('harness-app', 'product', 'sku-003', ['tag_1'])),
+                static fn (Client $c): BulkAssignResult => $c->assignments()->bulkAssign(new BulkAssign('harness-app', 'product', 'sku-003', ['tag_1'])),
                 static function (object $result, array $data): void {
                     self::assertInstanceOf(BulkAssignResult::class, $result);
                     self::assertSame([$data['created'], $data['existing'], $data['skipped']], [$result->created, $result->existing, $result->skipped]);
                     self::assertNotEmpty($data['assignments']);
-                    self::assertSame(array_column($data['assignments'], 'id'), array_map(static fn(Assignment $a): string => $a->id, $result->assignments));
+                    self::assertSame(array_column($data['assignments'], 'id'), array_map(static fn (Assignment $a): string => $a->id, $result->assignments));
                 },
             ];
             yield "{$v} assignments()->bulkRemove()" => [
                 "{$v}/tag-assignments/bulk-remove",
-                static fn(Client $c): BulkRemoveResult => $c->assignments()->bulkRemove(new BulkRemove('harness-app', 'product', 'sku-003', ['tag_1'])),
+                static fn (Client $c): BulkRemoveResult => $c->assignments()->bulkRemove(new BulkRemove('harness-app', 'product', 'sku-003', ['tag_1'])),
                 static function (object $result, array $data): void {
                     self::assertInstanceOf(BulkRemoveResult::class, $result);
                     self::assertGreaterThan(0, $data['removed']);
@@ -266,17 +257,17 @@ final class WrappedResponseRegressionTest extends SdkTestCase
             ];
             yield "{$v} resources()->replaceTags()" => [
                 "{$v}/resources/replace",
-                static fn(Client $c): ResourceTagsReplaceResult => $c->resources()->replaceTags('product', 'sku-004', new ResourceTagsReplace('harness-app', ['tag_1'])),
+                static fn (Client $c): ResourceTagsReplaceResult => $c->resources()->replaceTags('product', 'sku-004', new ResourceTagsReplace('harness-app', ['tag_1'])),
                 static function (object $result, array $data): void {
                     self::assertInstanceOf(ResourceTagsReplaceResult::class, $result);
                     self::assertSame([$data['created'], $data['removed']], [$result->created, $result->removed]);
                     self::assertNotEmpty($data['tags']);
-                    self::assertSame(array_column($data['tags'], 'id'), array_map(static fn(Tag $t): string => $t->id, $result->tags));
+                    self::assertSame(array_column($data['tags'], 'id'), array_map(static fn (Tag $t): string => $t->id, $result->tags));
                 },
             ];
             yield "{$v} tags()->resolve()" => [
                 "{$v}/tag-resolution/alias",
-                static fn(Client $c): TagResolution => $c->tags()->resolve('promo'),
+                static fn (Client $c): TagResolution => $c->tags()->resolve('promo'),
                 static function (object $result, array $data): void {
                     self::assertInstanceOf(TagResolution::class, $result);
                     self::assertSame($data['matched_type'], $result->matchedType);

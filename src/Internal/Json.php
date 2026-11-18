@@ -44,8 +44,9 @@ final class Json
      * the request the body answered.
      *
      * @throws \JsonException when the payload is not valid JSON
+     * @return mixed
      */
-    public static function decode(string $raw): mixed
+    public static function decode(string $raw)
     {
         if ($raw === '') {
             return null;
@@ -84,7 +85,7 @@ final class Json
      *
      * @throws MalformedResponseException when a read rejects a field
      */
-    public static function readAs(string $apiVersion, \Closure $read): mixed
+    public static function readAs(string $apiVersion, \Closure $read)
     {
         try {
             return $read();
@@ -258,7 +259,7 @@ final class Json
      * @throws MalformedResponseException when the key is absent, its value is not an object, or the object
      *                                    fails to hydrate
      */
-    public static function resource(array $d, string $key, \Closure $hydrate, string $apiVersion): mixed
+    public static function resource(array $d, string $key, \Closure $hydrate, string $apiVersion)
     {
         $v = self::present($d, $key);
         if (!$v instanceof \stdClass) {
@@ -283,7 +284,7 @@ final class Json
      * @throws MalformedResponseException when the key is absent, its value is neither an object nor null,
      *                                    or the object fails to hydrate
      */
-    public static function nullableResource(array $d, string $key, \Closure $hydrate, string $apiVersion): mixed
+    public static function nullableResource(array $d, string $key, \Closure $hydrate, string $apiVersion)
     {
         $v = self::present($d, $key);
         if ($v === null) {
@@ -379,8 +380,9 @@ final class Json
      * @param array<string, mixed> $d
      *
      * @throws MalformedResponseException when the key is absent
+     * @return mixed
      */
-    private static function present(array $d, string $key): mixed
+    private static function present(array $d, string $key)
     {
         if (!array_key_exists($key, $d)) {
             throw new MalformedResponseException('is missing', $key);
@@ -399,7 +401,7 @@ final class Json
      *
      * @return T
      */
-    private static function hydrateWithin(string $at, \Closure $hydrate, \stdClass $object, string $apiVersion): mixed
+    private static function hydrateWithin(string $at, \Closure $hydrate, \stdClass $object, string $apiVersion)
     {
         try {
             return $hydrate(self::members($object), $apiVersion);
@@ -408,17 +410,34 @@ final class Json
         }
     }
 
-    private static function wrongType(string $key, string $expected, mixed $actual): MalformedResponseException
+    /**
+     * @param mixed $actual
+     */
+    private static function wrongType(string $key, string $expected, $actual): MalformedResponseException
     {
-        $type = match (true) {
-            $actual === null => 'null',
-            is_bool($actual) => 'a boolean',
-            is_int($actual) => 'an integer',
-            is_float($actual) => 'a number',
-            is_string($actual) => 'a string',
-            $actual instanceof \stdClass => 'an object',
-            default => 'an array',
-        };
+        switch (true) {
+            case $actual === null:
+                $type = 'null';
+                break;
+            case is_bool($actual):
+                $type = 'a boolean';
+                break;
+            case is_int($actual):
+                $type = 'an integer';
+                break;
+            case is_float($actual):
+                $type = 'a number';
+                break;
+            case is_string($actual):
+                $type = 'a string';
+                break;
+            case $actual instanceof \stdClass:
+                $type = 'an object';
+                break;
+            default:
+                $type = 'an array';
+                break;
+        }
 
         return new MalformedResponseException("must be {$expected}, got {$type}", $key);
     }

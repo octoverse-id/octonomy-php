@@ -175,17 +175,19 @@ abstract class SdkTestCase extends TestCase
      * The timeout of the Guzzle client the SDK built for $client, when it was
      * given no http_client of its own. For a HealthService, the client its
      * probes are sent through.
+     * @param \Octoverse\Octonomy\Client|\Octoverse\Octonomy\Resource\HealthService $client
+     * @return mixed
      */
-    protected static function timeoutOfTheClientBuiltFor(Client|HealthService $client): mixed
+    protected static function timeoutOfTheClientBuiltFor($client)
     {
         // Read from the private properties that hold it, by a closure bound to
         // each class: no accessor exposes the client, and none should.
         if ($client instanceof HealthService) {
-            $transport = \Closure::bind(fn(): HealthTransport => $this->transport, $client, HealthService::class)();
-            $http = \Closure::bind(fn(): object => $this->http, $transport, HealthTransport::class)();
+            $transport = \Closure::bind(fn (): HealthTransport => $this->transport, $client, HealthService::class)();
+            $http = \Closure::bind(fn (): object => $this->http, $transport, HealthTransport::class)();
         } else {
-            $transport = \Closure::bind(fn(): Transport => $this->transport, $client, Client::class)();
-            $http = \Closure::bind(fn(): object => $this->http, $transport, Transport::class)();
+            $transport = \Closure::bind(fn (): Transport => $this->transport, $client, Client::class)();
+            $http = \Closure::bind(fn (): object => $this->http, $transport, Transport::class)();
         }
         if (!$http instanceof GuzzleClient) {
             throw new \LogicException('the client was not built by the SDK: it was given an http_client');
@@ -216,11 +218,11 @@ abstract class SdkTestCase extends TestCase
         array $config = [],
         ?\Closure $describe = null,
         ?int $status = null,
-        ?\Closure $middleware = null,
+        ?\Closure $middleware = null
     ): Client {
         return $this->clientWhoseHttpClientThrows(
             $config,
-            static fn(RequestInterface $request): TransferException => $status === null
+            static fn (RequestInterface $request): TransferException => $status === null
                 ? new ConnectException($describe === null ? 'Connection refused' : $describe($request), $request)
                 // BadResponseException takes the response in this place on
                 // Guzzle 7 and 8 alike; RequestException no longer does on 8.
@@ -270,7 +272,7 @@ abstract class SdkTestCase extends TestCase
         array $config,
         \Closure $throw,
         array $clientDefaults = [],
-        ?\Closure $middleware = null,
+        ?\Closure $middleware = null
     ): Client {
         if (array_key_exists('http_client', $config)) {
             throw new \LogicException('the client owns its HTTP client');
@@ -304,13 +306,7 @@ abstract class SdkTestCase extends TestCase
      */
     protected function transportWith(array $responses, string $apiVersion = ApiVersion::V2): Transport
     {
-        $transport = new Transport(new Config(
-            baseUrl: 'https://octonomy.test',
-            token: 'test-token',
-            tenantId: 'tenant-1',
-            httpClient: $this->mockedHttpClient($responses),
-            apiVersion: $apiVersion,
-        ), Client::VERSION);
+        $transport = new Transport(new Config('https://octonomy.test', 'test-token', 'tenant-1', null, $this->mockedHttpClient($responses), null, null, $apiVersion), Client::VERSION);
         self::refuseCrossVersionReplay($transport->apiVersion(), $responses);
 
         return $transport;
@@ -337,7 +333,7 @@ abstract class SdkTestCase extends TestCase
      */
     protected static function asDecoded(): \Closure
     {
-        return static fn(array $members): array => self::toArrays($members);
+        return static fn (array $members): array => self::toArrays($members);
     }
 
     /**
@@ -346,8 +342,9 @@ abstract class SdkTestCase extends TestCase
      * For hydrating a model directly, outside a request.
      *
      * @return array<string, mixed>
+     * @param \Octoverse\Octonomy\Tests\Fixture\CapturedFixture|\Octoverse\Octonomy\Tests\Fixture\SyntheticNegative $response
      */
-    protected static function members(CapturedFixture|SyntheticNegative $response): array
+    protected static function members($response): array
     {
         $decoded = json_decode($response->body, false, 512, JSON_THROW_ON_ERROR);
         if (!$decoded instanceof \stdClass || !$decoded->data instanceof \stdClass) {
@@ -476,7 +473,7 @@ abstract class SdkTestCase extends TestCase
         string $kind,
         int $status,
         string $body = '',
-        array $headers = ['Content-Type' => 'application/json'],
+        array $headers = ['Content-Type' => 'application/json']
     ): SyntheticNegative {
         return new SyntheticNegative($kind, $status, $body, $headers);
     }
@@ -539,18 +536,36 @@ abstract class SdkTestCase extends TestCase
     /**
      * A decoded body with each object turned into an array a closure can edit,
      * except an object that would re-encode as a list (see syntheticNegativeFrom).
+     * @param mixed $value
+     * @return mixed
      */
-    private static function editable(mixed $value): mixed
+    private static function editable($value)
     {
         if ($value instanceof \stdClass) {
             $members = get_object_vars($value);
-            if ($members === [] || array_is_list($members)) {
+            $arrayIsListFunction = function (array $array): bool {
+                if (function_exists('array_is_list')) {
+                    return array_is_list($array);
+                }
+                if ($array === []) {
+                    return true;
+                }
+                $current_key = 0;
+                foreach ($array as $key => $noop) {
+                    if ($key !== $current_key) {
+                        return false;
+                    }
+                    ++$current_key;
+                }
+                return true;
+            };
+            if ($members === [] || $arrayIsListFunction($members)) {
                 return $value;
             }
             $value = $members;
         }
 
-        return is_array($value) ? array_map(self::editable(...), $value) : $value;
+        return is_array($value) ? array_map(\Closure::fromCallable([self::class, 'editable']), $value) : $value;
     }
 
     /**
@@ -584,7 +599,7 @@ abstract class SdkTestCase extends TestCase
             if (!$response instanceof CapturedFixture && !$response instanceof SyntheticNegative) {
                 throw new \TypeError(sprintf(
                     'responses must come from captured() or syntheticNegative(), got %s',
-                    is_object($response) ? $response::class : gettype($response),
+                    is_object($response) ? get_class($response) : gettype($response),
                 ));
             }
         }
@@ -612,7 +627,7 @@ abstract class SdkTestCase extends TestCase
         $this->replaying = null;
 
         $this->mock = new MockHandler(array_map(
-            static fn(CapturedFixture|SyntheticNegative $response): Response => $response->response(),
+            static fn ($response): Response => $response->response(),
             $responses,
         ));
         $this->mockedRequests = [];

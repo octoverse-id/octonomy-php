@@ -49,18 +49,38 @@ use Psr\Http\Message\ResponseInterface;
  */
 final class HealthTransport
 {
+    /**
+     * @var Redaction
+     * @readonly
+     */
+    private Redaction $redaction;
     /** The status /health/ready answers with when the server cannot serve traffic. */
     private const NOT_READY = 503;
 
-    private readonly ClientInterface $http;
-    private readonly RequestFactoryInterface $requests;
-    private readonly string $baseUrl;
+    /**
+     * @readonly
+     */
+    private ClientInterface $http;
+    /**
+     * @readonly
+     */
+    private RequestFactoryInterface $requests;
+    /**
+     * @readonly
+     */
+    private string $baseUrl;
 
-    /** The scheme, host and port of the base URL, as a message names the server. */
-    private readonly string $origin;
+    /**
+     * The scheme, host and port of the base URL, as a message names the server.
+     * @readonly
+     */
+    private string $origin;
 
-    /** @var array<string, string> */
-    private readonly array $headers;
+    /**
+     * @var array<string, string>
+     * @readonly
+     */
+    private array $headers;
 
     /**
      * @param Redaction $redaction the values no message about a probe may quote: none for a HealthClient,
@@ -69,8 +89,9 @@ final class HealthTransport
      *
      * @throws ConfigurationException when $config carries both an HTTP client and a timeout
      */
-    public function __construct(HealthConfig $config, string $sdkVersion, private readonly Redaction $redaction)
+    public function __construct(HealthConfig $config, string $sdkVersion, Redaction $redaction)
     {
+        $this->redaction = $redaction;
         // Checked again, not trusted from HealthConfig: the PHP 7.4 line loses
         // readonly in the downgrade, so a HealthConfig can be given a client
         // after its constructor accepted its timeout.
@@ -192,7 +213,7 @@ final class HealthTransport
     {
         try {
             $decoded = Json::decode($raw);
-        } catch (\JsonException) {
+        } catch (\JsonException $exception) {
             return null;
         }
         if (!$decoded instanceof \stdClass || !is_string($decoded->status ?? null)) {

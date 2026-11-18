@@ -25,13 +25,14 @@ final class RequestIdTest extends IntegrationTestCase
     /** A tag id no corpus row has. */
     private const MISSING = '00000000-0000-0000-0000-000000000000';
 
-    #[DataProvider('versions')]
+    /**
+     * @dataProvider versions
+     */
     public function testTheServerRecordsTheCallersRequestId(string $apiVersion): void
     {
         $id = sprintf('octonomy-php-%s-%s', $apiVersion, bin2hex(random_bytes(8)));
-
         try {
-            $this->harnessClient($apiVersion)->tags()->get(self::MISSING, options: RequestOptions::withRequestId($id));
+            $this->harnessClient($apiVersion)->tags()->get(self::MISSING, null, null, RequestOptions::withRequestId($id));
             self::fail('expected a NotFoundException');
         } catch (NotFoundException $e) {
             self::assertSame($id, $e->requestId);
@@ -39,7 +40,9 @@ final class RequestIdTest extends IntegrationTestCase
         }
     }
 
-    #[DataProvider('versions')]
+    /**
+     * @dataProvider versions
+     */
     public function testWithoutOneTheServerMintsItsOwn(string $apiVersion): void
     {
         try {

@@ -15,4 +15,6 @@ namespace Octoverse\Octonomy\Exception;
  * headers, such as middleware on an injected HTTP client. Build the Client with
  * api_version v2, or remove the headers to stay in the global partition.
  */
-final class UnsupportedApiVersionException extends ApiException {}
+final class UnsupportedApiVersionException extends ApiException
+{
+}

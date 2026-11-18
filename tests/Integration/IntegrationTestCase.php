@@ -70,7 +70,7 @@ abstract class IntegrationTestCase extends TestCase
     protected function harnessClient(
         string $apiVersion,
         string $tokenVariable = 'OCTONOMY_TEST_TOKEN',
-        ?InterruptingClient $http = null,
+        ?InterruptingClient $http = null
     ): Client {
         $baseUrl = self::harnessBaseUrl();
         $token = self::harnessEnv($tokenVariable);

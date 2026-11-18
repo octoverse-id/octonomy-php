@@ -32,26 +32,92 @@ use Octoverse\Octonomy\Internal\Json;
 final class Tag
 {
     /**
+     * @readonly
+     */
+    public string $id;
+    /**
+     * @readonly
+     */
+    public string $tenantId;
+    /**
+     * @readonly
+     */
+    public ?string $applicationId;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceType;
+    /**
+     * @readonly
+     */
+    public ?string $namespaceId;
+    /**
+     * @readonly
+     */
+    public string $name;
+    /**
+     * @readonly
+     */
+    public string $slug;
+    /**
+     * @readonly
+     */
+    public string $type;
+    /**
+     * @readonly
+     */
+    public ?string $description;
+    /**
+     * @readonly
+     */
+    public ?string $parentId;
+    /**
+     * @readonly
+     */
+    public ?string $vocabularyId;
+    /**
+     * @var array<array-key, mixed>|null
+     * @readonly
+     */
+    public ?array $metadata;
+    /**
+     * @readonly
+     */
+    public bool $isActive;
+    /**
+     * @readonly
+     */
+    public int $usageCount;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $createdAt;
+    /**
+     * @readonly
+     */
+    public \DateTimeImmutable $updatedAt;
+    /**
      * @param array<array-key, mixed>|null $metadata
      */
-    public function __construct(
-        public readonly string $id,
-        public readonly string $tenantId,
-        public readonly ?string $applicationId,
-        public readonly ?string $namespaceType,
-        public readonly ?string $namespaceId,
-        public readonly string $name,
-        public readonly string $slug,
-        public readonly string $type,
-        public readonly ?string $description,
-        public readonly ?string $parentId,
-        public readonly ?string $vocabularyId,
-        public readonly ?array $metadata,
-        public readonly bool $isActive,
-        public readonly int $usageCount,
-        public readonly \DateTimeImmutable $createdAt,
-        public readonly \DateTimeImmutable $updatedAt,
-    ) {}
+    public function __construct(string $id, string $tenantId, ?string $applicationId, ?string $namespaceType, ?string $namespaceId, string $name, string $slug, string $type, ?string $description, ?string $parentId, ?string $vocabularyId, ?array $metadata, bool $isActive, int $usageCount, \DateTimeImmutable $createdAt, \DateTimeImmutable $updatedAt)
+    {
+        $this->id = $id;
+        $this->tenantId = $tenantId;
+        $this->applicationId = $applicationId;
+        $this->namespaceType = $namespaceType;
+        $this->namespaceId = $namespaceId;
+        $this->name = $name;
+        $this->slug = $slug;
+        $this->type = $type;
+        $this->description = $description;
+        $this->parentId = $parentId;
+        $this->vocabularyId = $vocabularyId;
+        $this->metadata = $metadata;
+        $this->isActive = $isActive;
+        $this->usageCount = $usageCount;
+        $this->createdAt = $createdAt;
+        $this->updatedAt = $updatedAt;
+    }
 
     /**
      * Hydrate a tag from one resource object of a response read as $apiVersion.
@@ -68,28 +134,23 @@ final class Tag
      */
     public static function fromArray(array $data, string $apiVersion): self
     {
-        return Json::readAs($apiVersion, static fn(): self => new self(
-            id: Json::string($data, 'id'),
-            tenantId: Json::string($data, 'tenant_id'),
-            applicationId: Json::nullableString($data, 'application_id'),
-            namespaceType: Json::namespaceField($data, 'namespace_type', $apiVersion),
-            namespaceId: Json::namespaceField($data, 'namespace_id', $apiVersion),
-            name: Json::string($data, 'name'),
-            slug: Json::string($data, 'slug'),
-            type: Json::string($data, 'type'),
-            description: Json::nullableString($data, 'description'),
-            // The two exceptions to key presence. The server omits parent_id and
-            // vocabulary_id when they are null instead of sending null: each is a
-            // dotted source through a nullable relation ("parent.id"), which DRF
-            // skips when it reaches None (octonomy/tags/serializers.py, unchanged
-            // in every release since 1.0.0). So an absent key means null here.
-            parentId: Json::nullableStringOrAbsent($data, 'parent_id'),
-            vocabularyId: Json::nullableStringOrAbsent($data, 'vocabulary_id'),
-            metadata: Json::nullableObject($data, 'metadata'),
-            isActive: Json::bool($data, 'is_active'),
-            usageCount: Json::int($data, 'usage_count'),
-            createdAt: Json::dateTime($data, 'created_at'),
-            updatedAt: Json::dateTime($data, 'updated_at'),
+        return Json::readAs($apiVersion, static fn (): self => new self(
+            Json::string($data, 'id'),
+            Json::string($data, 'tenant_id'),
+            Json::nullableString($data, 'application_id'),
+            Json::namespaceField($data, 'namespace_type', $apiVersion),
+            Json::namespaceField($data, 'namespace_id', $apiVersion),
+            Json::string($data, 'name'),
+            Json::string($data, 'slug'),
+            Json::string($data, 'type'),
+            Json::nullableString($data, 'description'),
+            Json::nullableStringOrAbsent($data, 'parent_id'),
+            Json::nullableStringOrAbsent($data, 'vocabulary_id'),
+            Json::nullableObject($data, 'metadata'),
+            Json::bool($data, 'is_active'),
+            Json::int($data, 'usage_count'),
+            Json::dateTime($data, 'created_at'),
+            Json::dateTime($data, 'updated_at'),
         ));
     }
 }

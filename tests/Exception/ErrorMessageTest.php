@@ -50,14 +50,12 @@ final class ErrorMessageTest extends TestCase
 
     /**
      * Every code the SDK knows gets a fix.
+     * @dataProvider codes
      */
-    #[DataProvider('codes')]
     public function testEveryKnownCodeGetsAFix(string $code, int $status): void
     {
         $context = new RequestContext(ApiVersion::V2, 'GET', '/api/v2/tags/tag_1');
-
         $message = ErrorMessage::forResponse($status, $code, 'The server message.', [], null, $context, Redaction::none());
-
         self::assertStringStartsWith('octonomy: ', $message);
         self::assertStringContainsString("({$code}, HTTP {$status}).", $message);
         self::assertStringContainsString('Request: GET /api/v2/tags/tag_1.', $message);
@@ -89,7 +87,7 @@ final class ErrorMessageTest extends TestCase
 
     public function testTheCodesAboveAreEveryDeclaredCode(): void
     {
-        $listed = array_map(static fn(array $row): string => $row[0], iterator_to_array(self::codes(), false));
+        $listed = array_map(static fn (array $row): string => $row[0], iterator_to_array(is_array(self::codes()) ? new \ArrayIterator(self::codes()) : self::codes(), false));
 
         self::assertEqualsCanonicalizing(array_values((new \ReflectionClass(ErrorCode::class))->getConstants()), $listed);
     }
@@ -98,12 +96,11 @@ final class ErrorMessageTest extends TestCase
      * A 404 names the kind and the id, and the scope the request was sent in,
      * and says the SDK cannot tell why, but nothing about where else the row
      * might be.
+     * @dataProvider notFound
      */
-    #[DataProvider('notFound')]
     public function testANotFoundNamesTheKindAndTheIdAndNothingMore(RequestContext $context, string $expected): void
     {
         $message = ErrorMessage::forResponse(404, ErrorCode::NOT_FOUND, 'Resource not found.', ['detail' => 'Tag was not found.'], 'req_1', $context, Redaction::none());
-
         self::assertSame($expected, $message);
         foreach (['elsewhere', 'another', 'other ', 'exist', 'global partition'] as $speculation) {
             self::assertStringNotContainsString($speculation, $message);

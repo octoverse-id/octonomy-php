@@ -1,12 +1,20 @@
 # Octonomy PHP SDK
 
-[![CI](https://github.com/octoverse-id/octonomy-php/actions/workflows/ci.yml/badge.svg)](https://github.com/octoverse-id/octonomy-php/actions/workflows/ci.yml)
+[![CI](https://github.com/octoverse-id/octonomy-php/actions/workflows/ci.yml/badge.svg?branch=support/php7.4)](https://github.com/octoverse-id/octonomy-php/actions/workflows/ci.yml?query=branch%3Asupport%2Fphp7.4)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 The official PHP client for [Octonomy](https://github.com/octoverse-id/octonomy) — a multi-tenant,
 multi-application tag management and taxonomy service. A hand-written, Guzzle-based client for the
 Octonomy REST API: **`/api/v2`** by default, with merchant and sub-tenant namespaces, or `/api/v1` on
 request.
+
+> **This is the 1.x line, for PHP 7.4 and later** (branch `support/php7.4`). It is the 2.x SDK on
+> `main`, downgraded for PHP 7.4 by Rector once and then frozen: after its `1.0.0` it takes security
+> fixes and major bug fixes only, and new features ship on 2.x. Two differences reach your code. Its
+> models are **mutable**: writing to a model property works here and throws on 2.x, where they are
+> `readonly`. And PHP 7.4 has no named arguments, which the samples in this README and the guide use:
+> pass those arguments by position, as the downgraded `examples/` in this package do.
+> [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) covers both.
 
 **Start with the [guide](docs/guide.md):** one path from trying the SDK against a local Octonomy to
 wiring it into Laravel or Symfony, with a runnable example for each resource group. This README is the
@@ -22,8 +30,12 @@ reference it links into.
 composer require octoverse-id/octonomy-php
 ```
 
-Requires PHP 8.2+. Requests go through Guzzle (7.8 or 8) unless you pass another
-[PSR-18 client](#http-client).
+The 1.x line requires PHP 7.4+. Requests go through Guzzle 7 (7.8 or later) unless you pass another
+[PSR-18 client](#http-client); 1.x does not accept Guzzle 8.
+
+On PHP 7.4, 8.0 or 8.1 the command above resolves 1.x by itself. On PHP 8.2 and later it resolves 2.x,
+whose models are `readonly`; require `octoverse-id/octonomy-php:^1.0` to stay on 1.x there.
+[Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) says what changes when you move.
 
 ## Quickstart
 
@@ -526,12 +538,13 @@ make help    # list all targets
 ## Documentation
 
 - [Guide](docs/guide.md) — start here: from install to framework wiring, in order.
+- [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) — the PHP 7.4 line, and what changes when you leave it.
 - [Architecture](docs/architecture.md) — how the client is layered.
 - [API mapping](docs/api.md) — SDK methods ↔ Octonomy endpoints, auth, scopes.
 - [Development](docs/development.md) — setup, quality gates, testing.
 - [Versioning](docs/versioning.md) — SemVer policy and which server contract this SDK targets.
 - [Release](docs/release.md) — the release runbook.
-- [Roadmap](docs/roadmap.md) — the recipe for adding an endpoint.
+- [Roadmap](docs/roadmap.md) — why the 1.x line has none, and where new endpoints go.
 - [CHANGELOG](CHANGELOG.md)
 
 ## Contributing & security

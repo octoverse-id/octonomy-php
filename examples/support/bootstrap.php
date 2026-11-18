@@ -45,8 +45,9 @@ if (!class_exists(Client::class)) {
 
 /**
  * End the example with a message on stderr and exit status 1.
+ * @return never
  */
-function exampleFail(string $example, string $message): never
+function exampleFail(string $example, string $message)
 {
     fwrite(STDERR, "{$example}: {$message}\n");
     exit(1);
@@ -106,9 +107,9 @@ function ensureVocabulary(Client $client, VocabularyCreate $vocabulary): Vocabul
     } catch (ConflictException $e) {
         // A vocabulary list has no slug filter, so walk the scope's active rows.
         $params = new VocabularyListParams(
-            applicationId: $vocabulary->applicationId,
-            includeShared: $vocabulary->applicationId === null ? null : false,
-            isActive: true,
+            $vocabulary->applicationId,
+            $vocabulary->applicationId === null ? null : false,
+            true,
         );
         foreach ($client->vocabularies()->walk($params) as $found) {
             if ($found->slug === $vocabulary->slug && $found->applicationId === $vocabulary->applicationId) {
@@ -133,13 +134,7 @@ function ensureTag(Client $client, TagCreate $tag): Tag
         // false, so the scope is checked on each row. A shared row can sit past
         // the first page, behind applications' rows with the same slug, so the
         // walk reads on until it finds the row, and sends nothing more once it has.
-        $params = new TagListParams(
-            applicationId: $tag->applicationId,
-            includeShared: $tag->applicationId === null ? null : false,
-            isActive: true,
-            slug: $tag->slug,
-            type: $tag->type,
-        );
+        $params = new TagListParams($tag->applicationId, $tag->applicationId === null ? null : false, true, null, null, $tag->slug, $tag->type);
         foreach ($client->tags()->walk($params) as $found) {
             if ($found->applicationId === $tag->applicationId) {
                 return $found;
@@ -158,12 +153,7 @@ function ensureAlias(Client $client, TagAliasCreate $alias): TagAlias
         return $client->aliases()->create($alias);
     } catch (ConflictException $e) {
         // Walked for the same reason as in ensureTag().
-        $params = new TagAliasListParams(
-            applicationId: $alias->applicationId,
-            includeShared: $alias->applicationId === null ? null : false,
-            isActive: true,
-            slug: $alias->slug,
-        );
+        $params = new TagAliasListParams($alias->applicationId, $alias->applicationId === null ? null : false, true, null, $alias->slug);
         foreach ($client->aliases()->walk($params) as $found) {
             if ($found->applicationId === $alias->applicationId) {
                 return $found;

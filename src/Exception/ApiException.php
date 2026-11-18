@@ -31,6 +31,33 @@ use Octoverse\Octonomy\RequestContext;
 class ApiException extends OctonomyException
 {
     /**
+     * @readonly
+     */
+    public int $statusCode;
+    /**
+     * @readonly
+     */
+    public string $errorCode;
+    /**
+     * @var RequestContext
+     * @readonly
+     */
+    public RequestContext $context;
+    /**
+     * @var array<string, mixed>
+     * @readonly
+     */
+    public array $details = [];
+    /**
+     * @readonly
+     */
+    public ?string $requestId = null;
+    /**
+     * @var string|null
+     * @readonly
+     */
+    public ?string $serverMessage = null;
+    /**
      * @param RequestContext       $context       the request that received this response
      * @param array<string, mixed> $details
      * @param string|null          $serverMessage the error envelope's message as the server sent it, unedited,
@@ -38,13 +65,19 @@ class ApiException extends OctonomyException
      */
     public function __construct(
         string $message,
-        public readonly int $statusCode,
-        public readonly string $errorCode,
-        public readonly RequestContext $context,
-        public readonly array $details = [],
-        public readonly ?string $requestId = null,
-        public readonly ?string $serverMessage = null,
+        int $statusCode,
+        string $errorCode,
+        RequestContext $context,
+        array $details = [],
+        ?string $requestId = null,
+        ?string $serverMessage = null
     ) {
+        $this->statusCode = $statusCode;
+        $this->errorCode = $errorCode;
+        $this->context = $context;
+        $this->details = $details;
+        $this->requestId = $requestId;
+        $this->serverMessage = $serverMessage;
         parent::__construct($message);
     }
 
@@ -63,7 +96,7 @@ class ApiException extends OctonomyException
         array $body,
         RequestContext $context,
         string $contentType = '',
-        ?Redaction $redaction = null,
+        ?Redaction $redaction = null
     ): self {
         // Read leniently, unlike a 2xx body: whatever a gateway or proxy sent in
         // place of the envelope, the status alone still picks the exception.
@@ -110,40 +143,63 @@ class ApiException extends OctonomyException
      */
     public static function classFor(string $code, int $status): string
     {
-        return match ($code) {
-            ErrorCode::NOT_FOUND => NotFoundException::class,
-            ErrorCode::CONFLICT, ErrorCode::SCOPE_IMMUTABLE => ConflictException::class,
-            ErrorCode::VALIDATION,
-            ErrorCode::TENANT_MISMATCH,
-            ErrorCode::APPLICATION_MISMATCH,
-            ErrorCode::INACTIVE_TAG,
-            ErrorCode::NAMESPACE_INVALID => ValidationException::class,
-            ErrorCode::AUTH_REQUIRED => AuthenticationException::class,
-            ErrorCode::FORBIDDEN => ForbiddenException::class,
-            ErrorCode::NAMESPACED_WRITES_DISABLED, ErrorCode::NAMESPACE_API_DISABLED => FeatureDisabledException::class,
-            ErrorCode::NAMESPACE_NOT_SUPPORTED => UnsupportedApiVersionException::class,
-            ErrorCode::AMBIGUOUS_RESOLUTION => AmbiguousResolutionException::class,
-            default => match ($status) {
-                404 => NotFoundException::class,
-                409 => ConflictException::class,
-                401 => AuthenticationException::class,
-                403 => ForbiddenException::class,
-                400 => ValidationException::class,
-                default => self::class,
-            },
-        };
+        switch ($code) {
+            case ErrorCode::NOT_FOUND:
+                return NotFoundException::class;
+            case ErrorCode::CONFLICT:
+            case ErrorCode::SCOPE_IMMUTABLE:
+                return ConflictException::class;
+            case ErrorCode::VALIDATION:
+            case ErrorCode::TENANT_MISMATCH:
+            case ErrorCode::APPLICATION_MISMATCH:
+            case ErrorCode::INACTIVE_TAG:
+            case ErrorCode::NAMESPACE_INVALID:
+                return ValidationException::class;
+            case ErrorCode::AUTH_REQUIRED:
+                return AuthenticationException::class;
+            case ErrorCode::FORBIDDEN:
+                return ForbiddenException::class;
+            case ErrorCode::NAMESPACED_WRITES_DISABLED:
+            case ErrorCode::NAMESPACE_API_DISABLED:
+                return FeatureDisabledException::class;
+            case ErrorCode::NAMESPACE_NOT_SUPPORTED:
+                return UnsupportedApiVersionException::class;
+            case ErrorCode::AMBIGUOUS_RESOLUTION:
+                return AmbiguousResolutionException::class;
+            default:
+                switch ($status) {
+                    case 404:
+                        return NotFoundException::class;
+                    case 409:
+                        return ConflictException::class;
+                    case 401:
+                        return AuthenticationException::class;
+                    case 403:
+                        return ForbiddenException::class;
+                    case 400:
+                        return ValidationException::class;
+                    default:
+                        return self::class;
+                }
+        }
     }
 
     private static function codeFromStatus(int $status): string
     {
-        return match ($status) {
-            400 => ErrorCode::VALIDATION,
-            401 => ErrorCode::AUTH_REQUIRED,
-            403 => ErrorCode::FORBIDDEN,
-            404 => ErrorCode::NOT_FOUND,
-            409 => ErrorCode::CONFLICT,
-            default => 'http_' . $status,
-        };
+        switch ($status) {
+            case 400:
+                return ErrorCode::VALIDATION;
+            case 401:
+                return ErrorCode::AUTH_REQUIRED;
+            case 403:
+                return ErrorCode::FORBIDDEN;
+            case 404:
+                return ErrorCode::NOT_FOUND;
+            case 409:
+                return ErrorCode::CONFLICT;
+            default:
+                return 'http_' . $status;
+        }
     }
 
     /**

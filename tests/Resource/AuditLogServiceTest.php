@@ -37,18 +37,18 @@ final class AuditLogServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/audit-logs/list')]);
 
         $page = $client->auditLogs()->list(new AuditLogListParams(
-            applicationId: 'harness-app',
-            action: 'tag.updated',
-            entityType: 'tag',
-            entityId: 'tag_1',
-            tagId: 'tag_1',
-            resourceType: 'product',
-            resourceId: 'sku-001',
-            actorId: 'svc-catalog',
-            operationId: 'op_1',
-            limit: 3,
-            offset: 0,
-            includeGlobal: true,
+            'harness-app',
+            'tag.updated',
+            'tag',
+            'tag_1',
+            'tag_1',
+            'product',
+            'sku-001',
+            'svc-catalog',
+            'op_1',
+            3,
+            0,
+            true,
         ), self::merchantA());
 
         $request = $this->lastRequest();
@@ -93,7 +93,7 @@ final class AuditLogServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/audit-logs/list')]);
         $row = self::capturedData('v2/audit-logs/list')[1];
 
-        $log = $client->auditLogs()->list(new AuditLogListParams(applicationId: 'harness-app', limit: 3), self::merchantA())->data[1];
+        $log = $client->auditLogs()->list(new AuditLogListParams('harness-app', null, null, null, null, null, null, null, null, 3), self::merchantA())->data[1];
 
         self::assertInstanceOf(AuditLog::class, $log);
         self::assertSame($row['id'], $log->id);
@@ -126,21 +126,19 @@ final class AuditLogServiceTest extends SdkTestCase
     /**
      * @param \Closure(Client): ResultList<AuditLog> $call
      * @param array<string, string>                  $query
+     * @dataProvider scopedLists
      */
-    #[DataProvider('scopedLists')]
     public function testTheScopedListsSendTheirPathAndParams(string $fixture, \Closure $call, string $path, array $query): void
     {
         $client = $this->clientWith([self::captured($fixture)]);
         $rows = self::capturedData($fixture);
-
         $page = $call($client);
-
         $request = $this->lastRequest();
         self::assertSame('GET', $request->getMethod());
         self::assertSame($path, $request->getUri()->getPath());
         self::assertSame($query, $this->lastQuery());
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(AuditLog $l): string => $l->id, $page->data));
-        self::assertSame(array_column($rows, 'action'), array_map(static fn(AuditLog $l): string => $l->action, $page->data));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (AuditLog $l): string => $l->id, $page->data));
+        self::assertSame(array_column($rows, 'action'), array_map(static fn (AuditLog $l): string => $l->action, $page->data));
     }
 
     /**
@@ -148,30 +146,30 @@ final class AuditLogServiceTest extends SdkTestCase
      */
     public static function scopedLists(): iterable
     {
-        $params = new AuditLogListParams(applicationId: 'harness-app', action: 'assignment.created', actorId: 'svc', limit: 10);
+        $params = new AuditLogListParams('harness-app', 'assignment.created', null, null, null, null, null, 'svc', null, 10);
         $query = ['application_id' => 'harness-app', 'action' => 'assignment.created', 'actor_id' => 'svc', 'limit' => '10'];
 
         yield 'a tag\'s entries' => [
             'v2/tags/audit-logs',
-            static fn(Client $c): ResultList => $c->tags()->listAuditLogs('tag_1', $params, self::merchantA()),
+            static fn (Client $c): ResultList => $c->tags()->listAuditLogs('tag_1', $params, self::merchantA()),
             '/api/v2/tags/tag_1/audit-logs',
             $query,
         ];
         yield 'a resource\'s entries' => [
             'v2/resources/audit-logs',
-            static fn(Client $c): ResultList => $c->resources()->listAuditLogs('product', 'sku-004', $params, self::merchantA()),
+            static fn (Client $c): ResultList => $c->resources()->listAuditLogs('product', 'sku-004', $params, self::merchantA()),
             '/api/v2/resources/product/sku-004/audit-logs',
             $query,
         ];
         yield 'a tag\'s entries, without params' => [
             'v2/tags/audit-logs',
-            static fn(Client $c): ResultList => $c->tags()->listAuditLogs('tag_1'),
+            static fn (Client $c): ResultList => $c->tags()->listAuditLogs('tag_1'),
             '/api/v2/tags/tag_1/audit-logs',
             [],
         ];
         yield 'a resource\'s entries, without params' => [
             'v2/resources/audit-logs',
-            static fn(Client $c): ResultList => $c->resources()->listAuditLogs('product', 'sku-004'),
+            static fn (Client $c): ResultList => $c->resources()->listAuditLogs('product', 'sku-004'),
             '/api/v2/resources/product/sku-004/audit-logs',
             [],
         ];
@@ -188,7 +186,7 @@ final class AuditLogServiceTest extends SdkTestCase
 
         $walked = [];
         try {
-            foreach ($client->auditLogs()->walk(new AuditLogListParams(applicationId: 'harness-app', limit: 3), self::merchantA()) as $offset => $log) {
+            foreach ($client->auditLogs()->walk(new AuditLogListParams('harness-app', null, null, null, null, null, null, null, null, 3), self::merchantA()) as $offset => $log) {
                 $walked[$offset] = $log;
             }
             self::fail('expected the second page to fail');
@@ -203,20 +201,18 @@ final class AuditLogServiceTest extends SdkTestCase
             ['application_id' => 'harness-app', 'limit' => '3', 'offset' => '3'],
         ], $this->sentQueries());
         self::assertSame([0, 1, 2], array_keys($walked));
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(AuditLog $l): string => $l->id, $walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (AuditLog $l): string => $l->id, $walked));
     }
 
     /**
      * @param \Closure(Client): array<int, AuditLog> $call
+     * @dataProvider scopedWalks
      */
-    #[DataProvider('scopedWalks')]
     public function testTheScopedWalksSendTheirPathAndParams(string $fixture, \Closure $call, string $path): void
     {
         $client = $this->clientWith([self::captured($fixture)]);
         $rows = self::capturedData($fixture);
-
         $walked = $call($client);
-
         self::assertSame('GET', $this->lastRequest()->getMethod());
         self::assertSame($path, $this->lastRequest()->getUri()->getPath());
         self::assertSame(
@@ -224,7 +220,7 @@ final class AuditLogServiceTest extends SdkTestCase
             $this->sentQueries(),
         );
         self::assertSame(array_keys($rows), array_keys($walked));
-        self::assertSame(array_column($rows, 'id'), array_map(static fn(AuditLog $l): string => $l->id, $walked));
+        self::assertSame(array_column($rows, 'id'), array_map(static fn (AuditLog $l): string => $l->id, $walked));
     }
 
     /**
@@ -232,16 +228,16 @@ final class AuditLogServiceTest extends SdkTestCase
      */
     public static function scopedWalks(): iterable
     {
-        $params = new AuditLogListParams(applicationId: 'harness-app', action: 'assignment.created');
+        $params = new AuditLogListParams('harness-app', 'assignment.created');
 
         yield 'a tag\'s entries' => [
             'v2/tags/audit-logs',
-            static fn(Client $c): array => iterator_to_array($c->tags()->walkAuditLogs('tag_1', $params, self::merchantA())),
+            static fn (Client $c): array => iterator_to_array($c->tags()->walkAuditLogs('tag_1', $params, self::merchantA())),
             '/api/v2/tags/tag_1/audit-logs',
         ];
         yield 'a resource\'s entries' => [
             'v2/resources/audit-logs',
-            static fn(Client $c): array => iterator_to_array(
+            static fn (Client $c): array => iterator_to_array(
                 $c->resources()->walkAuditLogs('product', 'sku-004', $params, self::merchantA()),
             ),
             '/api/v2/resources/product/sku-004/audit-logs',
@@ -256,18 +252,17 @@ final class AuditLogServiceTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/errors/forbidden')]);
 
         $this->expectException(ForbiddenException::class);
-        $client->auditLogs()->list(new AuditLogListParams(applicationId: 'harness-app'), self::merchantA());
+        $client->auditLogs()->list(new AuditLogListParams('harness-app'), self::merchantA());
     }
 
     /**
      * @param \Closure(Client): mixed $call
      * @param class-string<\Throwable> $expected
+     * @dataProvider errorMappings
      */
-    #[DataProvider('errorMappings')]
     public function testErrorsMapToTheirExceptions(string $fixture, \Closure $call, string $expected): void
     {
         $client = $this->clientWith([self::captured($fixture)]);
-
         $this->expectException($expected);
         $call($client);
     }
@@ -277,9 +272,9 @@ final class AuditLogServiceTest extends SdkTestCase
      */
     public static function errorMappings(): iterable
     {
-        $list = static fn(Client $c): mixed => $c->auditLogs()->list(new AuditLogListParams(applicationId: 'harness-app'), self::merchantA());
-        $tag = static fn(Client $c): mixed => $c->tags()->listAuditLogs('tag_1', options: self::merchantA());
-        $resource = static fn(Client $c): mixed => $c->resources()->listAuditLogs('product', 'sku-004', options: self::merchantA());
+        $list = static fn (Client $c) => $c->auditLogs()->list(new AuditLogListParams('harness-app'), self::merchantA());
+        $tag = static fn (Client $c) => $c->tags()->listAuditLogs('tag_1', null, self::merchantA());
+        $resource = static fn (Client $c) => $c->resources()->listAuditLogs('product', 'sku-004', null, self::merchantA());
 
         foreach (['list' => $list, 'tag' => $tag, 'resource' => $resource] as $name => $call) {
             yield "{$name} 404" => ['v2/errors/not-found', $call, NotFoundException::class];
@@ -292,7 +287,7 @@ final class AuditLogServiceTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v1/audit-logs/list')], ['api_version' => ApiVersion::V1]);
 
-        $page = $client->auditLogs()->list(new AuditLogListParams(limit: 3));
+        $page = $client->auditLogs()->list(new AuditLogListParams(null, null, null, null, null, null, null, null, null, 3));
 
         self::assertSame('/api/v1/audit-logs', $this->lastRequest()->getUri()->getPath());
         self::assertNotEmpty($page->data);
@@ -309,7 +304,7 @@ final class AuditLogServiceTest extends SdkTestCase
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('octonomy: include_global requires api_version v2');
 
-        $client->tags()->listAuditLogs('tag_1', new AuditLogListParams(includeGlobal: false));
+        $client->tags()->listAuditLogs('tag_1', new AuditLogListParams(null, null, null, null, null, null, null, null, null, null, null, false));
     }
 
     /**
@@ -317,6 +312,6 @@ final class AuditLogServiceTest extends SdkTestCase
      */
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

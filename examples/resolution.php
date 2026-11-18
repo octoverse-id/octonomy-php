@@ -33,15 +33,15 @@ require __DIR__ . '/support/bootstrap.php';
 
 try {
     // No application: shared by every application in the tenant.
-    $shared = ensureTag($client, new TagCreate(name: 'Thriller', slug: 'thriller', type: 'genre'));
-    ensureAlias($client, new TagAliasCreate(tagId: $shared->id, name: 'Suspense', slug: 'suspense'));
+    $shared = ensureTag($client, new TagCreate('Thriller', 'thriller', 'genre'));
+    ensureAlias($client, new TagAliasCreate($shared->id, 'Suspense', 'suspense'));
 
     // The same type and slug, as the application's own.
-    $own = ensureTag($client, new TagCreate(name: 'Thrillers & crime', slug: 'thriller', type: 'genre', applicationId: $application));
-    ensureAlias($client, new TagAliasCreate(tagId: $own->id, name: 'Page-turner', slug: 'page-turner', applicationId: $application));
+    $own = ensureTag($client, new TagCreate('Thrillers & crime', 'thriller', 'genre', $application));
+    ensureAlias($client, new TagAliasCreate($own->id, 'Page-turner', 'page-turner', $application));
 
     foreach ([['thriller', null], ['thriller', $application], ['suspense', $application], ['page-turner', $application]] as [$slug, $as]) {
-        $resolution = $client->tags()->resolve($slug, applicationId: $as);
+        $resolution = $client->tags()->resolve($slug, $as);
         $tag = $resolution->tag;
         // matchedType says what the slug matched, and matchedAlias is the alias
         // when it was one.
@@ -59,7 +59,7 @@ try {
     // A slug that matches nothing active is a 400, with the reason under the
     // field it is about.
     try {
-        $client->tags()->resolve('space-opera', applicationId: $application);
+        $client->tags()->resolve('space-opera', $application);
     } catch (ValidationException $e) {
         printf("\n'space-opera' -> ValidationException (HTTP %d): %s\n", $e->statusCode, $e->details['slug'][0] ?? $e->serverMessage);
     }

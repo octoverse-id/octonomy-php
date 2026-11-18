@@ -33,7 +33,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-limit-200')]);
 
-        $walked = iterator_to_array($client->tags()->walk(new TagListParams(applicationId: 'harness-app'), self::merchantA()));
+        $walked = iterator_to_array($client->tags()->walk(new TagListParams('harness-app'), self::merchantA()));
 
         self::assertSame(
             [['application_id' => 'harness-app', 'limit' => '200', 'offset' => '0']],
@@ -51,7 +51,7 @@ final class WalkTest extends SdkTestCase
         $client = $this->clientWith([self::captured('v2/tags/walk-first'), self::captured('v2/tags/walk-last')]);
 
         $walked = iterator_to_array($client->tags()->walk(
-            new TagListParams(applicationId: 'harness-app', type: 'label', limit: 3),
+            new TagListParams('harness-app', null, null, null, null, null, 'label', null, 3),
             self::merchantA(),
         ));
 
@@ -60,7 +60,7 @@ final class WalkTest extends SdkTestCase
             ['application_id' => 'harness-app', 'type' => 'label', 'limit' => '3', 'offset' => '3'],
         ], $this->sentQueries(), 'every page carries the caller\'s params and limit, and ends at the page with no next link');
         self::assertSame(
-            [...self::slugs('v2/tags/walk-first'), ...self::slugs('v2/tags/walk-last')],
+            array_merge(self::slugs('v2/tags/walk-first'), self::slugs('v2/tags/walk-last')),
             self::slugsOf($walked),
         );
         self::assertSame([0, 1, 2, 3], array_keys($walked), 'each tag is keyed by its offset in the list');
@@ -71,7 +71,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/list-empty')]);
 
-        $walked = iterator_to_array($client->tags()->walk(new TagListParams(slug: 'no-such-tag')));
+        $walked = iterator_to_array($client->tags()->walk(new TagListParams(null, null, null, null, null, 'no-such-tag')));
 
         self::assertSame([], $walked);
         self::assertSame([['slug' => 'no-such-tag', 'limit' => '200', 'offset' => '0']], $this->sentQueries());
@@ -81,7 +81,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-end')]);
 
-        $walked = iterator_to_array($client->tags()->walk(new TagListParams(limit: 3, offset: 4), self::merchantA()));
+        $walked = iterator_to_array($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3, 4), self::merchantA()));
 
         self::assertSame([], $walked);
         self::assertSame([['limit' => '3', 'offset' => '4']], $this->sentQueries());
@@ -91,7 +91,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-first'), self::captured('v2/tags/walk-last')]);
 
-        $walk = $client->tags()->walk(new TagListParams(limit: 3));
+        $walk = $client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3));
         $this->assertNothingSent();
 
         // Each page only once the one before it is used up.
@@ -106,7 +106,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-first'), self::captured('v2/tags/walk-last')]);
 
-        foreach ($client->tags()->walk(new TagListParams(limit: 3)) as $tag) {
+        foreach ($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3)) as $tag) {
             break;
         }
 
@@ -117,7 +117,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-first'), self::captured('v2/errors/forbidden')]);
 
-        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3), self::merchantA()));
+        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3), self::merchantA()));
 
         self::assertSame(self::slugs('v2/tags/walk-first'), self::slugsOf($walked), 'every tag before the failed page');
         self::assertSame(3, $e->reachedOffset);
@@ -130,20 +130,20 @@ final class WalkTest extends SdkTestCase
             . ' from where it started up to there, and none from that page on.',
             $e->getMessage(),
         );
-        self::assertStringContainsString(substr($cause->getMessage(), strlen('octonomy: ')), $e->getMessage());
+        self::assertStringContainsString((string) substr($cause->getMessage(), strlen('octonomy: ')), $e->getMessage());
         self::assertStringContainsString('walk again with the same params and offset 3', $e->getMessage());
         self::assertStringNotContainsString('test-token', $e->getMessage());
     }
 
     public function testTheReachedOffsetResumesTheWalk(): void
     {
-        $params = new TagListParams(applicationId: 'harness-app', limit: 3);
+        $params = new TagListParams('harness-app', null, null, null, null, null, null, null, 3);
         $client = $this->clientWith([self::captured('v2/tags/walk-first'), self::captured('v2/errors/forbidden')]);
         [$before, $e] = self::walkUntilInterrupted($client->tags()->walk($params, self::merchantA()));
 
         $client = $this->clientWith([self::captured('v2/tags/walk-last')]);
         $after = iterator_to_array($client->tags()->walk(
-            new TagListParams(applicationId: 'harness-app', limit: 3, offset: $e->reachedOffset),
+            new TagListParams('harness-app', null, null, null, null, null, null, null, 3, $e->reachedOffset),
             self::merchantA(),
         ));
 
@@ -151,7 +151,7 @@ final class WalkTest extends SdkTestCase
         self::assertSame([3], array_keys($after), 'a resumed walk keys its tags by their offset in the list, too');
         self::assertSame(
             self::slugs('v2/tags/walk-limit-200'),
-            [...self::slugsOf($before), ...self::slugsOf($after)],
+            array_merge(self::slugsOf($before), self::slugsOf($after)),
             'the two halves are the whole list, each tag once',
         );
     }
@@ -160,7 +160,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/errors/forbidden')]);
 
-        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3, offset: 3)));
+        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3, 3)));
 
         self::assertSame([], $walked);
         self::assertSame(3, $e->reachedOffset);
@@ -174,7 +174,7 @@ final class WalkTest extends SdkTestCase
             self::syntheticNegative(SyntheticNegative::GATEWAY, 503, '<html>Service Unavailable</html>', ['Content-Type' => 'text/html']),
         ]);
 
-        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3)));
+        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3)));
 
         self::assertSame(3, $e->reachedOffset);
         $cause = $e->getPrevious();
@@ -189,7 +189,7 @@ final class WalkTest extends SdkTestCase
             self::syntheticNegative(SyntheticNegative::GATEWAY, 200, '<html>Please wait</html>', ['Content-Type' => 'text/html']),
         ]);
 
-        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3)));
+        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3)));
 
         self::assertSame(3, $e->reachedOffset);
         self::assertInstanceOf(TransportException::class, $e->getPrevious());
@@ -206,7 +206,7 @@ final class WalkTest extends SdkTestCase
             }),
         ]);
 
-        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3), self::merchantA()));
+        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3), self::merchantA()));
 
         self::assertSame(self::slugs('v2/tags/walk-first'), self::slugsOf($walked));
         self::assertSame(3, $e->reachedOffset);
@@ -222,10 +222,10 @@ final class WalkTest extends SdkTestCase
         // again at the same offset, and answered the same way, for ever.
         $client = $this->clientWith([
             self::captured('v2/tags/walk-first'),
-            self::syntheticNegativeFrom('v2/tags/walk-first', SyntheticNegative::OTHER_PAGE, static fn(array $body): array => $body),
+            self::syntheticNegativeFrom('v2/tags/walk-first', SyntheticNegative::OTHER_PAGE, static fn (array $body): array => $body),
         ]);
 
-        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(limit: 3), self::merchantA()));
+        [$walked, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3), self::merchantA()));
 
         self::assertSame(self::slugs('v2/tags/walk-first'), self::slugsOf($walked), 'no tag twice');
         self::assertCount(2, $this->sentRequests(), 'and no third request for the same page');
@@ -247,7 +247,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/tags/walk-negative-offset'), self::captured('v2/tags/walk-last')]);
 
-        $walked = iterator_to_array($client->tags()->walk(new TagListParams(limit: 3, offset: -1), self::merchantA()));
+        $walked = iterator_to_array($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, 3, -1), self::merchantA()));
 
         self::assertSame([['limit' => '3', 'offset' => '-1'], ['limit' => '3', 'offset' => '3']], $this->sentQueries());
         self::assertSame([0, 1, 2, 3], array_keys($walked));
@@ -258,7 +258,7 @@ final class WalkTest extends SdkTestCase
     {
         $client = $this->clientWith([self::captured('v2/errors/forbidden')]);
 
-        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(offset: -1)));
+        [, $e] = self::walkUntilInterrupted($client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, null, -1)));
 
         self::assertSame(-1, $e->reachedOffset, 'nothing was served, so the walk got no further than it asked');
     }
@@ -266,7 +266,7 @@ final class WalkTest extends SdkTestCase
     public function testAMistakeInTheCallIsThrownAsItIsNotAsAnInterruption(): void
     {
         $client = $this->clientWith([], ['api_version' => ApiVersion::V1]);
-        $walk = $client->tags()->walk(new TagListParams(includeGlobal: true));
+        $walk = $client->tags()->walk(new TagListParams(null, null, null, null, null, null, null, null, null, null, true));
 
         try {
             iterator_to_array($walk);
@@ -314,11 +314,11 @@ final class WalkTest extends SdkTestCase
      */
     private static function slugsOf(array $tags): array
     {
-        return array_values(array_map(static fn(Tag $tag): string => $tag->slug, $tags));
+        return array_values(array_map(static fn (Tag $tag): string => $tag->slug, $tags));
     }
 
     private static function merchantA(): RequestOptions
     {
-        return new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a'));
+        return new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a'));
     }
 }

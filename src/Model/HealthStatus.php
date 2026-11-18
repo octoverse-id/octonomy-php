@@ -22,6 +22,16 @@ use Octoverse\Octonomy\Internal\Json;
  */
 final class HealthStatus
 {
+    /**
+     * @var bool
+     * @readonly
+     */
+    public bool $ok;
+    /**
+     * @var string
+     * @readonly
+     */
+    public string $status;
     /** The word a passing probe answers with. */
     public const STATUS_OK = 'ok';
 
@@ -34,10 +44,11 @@ final class HealthStatus
      * @param bool   $ok     whether the probe passed: a 2xx, not a 503
      * @param string $status the "status" word the server answered with, as sent
      */
-    public function __construct(
-        public readonly bool $ok,
-        public readonly string $status,
-    ) {}
+    public function __construct(bool $ok, string $status)
+    {
+        $this->ok = $ok;
+        $this->status = $status;
+    }
 
     /**
      * Hydrate the answer from a probe's body. A probe calls no api_version, so
@@ -51,8 +62,8 @@ final class HealthStatus
     public static function fromArray(array $data, bool $ok): self
     {
         return new self(
-            ok: $ok,
-            status: Json::string($data, 'status'),
+            $ok,
+            Json::string($data, 'status'),
         );
     }
 }

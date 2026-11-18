@@ -32,8 +32,8 @@ final class Psr18ClientTest extends SdkTestCase
         $client = $this->psr18ClientWith([self::captured('v2/tags/create')], ['actor_id' => 'svc-catalog']);
 
         $tag = $client->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label', applicationId: 'harness-app'),
-            new RequestOptions(namespace: new NamespaceScope('merchant', 'harness-merchant-a')),
+            new TagCreate('Featured', 'featured', 'label', 'harness-app'),
+            new RequestOptions(null, new NamespaceScope('merchant', 'harness-merchant-a')),
         );
 
         $request = $this->lastRequest();
@@ -48,7 +48,7 @@ final class Psr18ClientTest extends SdkTestCase
             'X-Namespace-Type' => 'merchant',
             'X-Namespace-ID' => 'harness-merchant-a',
             'Content-Type' => 'application/json',
-        ], array_diff_key(array_map(static fn(array $values): string => implode(', ', $values), $request->getHeaders()), ['Host' => true]));
+        ], array_diff_key(array_map(static fn (array $values): string => implode(', ', $values), $request->getHeaders()), ['Host' => true]));
         self::assertSame('{"name":"Featured","slug":"featured","type":"label","application_id":"harness-app"}', $this->lastRawBody());
         self::assertSame(self::capturedData('v2/tags/create')['id'], $tag->id);
     }
@@ -57,7 +57,7 @@ final class Psr18ClientTest extends SdkTestCase
     {
         $client = $this->psr18ClientWith([self::captured('v2/tags/list')]);
 
-        $page = $client->tags()->list(new TagListParams(applicationId: 'commerce', limit: 25, includeGlobal: true));
+        $page = $client->tags()->list(new TagListParams('commerce', null, null, null, null, null, null, null, 25, null, true));
 
         self::assertSame('application_id=commerce&limit=25&include_global=true', $this->lastRequest()->getUri()->getQuery());
         self::assertCount(count(self::capturedData('v2/tags/list')), $page->data);
@@ -80,17 +80,16 @@ final class Psr18ClientTest extends SdkTestCase
      *
      * @param class-string<ApiException>   $expected
      * @param \Closure(Client): mixed      $call
+     * @dataProvider errorResponses
      */
-    #[DataProvider('errorResponses')]
     public function testAnErrorStatusBecomesItsTypedException(string $fixture, string $expected, \Closure $call): void
     {
         $client = $this->psr18ClientWith([self::captured($fixture)]);
-
         try {
             $call($client);
             self::fail("expected {$expected}");
         } catch (ApiException $e) {
-            self::assertSame($expected, $e::class);
+            self::assertSame($expected, get_class($e));
             self::assertSame(self::captured($fixture)->status, $e->statusCode);
         }
     }
@@ -100,11 +99,11 @@ final class Psr18ClientTest extends SdkTestCase
      */
     public static function errorResponses(): iterable
     {
-        $create = static fn(Client $client): mixed => $client->tags()->create(
-            new TagCreate(name: 'Featured', slug: 'featured', type: 'label', applicationId: 'harness-app'),
+        $create = static fn (Client $client) => $client->tags()->create(
+            new TagCreate('Featured', 'featured', 'label', 'harness-app'),
         );
 
-        yield 'not found' => ['v2/errors/not-found', NotFoundException::class, static fn(Client $client): mixed => $client->tags()->get('tag_missing')];
+        yield 'not found' => ['v2/errors/not-found', NotFoundException::class, static fn (Client $client) => $client->tags()->get('tag_missing')];
         yield 'conflict' => ['v2/errors/conflict', ConflictException::class, $create];
         yield 'validation' => ['v2/errors/validation-error', ValidationException::class, $create];
     }
@@ -115,14 +114,14 @@ final class Psr18ClientTest extends SdkTestCase
      */
     public function testANetworkFailureIsReportedRedacted(): void
     {
-        $refuse = static fn(RequestInterface $request): \Throwable => self::networkFailure(
+        $refuse = static fn (RequestInterface $request): \Throwable => self::networkFailure(
             sprintf('could not reach the host for %s with %s', (string) $request->getBody(), $request->getHeaderLine('Authorization')),
             $request,
         );
         $client = $this->psr18ClientWith([], ['token' => 'octo_psr18_token'], $refuse);
 
         try {
-            $client->tags()->create(new TagCreate(name: 'Name From The Body', slug: 'slug-from-the-body', type: 'label'));
+            $client->tags()->create(new TagCreate('Name From The Body', 'slug-from-the-body', 'label'));
             self::fail('expected a TransportException');
         } catch (TransportException $e) {
             self::assertStringContainsString('slug-from-the-body', $this->lastRawBody(), 'the body was not sent');
@@ -139,15 +138,13 @@ final class Psr18ClientTest extends SdkTestCase
      * request_factory and stream_factory, whatever the client.
      *
      * @param \Closure(self, array<string, mixed>): Client $build
+     * @dataProvider bothKindsOfClient
      */
-    #[DataProvider('bothKindsOfClient')]
     public function testTheInjectedFactoriesBuildTheRequest(\Closure $build): void
     {
         $factory = self::recordingFactory();
         $client = $build($this, ['request_factory' => $factory, 'stream_factory' => $factory]);
-
-        $client->tags()->create(new TagCreate(name: 'Featured', slug: 'featured', type: 'label'));
-
+        $client->tags()->create(new TagCreate('Featured', 'featured', 'label'));
         self::assertSame([['POST', 'https://octonomy.test/api/v2/tags']], $factory->requests);
         self::assertSame(['{"name":"Featured","slug":"featured","type":"label"}'], $factory->streams);
         self::assertSame('recording-factory', $this->lastRequest()->getHeaderLine(RecordingFactory::MARK));
@@ -159,8 +156,8 @@ final class Psr18ClientTest extends SdkTestCase
      */
     public static function bothKindsOfClient(): iterable
     {
-        yield 'a PSR-18 client' => [static fn(self $t, array $config): Client => $t->psr18ClientWith([self::captured('v2/tags/create')], $config)];
-        yield 'a Guzzle client' => [static fn(self $t, array $config): Client => $t->clientWith([self::captured('v2/tags/create')], $config)];
+        yield 'a PSR-18 client' => [static fn (self $t, array $config): Client => $t->psr18ClientWith([self::captured('v2/tags/create')], $config)];
+        yield 'a Guzzle client' => [static fn (self $t, array $config): Client => $t->clientWith([self::captured('v2/tags/create')], $config)];
     }
 
     /**
@@ -169,8 +166,10 @@ final class Psr18ClientTest extends SdkTestCase
     private static function networkFailure(string $message, RequestInterface $request): NetworkExceptionInterface
     {
         return new class ($message, $request) extends \RuntimeException implements NetworkExceptionInterface {
-            public function __construct(string $message, private RequestInterface $request)
+            private RequestInterface $request;
+            public function __construct(string $message, RequestInterface $request)
             {
+                $this->request = $request;
                 parent::__construct($message);
             }
 
