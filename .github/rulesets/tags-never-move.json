@@ -1,0 +1,15 @@
+{
+  "name": "Tags: never moved",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["~ALL"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "update" }
+  ],
+  "bypass_actors": []
+}

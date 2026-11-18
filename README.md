@@ -519,7 +519,7 @@ Octonomy. Every one runs again against the server it wrote to, ending with its r
 
 ```bash
 make test    # phpunit
-make check   # php-cs-fixer + phpstan + phpunit
+make check   # php-cs-fixer + phpstan + phpunit + the release-line guard
 make help    # list all targets
 ```
 

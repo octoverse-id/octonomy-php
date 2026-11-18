@@ -25,6 +25,8 @@ first release PR replaces; it does not name a release.
 The first releases are planned as two lines ([epic #4](https://github.com/octoverse-id/octonomy-php/issues/4)): `2.0.0` from `main` for PHP 8.2+, and `1.0.0`
 from `support/php7.4` for PHP 7.4+. No `0.x` version will be released. Until then the public API may
 change without a deprecation path, and every user-facing change is still recorded under `[Unreleased]`.
+The release-line guard holds each line to its version range and its `php` constraint, on the release
+PR and on the tag ([release.md](release.md#the-release-line-guard)).
 
 ## Bump rules
 

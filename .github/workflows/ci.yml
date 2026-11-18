@@ -26,6 +26,10 @@ jobs:
           tools: composer:v2
       - name: Validate composer.json
         run: composer validate --strict
+      # Client::VERSION against the latest CHANGELOG.md release heading, or the 0.1.0 placeholder
+      # before the first release. Until #30 only release-check ran it, and CI never runs release-check.
+      - name: Version check
+        run: make version-check
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Coding style (php-cs-fixer)

@@ -1,0 +1,46 @@
+name: Release line
+
+# The release-line guard (#30, docs/release.md). scripts/release-line-guard.sh asserts that
+# composer.json's php constraint and Client::VERSION fit the branch, the release PR and the tag:
+# a 2.x tag on support/php7.4's tree would install on PHP 7.4 and win as the highest version for every
+# 8.2+ consumer, and Packagist publishes a tag the moment it is pushed.
+#
+# Its own workflow, apart from ci.yml, because it is the one check that must run on a tag push and
+# the one both lines run as written: support/php7.4 is to carry this file and both scripts unchanged
+# (#29). GitHub reads a push's workflows from the pushed commit, so the branch lists name both lines.
+on:
+  # On a release PR this is the gate: a red run is fixed by pushing a commit. `edited` is here
+  # because GitHub starts no run when a pull request's base changes, so retargeting a release PR at
+  # the other line would otherwise keep the green run its old base earned.
+  pull_request:
+    branches: [main, support/php7.4]
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main, support/php7.4]
+    # Every tag, not only v*: Composer also reads 2.0.0, V2.0.0 and release-2.0.0 as versions, and
+    # Packagist publishes them. On a tag push the guard can only detect, since the ref is public.
+    tags: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: release-line guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # The guard reads composer.json with the php CLI.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: none
+      - name: Assert the tree fits its release line
+        run: scripts/release-line-guard.sh
+      # Every ordinary pull request comes from a feature/ or fix/ branch, so the guard's release-PR
+      # and tag paths would otherwise run for the first time on the release they exist to stop.
+      - name: The guard's own fixture tests
+        run: scripts/release-line-guard-test.sh

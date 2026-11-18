@@ -20,11 +20,16 @@ make cs-fix    # apply style fixes
 make stan      # phpstan analyse (level in phpstan.neon.dist)
 make test      # phpunit
 make coverage  # phpunit --coverage-text (needs Xdebug or PCOV)
-make check     # cs + stan + test (fast pre-push gate)
+make check     # cs + stan + test + the release-line guard and its tests (fast pre-push gate)
+make version-check       # Client::VERSION against the latest CHANGELOG.md release heading
+make release-line-guard  # this tree against its release line (docs/release.md)
 make release-check  # the full pre-release gate
 ```
 
-These are also Composer scripts: `composer cs`, `composer stan`, `composer test`, `composer check`.
+`cs`, `cs-fix`, `stan`, `test` and `check` are also Composer scripts, though `composer check` runs
+only the first three gates, not the guard. CI runs `make version-check` on every PR, and the
+release-line guard with its tests in a workflow of its own, `release-line.yml`, which also runs on
+every tag push ([release.md](release.md#the-release-line-guard)).
 
 ## Testing approach
 
