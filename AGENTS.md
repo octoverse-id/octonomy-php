@@ -111,6 +111,12 @@ stays a faithful, ergonomic client.
   `docs/development.md#the-php-74-line`). No enums: use string class constants (#5). Never rely on a
   union type or `readonly` for behavior a test asserts, since the downgrade deletes both; make the
   check explicit.
+- `support/php7.4` holds the 1.x line: generated from `main` once (#29), reviewed, committed, and never
+  regenerated, so it is not a function of `main` and carries its own `AGENTS.md` section. Until its
+  `1.0.0` it takes what `main` ships for the current `/api/v2`; after that, security fixes and major bug
+  fixes only, and features ship on 2.x alone (#33). Either way a change reaches it as a pull request
+  into it, ported by hand; a fix both lines need lands on `main` first. Its models are mutable, since
+  the downgrade deletes `readonly` (`docs/upgrading-1-to-2.md`).
 - Guzzle (`guzzlehttp/guzzle`) is the **only** runtime dependency that ships code. `psr/http-client`,
   `psr/http-factory` and `psr/http-message` are required too, because `Config` and `Transport` type
   against them (#18); they hold interfaces only, and Guzzle requires them anyway. Do not add others
@@ -173,6 +179,9 @@ stays a faithful, ergonomic client.
 - Use `<type>/<description>` with lowercase alphanumerics, hyphens, and dots only where valid.
 - Allowed branch types are `feature`, `feat`, `bugfix`, `fix`, `hotfix`, `release`, and `chore`.
 - Example branch names: `feature/tag-assignments`, `fix/pagination-decode`, `chore/update-agent-rules`.
+- **One exception (#29):** `support/php7.4` is the 1.x line's long-lived release branch, not a unit of
+  planned development, so its name is exempt from the type list and the issue-number rule. Work for it
+  still arrives on ordinary `<type>/<issue-number>-...` branches, as pull requests into it.
 - When the user explicitly asks to implement an approved development plan, such as
   `PLEASE IMPLEMENT THIS PLAN`, create a GitHub issue before creating the development branch.
 - If the user provides an existing issue number, use that issue instead of creating a duplicate.

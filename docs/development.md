@@ -223,10 +223,16 @@ adding it to that list in the same PR.
 
 ## The PHP 7.4 line
 
-`main` is the only source. The 1.x line for PHP 7.4 (epic #4) is generated from it by Rector, and CI
-proves on every PR and every push to `main` that the generated tree works on a real PHP 7.4. The
-proof runs in a throwaway directory and commits nothing. `support/php7.4` does not exist yet: P5
-generates it once with the same script, reviews it, and freezes it.
+`main` is the 2.x line, and the source the 1.x line came from. The 1.x line for PHP 7.4 (epic #4) was
+generated from it by Rector, once:
+`support/php7.4` holds that tree, generated from `main` at `c1626d4` and reviewed and committed in
+[#29](https://github.com/octoverse-id/octonomy-php/issues/29). It is never regenerated. From then on
+it is its own code, with its own CI and its own README, CHANGELOG, Makefile and `AGENTS.md` section,
+and a change reaches it as described in [Changing the 1.x line](#changing-the-1x-line).
+
+CI still proves on every PR and every push to `main` that the generated tree works on a real PHP 7.4.
+The proof runs in a throwaway directory and commits nothing. It keeps `main` portable, so a fix both
+lines need can still be carried across.
 
 ```bash
 make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
@@ -259,9 +265,26 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
   annotation with the name, and fails the run on any other PHPUnit attribute (`#[Test]`, `#[Depends]`,
   ...) rather than let it be deleted. Teach that rule a new attribute before using it.
 
-PHPStan on the 7.4 tree ignores exactly one error, `property.readOnlyByPhpDocDefaultValue`. Rector
-keeps a promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. The
-ignore is checked for staleness, so it fails once Rector stops doing this.
+PHPStan on the 7.4 tree ignores two kinds of error (`compat/phpstan.neon.dist`), each checked for
+staleness, so it fails once its cause goes. `property.readOnlyByPhpDocDefaultValue`: Rector keeps a
+promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. And
+`class.notFound` with `argument.type` in `src/Http/PathAsIsCurlFactory.php`: PHPStan for 7.4 knows no
+`\CurlHandle`, which the downgraded handle check names for PHP 8's sake.
+
+### Changing the 1.x line
+
+`support/php7.4` takes what `main` ships for the current `/api/v2` until its `1.0.0`, and after that
+security fixes and major bug fixes only; features ship on 2.x alone
+([#33](https://github.com/octoverse-id/octonomy-php/issues/33)). Every change reaches it the same way:
+
+1. Branch from `support/php7.4` as usual (`fix/<issue>-...`) and open the pull request against it.
+   Its CI runs PHP 7.4 to 8.4, PHPStan at `phpVersion: 70400`, the integration suite and the dev
+   server on PHP 7.4, and the release-line guard.
+2. A fix both lines need lands on `main` first. Carry it across by cherry-picking when it applies
+   cleanly. When it does not, run `scripts/php74-downgrade.sh` from `main` into a temp dir and copy
+   only the files the fix changed, so the 7.4 form is Rector's rather than written by hand.
+3. Never regenerate the whole branch over itself: its README, CHANGELOG, Makefile, CI and
+   `AGENTS.md` section are its own, and copying the full tree would revert them.
 
 ## Running against your own Octonomy
 

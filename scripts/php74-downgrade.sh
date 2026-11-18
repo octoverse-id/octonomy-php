@@ -7,8 +7,8 @@
 # the top (compat/), and formats the result at @PSR12. The working tree is never
 # touched, and nothing is committed: CI runs this into a throwaway directory on
 # every push and proves the output on a real PHP 7.4 (scripts/php74-check.sh).
-# support/php7.4 does not exist until P5 of epic #4, which generates it once with
-# this same script.
+# support/php7.4 was generated once with this same script (#29) and is never
+# regenerated. CI keeps proving main downgrades, so a fix can still be carried across.
 #
 # Usage:
 #   scripts/php74-downgrade.sh <dir>    # <dir> must be missing or empty
@@ -56,7 +56,7 @@ cp "$root/scripts/octonomy-harness.sh" "$root/scripts/octonomy-dev-server" "$out
 mkdir "$out/docs"
 cp "$root/docs/openapi.yaml" "$root/docs/openapi-v2.yaml" "$root/docs/versioning.md" "$out/docs/"
 # GuideTest reads the guide and every Markdown file it links to.
-cp "$root/docs/guide.md" "$root/docs/api.md" "$out/docs/"
+cp "$root/docs/guide.md" "$root/docs/api.md" "$root/docs/upgrading-1-to-2.md" "$out/docs/"
 cp "$root/README.md" "$root/CHANGELOG.md" "$out/"
 cp "$root/compat/composer.json" "$root/compat/phpunit.xml.dist" "$root/compat/phpstan.neon.dist" \
     "$root/compat/.php-cs-fixer.dist.php" "$out/"

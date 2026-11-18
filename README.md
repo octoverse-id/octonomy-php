@@ -25,6 +25,13 @@ composer require octoverse-id/octonomy-php
 Requires PHP 8.2+. Requests go through Guzzle (7.8 or 8) unless you pass another
 [PSR-18 client](#http-client).
 
+On PHP 7.4, 8.0 or 8.1 the same command resolves the **1.x line**: this SDK generated for PHP 7.4 from
+the same source, kept on the `support/php7.4` branch, and requiring Guzzle 7. Two differences reach
+your code. Its models are **mutable** where 2.x's are `readonly`, so code that writes to a model
+property works on 1.x and throws on 2.x. And PHP 7.4 has no named arguments, which the samples below
+use, so pass those arguments by position there. [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md)
+has the details.
+
 ## Quickstart
 
 Two merchants on one tenant each create a tag with the same slug. Both rows live side by side, each
@@ -526,6 +533,7 @@ make help    # list all targets
 ## Documentation
 
 - [Guide](docs/guide.md) — start here: from install to framework wiring, in order.
+- [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) — the PHP 7.4 line, and what changes when you leave it.
 - [Architecture](docs/architecture.md) — how the client is layered.
 - [API mapping](docs/api.md) — SDK methods ↔ Octonomy endpoints, auth, scopes.
 - [Development](docs/development.md) — setup, quality gates, testing.
