@@ -544,7 +544,7 @@ make help    # list all targets
 - [Development](docs/development.md) — setup, quality gates, testing.
 - [Versioning](docs/versioning.md) — SemVer policy and which server contract this SDK targets.
 - [Release](docs/release.md) — the release runbook.
-- [Roadmap](docs/roadmap.md) — the recipe for adding an endpoint.
+- [Roadmap](docs/roadmap.md) — why the 1.x line has none, and where new endpoints go.
 - [CHANGELOG](CHANGELOG.md)
 
 ## Contributing & security

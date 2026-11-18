@@ -63,7 +63,9 @@ final class Webhook
      * passed it down, before any code here could remove it. Every exception
      * thrown here goes through Redaction::scrubAll(), which removes the
      * arguments of every frame in its trace, on either PHP line.
-     * #[\SensitiveParameter] marks the secret as well on PHP 8.2+.
+     * On 2.x #[\SensitiveParameter] marks the secret as well. This line cannot
+     * carry the attribute, which the downgrade removed, so the scrub is all
+     * there is here.
      *
      * The digests are compared with hash_equals(), never with == or ===, which
      * would reveal through timing how much of a forged digest is right. The hex
