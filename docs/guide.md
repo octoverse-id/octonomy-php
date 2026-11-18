@@ -358,9 +358,11 @@ A test then reads the fake with `static::getContainer()->get(FixtureClient::clas
 
 The SDK follows Semantic Versioning, and [`versioning.md`](versioning.md) says how each kind of
 change maps to a version. No version has been released yet. The first releases are planned as two
-lines from one source: `2.x` for PHP 8.2 and later, and `1.x` for PHP 7.4, which Composer picks by your
-PHP version ([before the first release](versioning.md#before-the-first-release)). Until then the public
-API can change, and [`CHANGELOG.md`](../CHANGELOG.md) records every change that reaches you.
+lines from one source: `2.x` for PHP 8.2 and later, and `1.x` for PHP 7.4 to 8.1, which Composer picks
+by your PHP version ([before the first release](versioning.md#before-the-first-release)). Until then the
+public API can change, and [`CHANGELOG.md`](../CHANGELOG.md) records every change that reaches you.
+[Upgrading from 1.x to 2.x](upgrading-1-to-2.md) lists what differs between the lines: 1.x models are
+mutable, and PHP 7.4 has no named arguments.
 
 The server's API version is a separate choice: a client calls `/api/v2` unless built with
 `'api_version' => 'v1'`, which a server older than 2.0.0 needs. Server releases that keep that
