@@ -264,9 +264,11 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
   annotation with the name, and fails the run on any other PHPUnit attribute (`#[Test]`, `#[Depends]`,
   ...) rather than let it be deleted. Teach that rule a new attribute before using it.
 
-PHPStan on the 7.4 tree ignores exactly one error, `property.readOnlyByPhpDocDefaultValue`. Rector
-keeps a promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. The
-ignore is checked for staleness, so it fails once Rector stops doing this.
+PHPStan on the 7.4 tree ignores two kinds of error (`compat/phpstan.neon.dist`), each checked for
+staleness, so it fails once its cause goes. `property.readOnlyByPhpDocDefaultValue`: Rector keeps a
+promoted parameter's default on the property it de-promotes, beside a `@readonly` tag. And
+`class.notFound` with `argument.type` in `src/Http/PathAsIsCurlFactory.php`: PHPStan for 7.4 knows no
+`\CurlHandle`, which the downgraded handle check names for PHP 8's sake.
 
 ### Changing the 1.x line
 
