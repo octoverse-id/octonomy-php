@@ -28,6 +28,11 @@ change without a deprecation path, and every user-facing change is still recorde
 The release-line guard holds each line to its version range and its `php` constraint, on the release
 PR and on the tag ([release.md](release.md#the-release-line-guard)).
 
+`support/php7.4` was generated from `main` once
+([#29](https://github.com/octoverse-id/octonomy-php/issues/29)) and is never regenerated. Its `1.0.0`
+carries what `main` ships for the current `/api/v2`; after that the 1.x line takes security fixes and
+major bug fixes only, and new features ship on 2.x.
+
 ## Bump rules
 
 Decide the bump from the **most significant** change in the release.
