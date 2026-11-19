@@ -13,6 +13,18 @@ methods 2.x has, on PHP 7.4+ and Guzzle 7, with mutable models, and without the 
 lacks. After `1.0.0` this file records this line's own fixes.
 
 ### Added
+- `Octoverse\Octonomy\Rector\FlagModelPropertyWriteRector`, an opt-in rule for Rector 2 that finds
+  writes to model properties before a move from 1.x to 2.x, where they throw. Named in a project's own
+  Rector configuration, it puts a `// TODO octonomy-php 2.x:` comment above each assignment,
+  reference, increment, decrement or `unset()` aimed at a property that is readonly on 2.x, so
+  `rector process --dry-run` lists them and exits non-zero while any is left. On this line it finds
+  them through the `@readonly` docblocks, and nothing loads it otherwise, so Rector is not a
+  dependency. `docs/upgrading-1-to-2.md` shows how to run it and what it misses (#33).
+- The support policy for the two lines, in `docs/versioning.md`, `SECURITY.md` and the README: which
+  line each PHP version installs, 1.x supported indefinitely, bounded in practice by Guzzle 7's support
+  for PHP 7.4, and taking security fixes and major bug fixes only after its `1.0.0`. No runtime
+  deprecation notice ships on either line. The README also states that 1.x needs Guzzle 7, and how to
+  install it with Guzzle 6 locked through other packages (`composer require ... -W`) (#33).
 - The 1.x line, for PHP 7.4 to 8.1, on the `support/php7.4` branch: this SDK generated once from the
   same source by Rector, with the same classes and methods, released as `1.x` beside `2.x`. Two
   differences reach your code: its models are mutable where 2.x's are `readonly`, and PHP 7.4 has no

@@ -28,10 +28,41 @@ change without a deprecation path, and every user-facing change is still recorde
 The release-line guard holds each line to its version range and its `php` constraint, on the release
 PR and on the tag ([release.md](release.md#the-release-line-guard)).
 
-`support/php7.4` was generated from `main` once
+## Release lines and support
+
+One package, `octoverse-id/octonomy-php`, ships as two lines, and Composer picks one by your PHP
+version:
+
+| Line | Branch | PHP | Guzzle | What it gets |
+| ---- | ------ | --- | ------ | ------------ |
+| 2.x | `main` | 8.2 and later | 7.8 or later, or 8 | Every feature and fix |
+| 1.x | `support/php7.4` | 7.4 and later | 7.8 or later 7.x | Until `1.0.0`, what `main` ships for the current `/api/v2`; after it, security fixes and major bug fixes only |
+
+| Your PHP | `composer require octoverse-id/octonomy-php` installs |
+| -------- | ----------------------------------------------------- |
+| 7.4, 8.0 or 8.1 | 1.x, the only line it can install |
+| 8.2 or later | 2.x. Require `^1.0` to stay on 1.x, or `"^1.0 \|\| ^2.0"` to accept either |
+
+Either line also accepts any PSR-18 client in place of Guzzle, but installs Guzzle regardless.
+
+**What 1.x gets.** `support/php7.4` was generated from `main` once
 ([#29](https://github.com/octoverse-id/octonomy-php/issues/29)) and is never regenerated. Its `1.0.0`
-carries what `main` ships for the current `/api/v2`; after that the 1.x line takes security fixes and
-major bug fixes only, and new features ship on 2.x.
+carries every feature `main` ships for the current `/api/v2`, the contract the vendored
+`docs/openapi-v2.yaml` records. After `1.0.0` the 1.x line takes security fixes and major bug fixes
+only. New features, support for later changes to the API included, ship on 2.x alone
+([#33](https://github.com/octoverse-id/octonomy-php/issues/33)). A fix both lines need lands on `main`
+first and reaches `support/php7.4` as a pull request into it.
+
+**How long 1.x is supported: indefinitely.** It is a product line for applications that still run PHP
+7.4, not a bridge for one application's upgrade, so it has no end date. In practice it stays current
+only while its dependencies support PHP 7.4, and Guzzle 7 is the one that binds. If a Guzzle 7 release
+drops PHP 7.4, Composer keeps a PHP 7.4 application on the last release that supports it, which gets
+no further Guzzle fixes, and that is the line's effective end.
+
+**No runtime notice.** Neither line warns at runtime that you should move. An `E_USER_DEPRECATED` from
+a working client would break applications whose error handler turns notices into exceptions, and
+would repeat on every request news that is never urgent. The signal is this page, the
+[upgrade guide](upgrading-1-to-2.md), and its opt-in Rector rule, which runs only when you run it.
 
 ## Bump rules
 
@@ -59,6 +90,14 @@ answering an endpoint is a major change. The bodies it answers with are not. The
 server release sent, and a fixture refresh can change any value in them in any release, recorded in
 `CHANGELOG.md`. A test that asserts a literal from the corpus, such as the captured tag's slug, may
 need updating after one.
+
+## The Rector rule
+
+`Octoverse\Octonomy\Rector\FlagModelPropertyWriteRector`, which finds writes to model properties
+before a move from 1.x to 2.x ([upgrading-1-to-2.md](upgrading-1-to-2.md#finding-writes-before-you-move)),
+is public API under the bump rules above: its class name, that it runs on Rector 2, and that it marks
+each write it finds with a comment starting `TODO octonomy-php 2.x:`. The rest of the comment's wording
+is not, and it can learn to find more writes in any minor release.
 
 ## Relationship to the server's API version
 

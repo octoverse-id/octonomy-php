@@ -33,9 +33,26 @@ composer require octoverse-id/octonomy-php
 The 1.x line requires PHP 7.4+. Requests go through Guzzle 7 (7.8 or later) unless you pass another
 [PSR-18 client](#http-client); 1.x does not accept Guzzle 8.
 
-On PHP 7.4, 8.0 or 8.1 the command above resolves 1.x by itself. On PHP 8.2 and later it resolves 2.x,
-whose models are `readonly`; require `octoverse-id/octonomy-php:^1.0` to stay on 1.x there.
-[Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) says what changes when you move.
+The command installs the line your PHP can run:
+
+| Your PHP | Installs | Guzzle | Models |
+| -------- | -------- | ------ | ------ |
+| 7.4, 8.0 or 8.1 | 1.x, from `support/php7.4` (this line) | 7.8 or later 7.x | mutable |
+| 8.2 or later | 2.x, from `main` | 7.8 or later, or 8 | `readonly` |
+
+On PHP 8.2 or later, require `octoverse-id/octonomy-php:^1.0` to stay on 1.x. This line has no end date,
+and after its `1.0.0` it takes security fixes and major bug fixes only, while new features ship on 2.x
+([versioning.md](docs/versioning.md#release-lines-and-support)).
+[Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) says what changes when you move, and shows an
+opt-in Rector rule that finds the writes to models that 2.x refuses.
+
+1.x needs Guzzle 7. An application whose own `composer.json` allows only Guzzle 6 cannot install it
+until that constraint allows 7. One that has Guzzle 6 only in `composer.lock`, through packages that
+also allow Guzzle 7, can let Composer update them along with the SDK:
+
+```bash
+composer require octoverse-id/octonomy-php:^1.0 -W
+```
 
 ## Quickstart
 
