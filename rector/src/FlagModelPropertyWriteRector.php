@@ -6,6 +6,7 @@ namespace Octoverse\Octonomy\Rector;
 
 use PhpParser\Comment;
 use PhpParser\Node;
+use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\Assign;
@@ -131,6 +132,10 @@ final class FlagModelPropertyWriteRector extends AbstractRector
             if ($node instanceof AssignRef) {
                 // Taking a reference to a readonly property throws as a write does.
                 $targets[] = $node->expr;
+            }
+            if ($node instanceof ArrayItem && $node->byRef) {
+                // So does an array item taken by reference: `[&$tag->name]`, or `[&$tag->name] = ...`.
+                $targets[] = $node->value;
             }
             if ($node instanceof PreInc || $node instanceof PreDec || $node instanceof PostInc || $node instanceof PostDec) {
                 $targets[] = $node->var;

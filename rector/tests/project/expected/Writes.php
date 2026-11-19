@@ -45,6 +45,8 @@ final class Writes
         [$tag->name, $tag->slug] = ['Pair', 'pair'];
         // TODO octonomy-php 2.x: a write to readonly Tag::$type throws there (docs/upgrading-1-to-2.md)
         list($tag->type) = ['label'];
+        // TODO octonomy-php 2.x: writes to readonly Tag::$name, Tag::$metadata throw there (docs/upgrading-1-to-2.md)
+        $refs = [&$tag->name, 'metadata' => &$tag->metadata['source']];
         // TODO octonomy-php 2.x: a write to readonly Tag::$name throws there (docs/upgrading-1-to-2.md)
         $label = ($tag->name = 'Inline') . '!';
         $create = new TagCreate('Featured', 'featured', 'label');
