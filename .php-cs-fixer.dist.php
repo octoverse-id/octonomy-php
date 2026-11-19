@@ -6,6 +6,7 @@ $finder = PhpCsFixer\Finder::create()
     ->in(__DIR__ . '/src')
     ->in(__DIR__ . '/tests')
     ->in(__DIR__ . '/examples')
+    ->in(__DIR__ . '/rector/src')
     ->in(__DIR__ . '/scripts')
     ->in(__DIR__ . '/tools/rector')
     ->exclude('vendor');

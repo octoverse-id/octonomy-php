@@ -1,7 +1,7 @@
 #!/bin/sh
 # Generates the PHP 7.4 tree of octonomy-php into a directory of your choosing.
 #
-# Copies src/, tests/, examples/, resources/, the harness, the vendored OpenAPI specs and the
+# Copies src/, tests/, examples/, rector/, resources/, the harness, the vendored OpenAPI specs and the
 # Markdown the tests read there,
 # downgrades the PHP with Rector (tools/rector), lays the 7.4 line's config over
 # the top (compat/), and formats the result at @PSR12. The working tree is never
@@ -44,6 +44,9 @@ case "$out" in
 esac
 
 cp -R "$root/src" "$root/tests" "$root/examples" "$out/"
+# The opt-in Rector rule ships on both lines; only its rule is downgraded, since the
+# project it is checked against (rector/tests/project) is PHP 7.4 already.
+cp -R "$root/rector" "$out/"
 # The captured corpus is data, not PHP, so Rector never sees it. The unit suite
 # replays it, and Testing\FixtureClient ships it to the 7.4 line's users too.
 cp -R "$root/resources" "$out/"
@@ -65,7 +68,7 @@ cp "$root/compat/composer.json" "$root/compat/phpunit.xml.dist" "$root/compat/ph
 # error: the issue #5 spike saw it crash (ShouldNotHappenException) and exit 1
 # with the file still in 8.2 syntax. Never pipe this command: a pipeline's status
 # is its last command's.
-"$rector" process "$out/src" "$out/tests" "$out/examples" \
+"$rector" process "$out/src" "$out/tests" "$out/examples" "$out/rector/src" \
     --config "$root/tools/rector/rector.php" --clear-cache --no-progress-bar --no-diffs
 
 # From inside the tree, so php-cs-fixer reads the 7.4 line's composer.json for the

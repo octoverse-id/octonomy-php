@@ -78,6 +78,12 @@ stays a faithful, ergonomic client.
   api_version rules, failure injection, or a way to be handed a response: a behavioral fake is a second
   Octonomy that drifts and teaches callers wrong behavior with a green suite. A new endpoint gets a
   row in `ROUTES` and in `FixtureClientTest::endpoints()`.
+- **`Rector\FlagModelPropertyWriteRector` (#33) flags writes and never rewrites them.** It lives in
+  `rector/src/`, the one shipped code outside `src/`, for users' own Rector runs. Nothing in `src/` may
+  load it, so Rector never becomes a dependency. It marks each write with a `// TODO octonomy-php 2.x:`
+  comment, and must find the same writes on both lines: through the native `readonly` on 2.x and the
+  `@readonly` docblocks on 1.x. Its test is the fixture project `rector/tests/project`, where a new
+  case goes into `src/Writes.php` and `expected/Writes.php` together.
 - Non-2xx responses become typed exceptions extending `ApiException` (`NotFoundException`,
   `ConflictException`, `ValidationException`, `AuthenticationException`, `ForbiddenException`). Callers
   catch these; the SDK never returns error codes.
@@ -163,7 +169,8 @@ stays a faithful, ergonomic client.
 ## Local Development
 
 - Run `make check` before pushing and `make release-check` before a release. Run `make php74` (needs
-  Docker) when a change touches `src/`, `tests/`, `tools/rector/` or `compat/`.
+  Docker) when a change touches `src/`, `tests/`, `rector/`, `tools/rector/` or `compat/`, and
+  `make rector-rule` when it touches `rector/`.
 - Keep the README quickstart, `examples/`, `docs/guide.md`, and `composer.json`/`Makefile` scripts current
   with the public API. Every example must run twice in a row against one dev server (CI's `dev-server` job
   does), and the guide links each one. The guide shows code only where no example can: PHP and YAML in its

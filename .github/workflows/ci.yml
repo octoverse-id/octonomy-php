@@ -38,6 +38,14 @@ jobs:
           PHP_CS_FIXER_IGNORE_ENV: "1"
       - name: Static analysis (phpstan)
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+      # The opt-in Rector rule (#33) as a project runs it: the SDK from this checkout and the newest
+      # Rector 2 go into a copy of rector/tests/project, whose rector-octonomy.php is the configuration
+      # docs/upgrading-1-to-2.md shows. Here the models are natively readonly; the php74 job runs the
+      # same project on the 1.x tree, where the rule finds them through @readonly docblocks.
+      - name: Rector rule (2.x)
+        run: |
+          scripts/rector-rule-check.sh install . "$RUNNER_TEMP/rector-rule"
+          scripts/rector-rule-check.sh check "$RUNNER_TEMP/rector-rule"
 
   test:
     runs-on: ubuntu-latest
@@ -59,8 +67,8 @@ jobs:
         run: vendor/bin/phpunit
 
   # The PHP 7.4 line (epic #4). Rector downgrades the tree into a throwaway directory, and the result
-  # is proven on a real PHP 7.4: lint, @PSR12, PHPStan at phpVersion 70400, and PHPUnit 9.6 running
-  # exactly the tests main runs. Nothing is committed and no branch is involved: support/php7.4 was
+  # is proven on a real PHP 7.4: lint, @PSR12, PHPStan at phpVersion 70400, PHPUnit 9.6 running
+  # exactly the tests main runs, and the opt-in Rector rule's fixture project. Nothing is committed and no branch is involved: support/php7.4 was
   # generated once by the same script (#29) and is never regenerated, and this job keeps main portable
   # so a fix can still be carried across. It needs no other job, so it runs beside the 8.x matrix.
   php74:
@@ -97,6 +105,13 @@ jobs:
           composer install --no-interaction --no-progress
       - name: Prove the tree on PHP 7.4
         run: scripts/php74-check.sh "$RUNNER_TEMP/php74" "$RUNNER_TEMP/main-junit.xml"
+      # The opt-in Rector rule (#33) on the 1.x tree, on PHP 7.4 with the Rector 2 Composer resolves
+      # there: the models carry @readonly docblocks instead of the keyword, and the project must come
+      # out exactly as it does on 2.x.
+      - name: Rector rule on the 7.4 tree
+        run: |
+          scripts/rector-rule-check.sh install "$RUNNER_TEMP/php74" "$RUNNER_TEMP/rector-rule"
+          scripts/rector-rule-check.sh check "$RUNNER_TEMP/rector-rule"
 
   # The integration suite against a real server: scripts/octonomy-harness.sh boots Postgres plus the
   # digest-pinned Octonomy image, seeds the corpus, and asserts each partition reads back as seeded.

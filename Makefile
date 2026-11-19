@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
 	release-line-guard release-line-guard-test \
-	harness-up harness-down harness-logs test-integration fixtures php74
+	harness-up harness-down harness-logs test-integration fixtures php74 rector-rule
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -70,9 +70,12 @@ fixtures: ## Re-capture the response fixtures from a fresh harness (replaces a r
 
 # The PHP 7.4 line (epic #4). scripts/php74-downgrade.sh writes the Rector-downgraded tree into a
 # temp dir, and scripts/php74-check.sh proves it on a real PHP 7.4 in Docker: lint, @PSR12, PHPStan at
-# phpVersion 70400, and PHPUnit 9.6 running exactly the tests main runs. CI's php74 job runs the same
-# two scripts. The tree's dependencies are resolved on the host, for PHP 7.4.33 by compat/composer.json's
-# platform setting. The image is pinned by digest, like the harness's.
+# phpVersion 70400, and PHPUnit 9.6 running exactly the tests main runs. Then the opt-in Rector rule's
+# fixture project runs against the tree, where the rule finds writes through @readonly docblocks. CI's
+# php74 job runs the same scripts. Dependencies are resolved on the host for PHP 7.4.33: the tree's by
+# compat/composer.json's platform setting, the project's by PLATFORM_PHP. The project's symlink to the
+# tree is an absolute path, so its container mounts the temp dir at that same path. The image is
+# pinned by digest, like the harness's.
 PHP74_IMAGE := php:7.4-cli@sha256:620a6b9f4d4feef2210026172570465e9d0c1de79766418d3affd09190a7fda5
 
 php74: ## Downgrade into a temp dir and prove it on PHP 7.4 (needs Docker)
@@ -83,7 +86,20 @@ php74: ## Downgrade into a temp dir and prove it on PHP 7.4 (needs Docker)
 	vendor/bin/phpunit --log-junit "$$work/main-junit.xml"; \
 	composer install --working-dir="$$work/tree" --no-interaction --no-progress --quiet; \
 	docker run --rm --user "$$(id -u):$$(id -g)" -v "$$PWD/scripts:/scripts:ro" -v "$$work:/work" \
-		$(PHP74_IMAGE) /scripts/php74-check.sh /work/tree /work/main-junit.xml
+		$(PHP74_IMAGE) /scripts/php74-check.sh /work/tree /work/main-junit.xml; \
+	PLATFORM_PHP=7.4.33 scripts/rector-rule-check.sh install "$$work/tree" "$$work/rector-rule"; \
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$$PWD/scripts:/scripts:ro" -v "$$work:$$work" \
+		$(PHP74_IMAGE) /scripts/rector-rule-check.sh check "$$work/rector-rule"
+
+# The opt-in Rector rule (#33) the way a project runs it: the SDK from this tree and the newest Rector 2
+# go into a copy of rector/tests/project, and scripts/rector-rule-check.sh runs a dry run, the applied
+# result against expected/, a second dry run, and PHPStan level 8 on the rule. Composer needs network
+# access. make php74 runs the same project on PHP 7.4 against the 1.x tree.
+rector-rule: ## Prove the opt-in Rector rule against its fixture project (needs network)
+	@set -e; \
+	work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
+	scripts/rector-rule-check.sh install . "$$work/project"; \
+	scripts/rector-rule-check.sh check "$$work/project"
 
 # Before the first release CHANGELOG.md has only [Unreleased], so there is no heading to match and
 # Client::VERSION must stay at this placeholder until the release PR replaces it (docs/versioning.md).
