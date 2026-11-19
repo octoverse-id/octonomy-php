@@ -35,12 +35,14 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  * It flags rather than fixes, because a write has no mechanical replacement: changing a tag on the
  * server is an update call, and keeping a changed value is the caller's own variable. The flag is a
  * `// TODO octonomy-php 2.x:` comment above the statement, so `rector process --dry-run` lists every
- * such write and exits non-zero while one is left. A statement that already carries the comment is
- * not flagged twice.
+ * such write and exits non-zero while one is unmarked. A statement that already carries the comment
+ * is not flagged twice, so once the comments are written, they are the list of what is left.
  *
  * A write is an assignment of any kind, a reference, an increment or decrement, or an `unset()`,
- * aimed at the property itself or into an array it holds, in an expression statement or an `unset()`
- * statement. The property counts when the analyser types the object as a class in the
+ * aimed at the property itself or reaching through it into an array it holds (an object in that array
+ * included), in an expression statement or an `unset()` statement. Reaching through a property that
+ * holds an object is not a write to it, since 2.x leaves that object writable. The property counts
+ * when the analyser types the object as a class in the
  * `Octoverse\Octonomy\` namespace whose property is readonly: natively on 2.x, or through the
  * `@readonly` docblock the downgrade leaves on 1.x. So the same rule finds the same writes whichever
  * line is installed. A write through an untyped variable, or passed by reference to a function, is
@@ -142,11 +144,39 @@ final class FlagModelPropertyWriteRector extends AbstractRector
         $properties = [];
         foreach ($targets as $target) {
             foreach ($this->destructured($target) as $written) {
-                $property = $this->readonlySdkProperty($written);
-                if ($property !== null && !in_array($property, $properties, true)) {
+                foreach ($this->readonlySdkPropertiesWrittenBy($written) as $property) {
+                    if (!in_array($property, $properties, true)) {
+                        $properties[] = $property;
+                    }
+                }
+            }
+        }
+
+        return $properties;
+    }
+
+    /**
+     * The readonly SDK properties a write to $target modifies, from the target outwards. The target
+     * itself is one. So is each property the write reaches through, as in
+     * `$tag->metadata['profile']->label = ...`: PHP fetches that chain for writing, and a readonly
+     * property refuses to be fetched so ("Cannot indirectly modify") unless it holds an object, whose
+     * own properties and offsets stay writable.
+     *
+     * @return list<string>
+     */
+    private function readonlySdkPropertiesWrittenBy(Expr $target): array
+    {
+        $properties = [];
+        $direct = true;
+        while ($target instanceof ArrayDimFetch || $target instanceof PropertyFetch) {
+            if ($target instanceof PropertyFetch) {
+                $property = $this->readonlySdkProperty($target, $direct);
+                if ($property !== null) {
                     $properties[] = $property;
                 }
             }
+            $target = $target->var;
+            $direct = false;
         }
 
         return $properties;
@@ -174,32 +204,33 @@ final class FlagModelPropertyWriteRector extends AbstractRector
     }
 
     /**
-     * `Class::$property` when $target is, or writes into an array held by, a property that is
-     * readonly on the SDK class the analyser types its object as; null for anything else.
+     * `Class::$property` when $fetch is a property that is readonly on the SDK class the analyser
+     * types its object as, and a write $direct-ly to it, or one reaching through it while it holds
+     * something other than an object, throws on 2.x; null for anything else.
      */
-    private function readonlySdkProperty(Expr $target): ?string
+    private function readonlySdkProperty(PropertyFetch $fetch, bool $direct): ?string
     {
-        while ($target instanceof ArrayDimFetch) {
-            $target = $target->var;
-        }
-        if (!$target instanceof PropertyFetch) {
-            return null;
-        }
-        $name = $this->getName($target->name);
+        $name = $this->getName($fetch->name);
         if ($name === null) {
             return null;
         }
 
-        foreach ($this->getType($target->var)->getObjectClassReflections() as $class) {
+        foreach ($this->getType($fetch->var)->getObjectClassReflections() as $class) {
             if (!str_starts_with($class->getName(), self::SDK_NAMESPACE) || !$class->hasNativeProperty($name)) {
                 continue;
             }
             // isReadOnly() is the native keyword (2.x); isReadOnlyByPhpDoc() is the @readonly tag the
             // PHP 7.4 downgrade writes in its place (1.x).
             $property = $class->getNativeProperty($name);
-            if ($property->isReadOnly() || $property->isReadOnlyByPhpDoc()) {
-                return $class->getNativeReflection()->getShortName() . '::$' . $name;
+            if (!$property->isReadOnly() && !$property->isReadOnlyByPhpDoc()) {
+                continue;
             }
+            // The declared type, which 1.x keeps: a write through an object it holds is allowed.
+            if (!$direct && $property->getNativeType()->isObject()->yes()) {
+                continue;
+            }
+
+            return $class->getNativeReflection()->getShortName() . '::$' . $name;
         }
 
         return null;

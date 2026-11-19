@@ -91,8 +91,9 @@ return RectorConfig::configure()
 vendor/bin/rector process --config rector-octonomy.php --dry-run
 ```
 
-The dry run shows each write as the comment the rule would put above it, and exits non-zero while any
-is left, so it can gate your CI. Without `--dry-run` it writes the comments into your code:
+The dry run shows each write as the comment the rule would put above it, and exits non-zero while it
+finds a write it has not marked, so it can gate your CI. Without `--dry-run` it writes the comments
+into your code:
 
 ```php
 // TODO octonomy-php 2.x: a write to readonly Tag::$name throws there (docs/upgrading-1-to-2.md)
@@ -100,11 +101,15 @@ $tag->name = 'Renamed';
 ```
 
 Rewrite each flagged statement as [Models are read-only](#models-are-read-only) says, then delete the
-comment. The rule never flags a statement that already carries one.
+comment. The rule never flags a statement that already carries one, so once the comments are in your
+code a dry run passes, and the comments themselves are the list of what is left.
+`grep -rn 'TODO octonomy-php 2.x:' src` lists them, and `! grep -rq 'TODO octonomy-php 2.x:' src`
+fails a CI step while any is left.
 
 It finds an assignment of any kind, a reference, an increment or decrement, and an `unset()`, aimed at
-a model property or into an array a property holds, in an expression statement or an `unset()`
-statement. It needs Rector to know the object is an SDK model, which Rector learns from a type
+a model property or reaching through one into the array it holds, an object in that array included
+(`$tag->metadata['profile']->label = ...`, which 2.x refuses too), in an expression statement or an
+`unset()` statement. It needs Rector to know the object is an SDK model, which Rector learns from a type
 declaration, a `@var` or `@param` tag, or the return type of the SDK method that produced it. It finds
 the same writes on 1.x, where the downgrade leaves a `@readonly` docblock on each property, as on 2.x,
 where the property is `readonly`. It misses a write through a value Rector cannot type (an untyped
