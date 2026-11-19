@@ -61,6 +61,15 @@ final class Writes
         $described = $this->untyped($client);
         // TODO octonomy-php 2.x: a write to readonly Tag::$slug throws there (docs/upgrading-1-to-2.md)
         $described->slug = 'typed-by-a-docblock';
+        // TODO octonomy-php 2.x: a write to readonly Tag::$metadata throws there (docs/upgrading-1-to-2.md)
+        $tag->metadata['profile']->label = 'Through an object in the array';
+        // TODO octonomy-php 2.x: writes to readonly Tag::$name, ResultList::$data throw there (docs/upgrading-1-to-2.md)
+        $client->tags()->list()->data[0]->name = 'Through a page';
+        // TODO octonomy-php 2.x: a write to readonly Pagination::$limit throws there (docs/upgrading-1-to-2.md)
+        $client->tags()->list()->pagination->limit = 10;
+        // TODO octonomy-php 2.x: a write to readonly Tag::$name throws there (docs/upgrading-1-to-2.md)
+        // A comment of the caller's own stays, below the flag.
+        $tag->name = 'Commented';
     }
 
     public function untouched(Client $client, Tag $tag): void

@@ -17,7 +17,7 @@ lacks. After `1.0.0` this file records this line's own fixes.
   writes to model properties before a move from 1.x to 2.x, where they throw. Named in a project's own
   Rector configuration, it puts a `// TODO octonomy-php 2.x:` comment above each assignment,
   reference, increment, decrement or `unset()` aimed at a property that is readonly on 2.x, so
-  `rector process --dry-run` lists them and exits non-zero while any is left. On this line it finds
+  `rector process --dry-run` lists them and exits non-zero while one is unmarked. On this line it finds
   them through the `@readonly` docblocks, and nothing loads it otherwise, so Rector is not a
   dependency. `docs/upgrading-1-to-2.md` shows how to run it and what it misses (#33).
 - The support policy for the two lines, in `docs/versioning.md`, `SECURITY.md` and the README: which

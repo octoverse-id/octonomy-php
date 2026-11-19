@@ -44,6 +44,11 @@ final class Writes
         /** @var Tag $described */
         $described = $this->untyped($client);
         $described->slug = 'typed-by-a-docblock';
+        $tag->metadata['profile']->label = 'Through an object in the array';
+        $client->tags()->list()->data[0]->name = 'Through a page';
+        $client->tags()->list()->pagination->limit = 10;
+        // A comment of the caller's own stays, below the flag.
+        $tag->name = 'Commented';
     }
 
     public function untouched(Client $client, Tag $tag): void
