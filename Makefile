@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help install test coverage cs cs-fix stan check version-check release-check \
 	release-line-guard release-line-guard-test \
-	harness-up harness-down harness-logs test-integration
+	harness-up harness-down harness-logs test-integration rector-rule
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -93,6 +93,16 @@ release-line-guard: ## Assert this tree fits its release line (TAG=vX.Y.Z: check
 
 release-line-guard-test: ## Run the release-line guard's fixture tests
 	@scripts/release-line-guard-test.sh
+
+# The opt-in Rector rule (#33) the way a project runs it: the SDK from this tree and the newest Rector 2
+# go into a copy of rector/tests/project, and scripts/rector-rule-check.sh runs a dry run, the applied
+# result against expected/, a second dry run, and PHPStan level 8 on the rule. Here the rule finds the
+# writes through the @readonly docblocks, on whatever PHP runs it. Composer needs network access.
+rector-rule: ## Prove the opt-in Rector rule against its fixture project (needs network)
+	@set -e; \
+	work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
+	scripts/rector-rule-check.sh install . "$$work/project"; \
+	scripts/rector-rule-check.sh check "$$work/project"
 
 release-check: cs stan test release-line-guard release-line-guard-test ## Full pre-release gate (requires a release heading in CHANGELOG.md)
 	@$(MAKE) --no-print-directory version-check REQUIRE_RELEASE=1

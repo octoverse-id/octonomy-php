@@ -25,6 +25,7 @@ make coverage  # phpunit --coverage-text (needs Xdebug or PCOV)
 make check     # cs + stan + test + the release-line guard and its tests (fast pre-push gate)
 make version-check       # Client::VERSION against the latest CHANGELOG.md release heading
 make release-line-guard  # this tree against its release line (docs/release.md)
+make rector-rule    # the opt-in Rector rule against its fixture project (needs network)
 make release-check  # the full pre-release gate
 ```
 
@@ -273,6 +274,28 @@ security fixes and major bug fixes only; features ship on 2.x alone
    only the files the fix changed, so the 7.4 form is Rector's rather than written by hand.
 3. Never regenerate the whole branch over itself: its README, CHANGELOG, Makefile, CI and
    `AGENTS.md` section are its own, and copying the full tree would revert them.
+
+## The opt-in Rector rule
+
+`rector/src/FlagModelPropertyWriteRector.php` is a Rector 2 rule for the SDK's users, which flags writes
+to model properties before a move from 1.x to 2.x
+([upgrading-1-to-2.md](upgrading-1-to-2.md#finding-writes-before-you-move)). It is `main`'s rule as the
+downgrade wrote it, so a change to it lands on `main` first and is carried across as
+[Changing the 1.x line](#changing-the-1x-line) says. It ships in the package and autoloads as
+`Octoverse\Octonomy\Rector\`, but nothing in `src/` loads it, so Rector is not one of the SDK's
+dependencies. That also keeps it out of reach of PHPStan and the unit suite, which have no Rector, so it
+is proven against a project instead:
+
+```bash
+make rector-rule   # the fixture project against this tree (needs network)
+```
+
+`scripts/rector-rule-check.sh` installs the SDK from this tree and the newest Rector 2 into a copy of
+`rector/tests/project`, runs the project's `rector-octonomy.php` (the configuration the upgrade guide
+shows), and requires four things: a dry run that applies the rule and exits non-zero, `src/` equal to
+`expected/` once the rule is applied, a second dry run with nothing left to do, and PHPStan level 8 on
+the rule as installed. CI's `static` job runs it on PHP 7.4. Here the rule finds the writes through the
+`@readonly` docblocks, and `expected/` is the same file `main` checks against its native `readonly`.
 
 ## Running against your own Octonomy
 
