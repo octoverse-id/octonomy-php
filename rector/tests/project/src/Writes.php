@@ -33,6 +33,7 @@ final class Writes
         $alias = &$tag->slug;
         [$tag->name, $tag->slug] = ['Pair', 'pair'];
         list($tag->type) = ['label'];
+        $refs = [&$tag->name, 'metadata' => &$tag->metadata['source']];
         $label = ($tag->name = 'Inline') . '!';
         $create = new TagCreate('Featured', 'featured', 'label');
         $create->name = 'Other';
