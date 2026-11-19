@@ -45,6 +45,14 @@ jobs:
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
       - name: Static analysis (phpstan, phpVersion 70400)
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+      # The opt-in Rector rule (#33) as a project runs it, on PHP 7.4: the SDK from this checkout and the
+      # Rector 2 Composer resolves here go into a copy of rector/tests/project, whose rector-octonomy.php
+      # is the configuration docs/upgrading-1-to-2.md shows. The models carry @readonly docblocks
+      # instead of the keyword, and the project must come out exactly as expected/ says.
+      - name: Rector rule
+        run: |
+          scripts/rector-rule-check.sh install . "$RUNNER_TEMP/rector-rule"
+          scripts/rector-rule-check.sh check "$RUNNER_TEMP/rector-rule"
 
   # Every PHP this line installs on. Composer resolves 1.x on PHP 7.4, 8.0 and 8.1 by itself, since 2.x
   # needs 8.2, and a project that requires ^1.0 gets it on 8.2 and later too. composer.json's
