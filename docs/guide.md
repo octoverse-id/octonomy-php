@@ -362,7 +362,9 @@ lines from one source: `2.x` for PHP 8.2 and later, and `1.x` for PHP 7.4 to 8.1
 by your PHP version ([before the first release](versioning.md#before-the-first-release)). Until then the
 public API can change, and [`CHANGELOG.md`](../CHANGELOG.md) records every change that reaches you.
 [Upgrading from 1.x to 2.x](upgrading-1-to-2.md) lists what differs between the lines: 1.x models are
-mutable, and PHP 7.4 has no named arguments.
+mutable, and PHP 7.4 has no named arguments. It also shows an opt-in Rector rule that finds the writes
+to models that 2.x refuses. 1.x has no end date, and after its `1.0.0` it takes security fixes and
+major bug fixes only ([release lines and support](versioning.md#release-lines-and-support)).
 
 The server's API version is a separate choice: a client calls `/api/v2` unless built with
 `'api_version' => 'v1'`, which a server older than 2.0.0 needs. Server releases that keep that

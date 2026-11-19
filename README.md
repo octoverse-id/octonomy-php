@@ -22,15 +22,31 @@ reference it links into.
 composer require octoverse-id/octonomy-php
 ```
 
-Requires PHP 8.2+. Requests go through Guzzle (7.8 or 8) unless you pass another
-[PSR-18 client](#http-client).
+Requests go through Guzzle unless you pass another [PSR-18 client](#http-client). The SDK ships as two
+lines, and the command installs the one your PHP can run:
 
-On PHP 7.4, 8.0 or 8.1 the same command resolves the **1.x line**: this SDK generated for PHP 7.4 from
-the same source, kept on the `support/php7.4` branch, and requiring Guzzle 7. Two differences reach
-your code. Its models are **mutable** where 2.x's are `readonly`, so code that writes to a model
-property works on 1.x and throws on 2.x. And PHP 7.4 has no named arguments, which the samples below
-use, so pass those arguments by position there. [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md)
-has the details.
+| Your PHP | Installs | Guzzle | Models |
+| -------- | -------- | ------ | ------ |
+| 8.2 or later | 2.x, from `main` | 7.8 or later, or 8 | `readonly` |
+| 7.4, 8.0 or 8.1 | 1.x, from `support/php7.4` | 7.8 or later 7.x | mutable |
+
+On PHP 8.2 or later, require `octoverse-id/octonomy-php:^1.0` to stay on 1.x. The 1.x line has no end
+date, and after its `1.0.0` it takes security fixes and major bug fixes only, while new features ship
+on 2.x ([versioning.md](docs/versioning.md#release-lines-and-support)).
+
+The **1.x line** is this SDK generated for PHP 7.4 from the same source. Two differences reach your
+code. Its models are **mutable** where 2.x's are `readonly`, so code that writes to a model property
+works on 1.x and throws on 2.x. And PHP 7.4 has no named arguments, which the samples below use, so pass
+those arguments by position there. [Upgrading from 1.x to 2.x](docs/upgrading-1-to-2.md) has the
+details, and an opt-in Rector rule that finds those writes.
+
+1.x needs Guzzle 7. An application whose own `composer.json` allows only Guzzle 6 cannot install it
+until that constraint allows 7. One that has Guzzle 6 only in `composer.lock`, through packages that
+also allow Guzzle 7, can let Composer update them along with the SDK:
+
+```bash
+composer require octoverse-id/octonomy-php:^1.0 -W
+```
 
 ## Quickstart
 

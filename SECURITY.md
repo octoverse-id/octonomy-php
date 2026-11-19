@@ -2,8 +2,22 @@
 
 ## Supported versions
 
-No version of this SDK has been released yet, so there is no supported release. Security fixes land on
-`main`. The support policy for the first release lines is published here before they ship.
+The SDK ships as two lines of one package
+([docs/versioning.md](docs/versioning.md#release-lines-and-support)):
+
+| Line | Branch | PHP | Supported | After its first release it takes |
+| ---- | ------ | --- | --------- | -------------------------------- |
+| 2.x | `main` | 8.2 and later | Yes | Every feature and fix |
+| 1.x | `support/php7.4` | 7.4 and later | Yes, indefinitely | Security fixes and major bug fixes only |
+
+No version of either line has been released yet; the first are `2.0.0` and `1.0.0`. Until then
+security fixes land on `main`, and on `support/php7.4` as a pull request into it.
+
+A security fix both lines need lands on `main` first and is ported to `support/php7.4`, and each line
+ships it in its next release. The 1.x line has no end date, but it is only as secure as its
+dependencies, Guzzle 7 above all: if Guzzle 7 drops PHP 7.4, a PHP 7.4 application stays on the last
+Guzzle 7 that supports it and gets no further Guzzle fixes. From then on, getting them means leaving
+PHP 7.4 ([docs/upgrading-1-to-2.md](docs/upgrading-1-to-2.md)).
 
 ## Credentials in exceptions
 

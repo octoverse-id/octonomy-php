@@ -23,6 +23,7 @@ make coverage  # phpunit --coverage-text (needs Xdebug or PCOV)
 make check     # cs + stan + test + the release-line guard and its tests (fast pre-push gate)
 make version-check       # Client::VERSION against the latest CHANGELOG.md release heading
 make release-line-guard  # this tree against its release line (docs/release.md)
+make rector-rule    # the opt-in Rector rule against its fixture project (needs network)
 make release-check  # the full pre-release gate
 ```
 
@@ -244,7 +245,7 @@ make php74    # downgrade into a temp dir, then prove it on PHP 7.4 in Docker
 | ----- | ---------- |
 | `tools/rector/` | An isolated Composer project with `rector/rector` pinned to one exact version, and the downgrade config `rector.php` (`withDowngradeSets(php74: true)`, the `down-to-php74` level set). It is kept out of the root `require-dev` because Rector requires its own PHPStan, which would tie `main`'s static analysis to every Rector upgrade, and `composer.lock` is not committed, so only an exact constraint pins it. The PHPStan Rector runs on is pinned exactly too: Rector's own range (`^2.3.0` for 2.7.0) would float to a PHPStan it was not released with, and PHPStan 2.3.4 makes Rector 2.7.0 and 2.8.1 fail on every file. Bump the two together, in a PR of their own; Dependabot opens one for the pair, and does not auto-merge it, since the `php74` job that proves it is not a required check. Merge it by hand once that job is green. |
 | `compat/` | The 7.4 line's config, laid over the downgraded tree: `composer.json` (`php >=7.4`, Guzzle `^7.8` and the PSR HTTP interfaces, PHPUnit `^9.6`, and `config.platform.php` 7.4.33 so it resolves for 7.4 on any PHP), `phpunit.xml.dist` on the PHPUnit 9 schema, `phpstan.neon.dist` at `phpVersion: 70400`, and `.php-cs-fixer.dist.php` at `@PSR12`. |
-| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, the harness and dev-server scripts, and the vendored specs with the Markdown tests read (`docs/versioning.md`, and for `GuideTest` the guide, `docs/api.md`, `README.md` and `CHANGELOG.md`) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
+| `scripts/php74-downgrade.sh <dir>` | Copies `src/`, `tests/`, `examples/`, `rector/`, the harness and dev-server scripts, and the vendored specs with the Markdown tests read (`docs/versioning.md`, and for `GuideTest` the guide, `docs/api.md`, `README.md` and `CHANGELOG.md`) into `<dir>`, runs Rector over the PHP, lays `compat/` over it, and formats it at `@PSR12`. Any non-zero exit from Rector fails it. |
 | `scripts/php74-check.sh <dir> <main-junit.xml>` | Run with PHP 7.4 after `composer install` in `<dir>`. It runs `php -l` on every file, the `@PSR12` dry run, PHPStan at `phpVersion: 70400`, and PHPUnit 9.6. Then it requires that the suite ran exactly the tests `main`'s suite ran, data sets included, each with the same outcome (passed, skipped or failed), compared through each run's JUnit log. It reports every failing check, not just the first. |
 
 `phpVersion: 70400` applies to the downgraded tree only. On `main` it would flag every 8.x construct
@@ -285,6 +286,34 @@ security fixes and major bug fixes only; features ship on 2.x alone
    only the files the fix changed, so the 7.4 form is Rector's rather than written by hand.
 3. Never regenerate the whole branch over itself: its README, CHANGELOG, Makefile, CI and
    `AGENTS.md` section are its own, and copying the full tree would revert them.
+
+## The opt-in Rector rule
+
+`rector/src/FlagModelPropertyWriteRector.php` is a Rector 2 rule for the SDK's users, which flags writes
+to model properties before a move from 1.x to 2.x
+([upgrading-1-to-2.md](upgrading-1-to-2.md#finding-writes-before-you-move)). It ships in the package
+and autoloads as `Octoverse\Octonomy\Rector\`, but nothing in `src/` loads it, so Rector is not one of
+the SDK's dependencies: a project that names the rule in its Rector configuration has Rector already.
+That also keeps it out of reach of the root PHPStan and the unit suite, which have no Rector, so it is
+proven against a project instead:
+
+```bash
+make rector-rule   # the fixture project against this tree (needs network)
+make php74         # also runs it against the 1.x tree on PHP 7.4
+```
+
+`scripts/rector-rule-check.sh` installs the SDK from a tree and the newest Rector 2 into a copy of
+`rector/tests/project`, runs the project's `rector-octonomy.php` (the configuration the upgrade guide
+shows), and requires four things: a dry run that applies the rule and exits non-zero, `src/` equal to
+`expected/` once the rule is applied, a second dry run with nothing left to do, and PHPStan level 8 on
+the rule as installed. CI runs it in the `static` job against `main`'s checkout and in the `php74` job
+against the 7.4 tree. Both trees must produce the same `expected/`: on 2.x the rule reads the native
+`readonly`, on 1.x the `@readonly` docblocks the downgrade leaves.
+
+To change what the rule finds, change `rector/tests/project/src/Writes.php` and `expected/Writes.php`
+together: a case the rule must flag goes in `run()`, and one it must leave alone in `untouched()`.
+Keep the project valid PHP 7.4, since the 1.x line runs it as written. The rule itself is written for
+8.2 and downgraded with `src/`.
 
 ## Running against your own Octonomy
 
