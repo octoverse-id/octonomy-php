@@ -22,6 +22,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\NodeVisitor;
+use PHPStan\Type\TypeCombinator;
 use Rector\Rector\AbstractRector;
 use Symplify\RuleDocGenerator\ValueObject\CodeSample\CodeSample;
 use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
@@ -54,6 +55,10 @@ final class FlagModelPropertyWriteRector extends AbstractRector
 
     private const SDK_NAMESPACE = 'Octoverse\\Octonomy\\';
 
+    /**
+     * The rule's description and a before/after sample, in the form Rector's rule documentation
+     * tools read. Rector itself never calls it to run the rule.
+     */
     public function getRuleDefinition(): RuleDefinition
     {
         return new RuleDefinition('Flag writes to properties that are readonly on octonomy-php 2.x', [
@@ -72,6 +77,9 @@ final class FlagModelPropertyWriteRector extends AbstractRector
     }
 
     /**
+     * The statements the rule visits: an expression statement and an `unset()`, which carry every
+     * write it finds and can take a comment of their own.
+     *
      * @return array<class-string<Node>>
      */
     public function getNodeTypes(): array
@@ -80,6 +88,9 @@ final class FlagModelPropertyWriteRector extends AbstractRector
     }
 
     /**
+     * Puts the flag above $node when it writes to a readonly SDK property and carries no flag yet;
+     * returns null, leaving the statement as it is, otherwise.
+     *
      * @param Expression|Unset_ $node
      */
     public function refactor(Node $node): ?Node
@@ -225,8 +236,9 @@ final class FlagModelPropertyWriteRector extends AbstractRector
             if (!$property->isReadOnly() && !$property->isReadOnlyByPhpDoc()) {
                 continue;
             }
-            // The declared type, which 1.x keeps: a write through an object it holds is allowed.
-            if (!$direct && $property->getNativeType()->isObject()->yes()) {
+            // The declared type, which 1.x keeps: a write through an object it holds is allowed. A
+            // nullable one counts as the object, since a null there fails on either line.
+            if (!$direct && TypeCombinator::removeNull($property->getNativeType())->isObject()->yes()) {
                 continue;
             }
 

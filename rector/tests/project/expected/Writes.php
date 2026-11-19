@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App;
 
 use Octoverse\Octonomy\Client;
+use Octoverse\Octonomy\Config;
 use Octoverse\Octonomy\Model\Tag;
 use Octoverse\Octonomy\Model\TagCreate;
 
@@ -72,7 +73,7 @@ final class Writes
         $tag->name = 'Commented';
     }
 
-    public function untouched(Client $client, Tag $tag): void
+    public function untouched(Client $client, Tag $tag, Config $config): void
     {
         $name = $tag->name;
         $metadata = $tag->metadata;
@@ -80,6 +81,8 @@ final class Writes
         $own = new \stdClass();
         $own->name = 'not an SDK object';
         $this->label = 'a property of our own';
+        // A readonly property that holds an object, nullable or not, leaves that object writable.
+        $config->httpClient['trace'] = true;
         // Writes the rule cannot see: the analyser does not know the object is a Tag.
         $property = 'name';
         $tag->$property = 'by a variable name';
